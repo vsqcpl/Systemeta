@@ -1,0 +1,1645 @@
+"use client";
+
+import React, { useState, useEffect, useRef, useMemo } from "react";
+
+import { useAppStore, useTranslation } from "@/lib/store";
+import { formatCurrency } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
+import { filterExpenses, filterProjects } from "@/lib/dataFilters";
+import ActionGuard from "@/components/guards/ActionGuard";
+import { ExpenseCategory } from "@/lib/data/types";
+import {
+  IconPlane,
+  IconHotel,
+  IconUtensils,
+  IconCar,
+  IconPackage,
+  IconFileText,
+  IconPaperclip,
+  IconAlert,
+  IconCheckCircle,
+  IconClose,
+} from "@/components/ui/Icons";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip as RechartsTooltip,
+  CartesianGrid,
+} from "recharts";
+
+// Pure SVG donut chart — avoids Recharts PolarChart infinite-loop bug
+function SvgDonutChart({ data, colors }: { data: { name: string; value: number; percentage: number }[]; colors: string[] }) {
+  const size = 160;
+  const cx = size / 2;
+  const cy = size / 2;
+  const outerR = 70;
+  const innerR = 50;
+  const gap = 3; // degrees gap between slices
+  const total = data.reduce((s, d) => s + d.value, 0);
+
+  let cumAngle = -90; // start at top
+  const slices = data.map((d, i) => {
+    const angle = (d.value / total) * 360 - gap;
+    const start = cumAngle + gap / 2;
+    cumAngle += (d.value / total) * 360;
+    const end = start + angle;
+
+    const toRad = (deg: number) => (deg * Math.PI) / 180;
+    const x1 = cx + outerR * Math.cos(toRad(start));
+    const y1 = cy + outerR * Math.sin(toRad(start));
+    const x2 = cx + outerR * Math.cos(toRad(end));
+    const y2 = cy + outerR * Math.sin(toRad(end));
+    const x3 = cx + innerR * Math.cos(toRad(end));
+    const y3 = cy + innerR * Math.sin(toRad(end));
+    const x4 = cx + innerR * Math.cos(toRad(start));
+    const y4 = cy + innerR * Math.sin(toRad(start));
+    const large = angle > 180 ? 1 : 0;
+
+    return {
+      d: `M ${x1} ${y1} A ${outerR} ${outerR} 0 ${large} 1 ${x2} ${y2} L ${x3} ${y3} A ${innerR} ${innerR} 0 ${large} 0 ${x4} ${y4} Z`,
+      color: colors[i % colors.length],
+      name: d.name,
+    };
+  });
+
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ display: "block", margin: "0 auto" }}>
+      {slices.map((s, i) => (
+        <path key={i} d={s.d} fill={s.color} />
+      ))}
+    </svg>
+  );
+}
+
+const CATEGORY_COLORS = ["#2E86C1", "#6C7EC7", "#1ABC9C", "#17A5C8", "#E09B2D"];
+
+const EXPENSE_DETAILS_MAP: Record<string, {
+  title: string;
+  id: string;
+  employeeName: string;
+  projectCode: string;
+  date: string;
+  submittedDate: string;
+  category: string;
+  amount: number;
+  status: string;
+  receiptAttached: string;
+  description: string;
+  approvalStatus: string;
+  reimbursementStage: string;
+}> = {};
+
+export default function ExpensesPage() {
+  const data = useAppStore((state) => state.data);
+  const darkMode = useAppStore((state) => state.darkMode);
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const showToast = useAppStore((state) => state.showToast);
+  const approveExpense = useAppStore((state) => state.approveExpense);
+  const rejectExpense = useAppStore((state) => state.rejectExpense);
+  const addExpense = useAppStore((state) => state.addExpense);
+
+  // Stable memoized arrays — MUST use useMemo, never inline .filter()
+  // Inline .filter() creates a new array reference every render, which causes
+  // any useEffect depending on them to loop infinitely.
+  const visibleExpenses = useMemo(
+    () => (user ? filterExpenses(data.expenses, user) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.expenses, user?.id]
+  );
+  const visibleProjects = useMemo(
+    () => (user ? filterProjects(data.projects, user) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data.projects, user?.id]
+  );
+
+  // Dynamic categoryData calculation
+  const categoryData = useMemo(() => {
+    const categories = ["Travel", "Accommodation", "Meals", "Transport", "Other"];
+    const map = categories.reduce((acc, cat) => ({ ...acc, [cat]: 0 }), {} as Record<string, number>);
+    let total = 0;
+    
+    visibleExpenses.forEach((e) => {
+      const cat = e.category;
+      if (categories.includes(cat)) {
+        map[cat] += e.amount;
+        total += e.amount;
+      } else {
+        map["Other"] += e.amount;
+        total += e.amount;
+      }
+    });
+    
+    return categories.map((name) => {
+      const val = map[name];
+      const percentage = total > 0 ? Math.round((val / total) * 100) : 0;
+      return { name, value: val, percentage };
+    });
+  }, [visibleExpenses]);
+
+  // Dynamic monthlyData calculation (Jan-Jun)
+  const monthlyData = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const map = months.reduce((acc, m) => ({ ...acc, [m]: 0 }), {} as Record<string, number>);
+    
+    visibleExpenses.forEach((e) => {
+      const dateParts = e.date.split("-");
+      if (dateParts.length >= 2) {
+        const monthIdx = parseInt(dateParts[1], 10) - 1;
+        if (monthIdx >= 0 && monthIdx < 12) {
+          const mName = months[monthIdx];
+          map[mName] += e.amount;
+        }
+      }
+    });
+    
+    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map((m) => ({
+      month: m,
+      Spend: map[m] || 0,
+    }));
+  }, [visibleExpenses]);
+
+  // Dynamic recentActivities calculation
+  const recentActivities = useMemo(() => {
+    return visibleExpenses
+      .slice(0, 5)
+      .map((e, idx) => {
+        const statusText = e.status === "approved" ? "approved" : e.status === "rejected" ? "rejected" : "submitted";
+        const type = e.status === "approved" ? "approve" : e.status === "rejected" ? "reject" : "submit";
+        const consultantObj = data.consultants.find((c: any) => c.id === e.consultant);
+        const name = consultantObj ? consultantObj.name : e.consultant || "Someone";
+        return {
+          id: idx,
+          text: `${name} ${statusText} ${e.category.toLowerCase()} expense claim for ${formatCurrency(e.amount)} (${e.project})`,
+          time: e.date,
+          type,
+        };
+      });
+  }, [visibleExpenses, data.consultants]);
+
+  // Filter States
+  const [selectedProject, setSelectedProject] = useState("All Projects");
+  const [categoryFilter, setCategoryFilter] = useState("All Categories");
+  const [statusFilter, setStatusFilter] = useState("All Statuses");
+  const [dateRangeFilter, setDateRangeFilter] = useState("All Dates");
+  const [searchTerm, setSearchTerm] = useState("");
+
+  // Modals & Tracker
+  const [showForm, setShowForm] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
+  const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null);
+
+  // Form State
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const [receipt, setReceipt] = useState<{
+    fileName: string;
+    fileSize: string;
+    fileType: string;
+    previewUrl: string;
+    supabaseUrl: string;  // real Supabase public URL
+    timestamp: string;
+  } | null>(null);
+
+  // Dashboard Receipt Upload Card State
+  const dashboardFileInputRef = useRef<HTMLInputElement>(null);
+  const [dashboardReceipt, setDashboardReceipt] = useState<{
+    fileName: string;
+    fileSize: string;
+    fileType: string;
+  } | null>(null);
+
+  const handleDashboardUploadClick = () => {
+    dashboardFileInputRef.current?.click();
+  };
+
+  const handleDashboardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxSize = 10 * 1024 * 1024; // 10MB
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Unsupported file type! Only JPG, PNG, and PDF are allowed.", "danger");
+      return;
+    }
+
+    if (file.size > maxSize) {
+      showToast("File size exceeds 10MB limit.", "danger");
+      return;
+    }
+
+    const isReplace = dashboardReceipt !== null;
+    setDashboardReceipt({
+      fileName: file.name,
+      fileSize: (file.size / (1024 * 1024)).toFixed(2) + " MB",
+      fileType: file.type.split("/")[1]?.toUpperCase() || file.type,
+    });
+
+    if (isReplace) {
+      showToast("Receipt replaced successfully.", "success");
+    } else {
+      showToast("Receipt uploaded successfully.", "success");
+    }
+  };
+
+  const handleDashboardRemoveFile = () => {
+    setDashboardReceipt(null);
+    if (dashboardFileInputRef.current) dashboardFileInputRef.current.value = "";
+    showToast("Receipt removed successfully.", "success");
+  };
+
+  const [newExpense, setNewExpense] = useState({
+    description: "",
+    amount: "",
+    consultant: "",
+    project: "",
+    category: "Travel",
+    date: new Date().toISOString().split("T")[0],
+  });
+
+  // One-time init: populate form defaults on first render only.
+  // We intentionally use an empty dep array — we only want to seed the form once.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    setNewExpense((prev) => ({
+      ...prev,
+      consultant: user?.id ?? data.consultants?.[0]?.id ?? "",
+      project: data.projects?.[0]?.id ?? "",
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // One-time init: select first tracker item. Use a ref guard so this only runs
+  // once even if visibleExpenses reference changes (avoids infinite loop).
+  const trackerInitRef = useRef(false);
+  useEffect(() => {
+    if (!trackerInitRef.current && visibleExpenses.length > 0) {
+      trackerInitRef.current = true;
+      setSelectedTrackerId(visibleExpenses[0].id);
+    }
+  }, [visibleExpenses]);
+
+  const handleFormChange = (field: string, value: string) => {
+    setNewExpense((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleUploadClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const maxSize = 10 * 1024 * 1024;
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Unsupported file type! Only JPG, PNG, and PDF are allowed.", "danger");
+      return;
+    }
+    if (file.size > maxSize) {
+      showToast("File size exceeds 10MB limit!", "danger");
+      return;
+    }
+
+    setReceiptUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "expenses");
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const result = await res.json();
+
+      if (!res.ok || !result.url) {
+        throw new Error(result.error || "Upload failed");
+      }
+
+      // For images create a local preview; for PDFs show a PDF icon
+      const previewUrl = file.type.startsWith("image/")
+        ? URL.createObjectURL(file)
+        : "";
+
+      setReceipt({
+        fileName: file.name,
+        fileSize: result.fileSize,
+        fileType: file.type,
+        previewUrl,
+        supabaseUrl: result.url,
+        timestamp: new Date().toLocaleString(),
+      });
+      showToast("Receipt uploaded to cloud storage.", "success");
+    } catch (err: any) {
+      showToast("Receipt upload failed: " + err.message, "danger");
+    } finally {
+      setReceiptUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleSubmitExpense = () => {
+    if (!newExpense.description || !newExpense.amount) {
+      showToast("Please fill in description and amount.", "warning");
+      return;
+    }
+
+    addExpense({
+      description: newExpense.description,
+      amount: Number(newExpense.amount),
+      consultant: newExpense.consultant,
+      project: newExpense.project,
+      category: newExpense.category as ExpenseCategory,
+      date: newExpense.date,
+      currency: "INR",
+      receiptUrl: receipt?.supabaseUrl,
+    });
+
+    // Reset Form
+    setNewExpense({
+      description: "",
+      amount: "",
+      consultant: data.consultants?.[0]?.id ?? "",
+      project: data.projects?.[0]?.id ?? "",
+      category: "Travel",
+      date: new Date().toISOString().split("T")[0],
+    });
+    setReceipt(null);
+    setShowForm(false);
+    showToast("Expense submitted successfully.", "success");
+  };
+
+  const handleRemoveReceipt = () => {
+    setReceipt(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+    showToast("Receipt removed.", "info");
+  };
+
+  const handleExport = () => {
+    if (!visibleExpenses?.length) {
+      showToast("No expenses to export.", "warning");
+      return;
+    }
+    const headers = ["Description", "Amount", "Consultant", "Project", "Category", "Status", "Date"];
+    const rows = visibleExpenses.map((e) => [
+      e.description,
+      e.amount,
+      e.consultant,
+      e.project,
+      e.category,
+      e.status,
+      e.date,
+    ]);
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      [headers, ...rows].map((r) => r.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "expenses_report.csv");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast("Expenses report exported as CSV.", "success");
+  };
+
+  const getExpenseDetails = (expense: any) => {
+    if (!expense) return null;
+    const staticData = EXPENSE_DETAILS_MAP[expense.id];
+    if (staticData) {
+      let currentStatus = staticData.status;
+      let currentApprovalStatus = staticData.approvalStatus;
+      let currentReimbursementStage = staticData.reimbursementStage;
+
+      if (expense.status === "approved") {
+        currentStatus = "Approved";
+        currentApprovalStatus = "Approved";
+        currentReimbursementStage = "Payment queued";
+      } else if (expense.status === "rejected") {
+        currentStatus = "Rejected";
+        currentApprovalStatus = "Rejected";
+        currentReimbursementStage = "Hold pending approval";
+      } else if (expense.status === "pending") {
+        currentStatus = "Pending";
+        currentApprovalStatus = "Awaiting Manager Review";
+        currentReimbursementStage = "Hold pending approval";
+      }
+
+      return {
+        ...staticData,
+        status: currentStatus,
+        approvalStatus: currentApprovalStatus,
+        reimbursementStage: currentReimbursementStage,
+      };
+    }
+
+    const consultantObj = data.consultants.find((c: any) => c.id === expense.consultant);
+    const employeeName = consultantObj ? consultantObj.name : expense.consultant || "Unknown";
+    
+    const statusLower = expense.status.toLowerCase();
+    const displayStatus = statusLower === "approved" ? "Approved" : statusLower === "rejected" ? "Rejected" : "Pending";
+    const approvalStatus = statusLower === "approved" ? "Approved" : statusLower === "rejected" ? "Rejected" : "Awaiting Manager Review";
+    const reimbursementStage = statusLower === "approved" ? "Payment queued" : "Hold pending approval";
+
+    return {
+      title: expense.description,
+      id: expense.id.startsWith("E") ? `EXP-${expense.id.slice(1)}` : expense.id,
+      employeeName,
+      projectCode: expense.project,
+      date: expense.date,
+      submittedDate: expense.date,
+      category: expense.category,
+      amount: expense.amount,
+      status: displayStatus,
+      receiptAttached: expense.receipt ? "Receipt Attached" : "Missing Receipt",
+      description: expense.description,
+      approvalStatus,
+      reimbursementStage,
+    };
+  };
+
+  const details = selectedExpense ? getExpenseDetails(selectedExpense) : null;
+
+  if (!data) return null;
+
+  // Advanced Filtering
+  const filteredExpenses = visibleExpenses.filter((e) => {
+    const matchesSearch =
+      e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      e.id.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesProject = selectedProject === "All Projects" || e.project === selectedProject;
+    const matchesCategory = categoryFilter === "All Categories" || e.category === categoryFilter;
+    
+    let matchesStatus = true;
+    if (statusFilter !== "All Statuses") {
+      if (statusFilter === "Approved") matchesStatus = e.status === "approved";
+      else if (statusFilter === "Awaiting Approval") matchesStatus = e.status === "pending";
+      else if (statusFilter === "Rejected") matchesStatus = e.status === "rejected";
+      else if (statusFilter === "Under Review") matchesStatus = e.status === "pending"; // simulate under review
+    }
+
+    let matchesDate = true;
+    if (dateRangeFilter !== "All Dates") {
+      const dateLimit = new Date();
+      if (dateRangeFilter === "Last 30 Days") {
+        dateLimit.setDate(dateLimit.getDate() - 30);
+      } else if (dateRangeFilter === "This Month") {
+        dateLimit.setDate(1);
+      } else if (dateRangeFilter === "Last 3 Months") {
+        dateLimit.setMonth(dateLimit.getMonth() - 3);
+      }
+      const claimDate = new Date(e.date);
+      matchesDate = claimDate >= dateLimit;
+    }
+
+    return matchesSearch && matchesProject && matchesCategory && matchesStatus && matchesDate;
+  });
+
+  // KPI calculations
+  const totalSubmitted = filteredExpenses.reduce((s, e) => s + e.amount, 0);
+  const pendingAmount = filteredExpenses
+    .filter((e) => e.status === "pending")
+    .reduce((s, e) => s + e.amount, 0);
+  const approvedAmount = filteredExpenses
+    .filter((e) => e.status === "approved")
+    .reduce((s, e) => s + e.amount, 0);
+  const avgClaim = filteredExpenses.length ? totalSubmitted / filteredExpenses.length : 0;
+  const progressPercent = totalSubmitted > 0 ? Math.round((approvedAmount / totalSubmitted) * 100) : 0;
+
+  // Selected Expense for Workflow Tracker
+  const trackedExpense = visibleExpenses.find((e) => e.id === (selectedTrackerId || ""));
+
+  const getWorkflowSteps = (status: string) => {
+    const steps = [
+      { title: "Draft Created", desc: "Submitted by consultant", state: "done" },
+      { title: "Receipt Validated", desc: "AI audit verification passed", state: "done" },
+      { title: "Manager Review", desc: status === "approved" ? "Approved by Director" : status === "rejected" ? "Rejected" : "Awaiting review", state: status === "approved" ? "done" : status === "rejected" ? "error" : "active" },
+      { title: "Reimbursement", desc: status === "approved" ? "Payment queued" : "Hold pending approval", state: status === "approved" ? "done" : "pending" },
+    ];
+    return steps;
+  };
+
+  return (
+    <div style={{ animation: "fadeIn 0.5s ease-out", color: "var(--text-primary)" }}>
+      {/* Hidden File Input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        accept="image/jpeg,image/jpg,image/png,application/pdf"
+        style={{ display: "none" }}
+      />
+
+      {/* Header */}
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">{t("Travel & Expenses")}</h1>
+          <p className="page-subtitle">
+            {filteredExpenses.length} {t("claims filtered")} · {t("Total")} {formatCurrency(totalSubmitted)}
+          </p>
+        </div>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+          <button className="btn btn-secondary btn-sm" onClick={handleExport}>
+            {t("Export CSV")}
+          </button>
+          <button className="btn btn-primary btn-sm" onClick={() => setShowForm(true)}>
+            {t("Submit Expense")}
+          </button>
+        </div>
+      </div>
+
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", marginBottom: "24px" }}>
+        
+        {/* Card 1 */}
+        <div className="card" style={{ padding: "20px", borderLeft: "4px solid var(--ob-accent-blue)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            {t("Total Expenses Submitted")}
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
+            {formatCurrency(totalSubmitted)}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>{t("Across all expense categories")}</div>
+        </div>
+
+        {/* Card 2 */}
+        <div className="card" style={{ padding: "20px", borderLeft: "4px solid var(--ob-amber)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            {t("Awaiting Approval")}
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
+            {formatCurrency(pendingAmount)}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>{t("Pending manager review")}</div>
+        </div>
+
+        {/* Card 3 */}
+        <div className="card" style={{ padding: "20px", borderLeft: "4px solid var(--ob-teal)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            {t("Approved Expenses")}
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
+            {formatCurrency(approvedAmount)}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>{t("Approved for reimbursement")}</div>
+        </div>
+
+        {/* Card 4 */}
+        <div className="card" style={{ padding: "20px", borderLeft: "4px solid var(--ob-indigo)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+            {t("Average Claim Value")}
+          </div>
+          <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
+            {formatCurrency(Math.round(avgClaim))}
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>{t("Average amount per expense claim")}</div>
+        </div>
+
+      </div>
+
+      {/* Main Grid: Claims List & Advanced Filters */}
+      <div className="grid-7-3" style={{ gap: "20px", marginBottom: "24px" }}>
+        
+        {/* Left Column: Claims & Management */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          
+          {/* Claims List Card */}
+          <div className="card">
+            <div className="card-header" style={{ display: "flex", flexDirection: "column", gap: "16px", paddingBottom: "16px", borderBottom: "1px solid var(--border-subtle)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+                <span className="card-title" style={{ fontSize: "16px" }}>{t("Recent Expense Claims")}</span>
+                <span className="badge badge-brand">{filteredExpenses.length} {t("Claims Found")}</span>
+              </div>
+
+              {/* Filters Panel */}
+              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr 1fr", gap: "10px", width: "100%" }}>
+                <input
+                  type="text"
+                  placeholder={t("Search claims...")}
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="input"
+                  style={{ fontSize: "12.5px", padding: "6px 10px", width: "100%" }}
+                />
+
+                <select
+                  value={selectedProject}
+                  onChange={(e) => setSelectedProject(e.target.value)}
+                  className="select"
+                  style={{ fontSize: "12px", padding: "6px" }}
+                >
+                  <option value="All Projects">{t("All Projects")}</option>
+                  {visibleProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.id}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => setCategoryFilter(e.target.value)}
+                  className="select"
+                  style={{ fontSize: "12px", padding: "6px" }}
+                >
+                  <option value="All Categories">{t("All Categories")}</option>
+                  <option value="Travel">{t("Travel")}</option>
+                  <option value="Accommodation">{t("Accommodation")}</option>
+                  <option value="Meals">{t("Meals")}</option>
+                  <option value="Transport">{t("Transport")}</option>
+                  <option value="Other">{t("Other")}</option>
+                </select>
+
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="select"
+                  style={{ fontSize: "12px", padding: "6px" }}
+                >
+                  <option value="All Statuses">{t("All Statuses")}</option>
+                  <option value="Approved">{t("Approved")}</option>
+                  <option value="Awaiting Approval">{t("Awaiting Approval")}</option>
+                  <option value="Rejected">{t("Rejected")}</option>
+                  <option value="Under Review">{t("Under Review")}</option>
+                </select>
+
+                <select
+                  value={dateRangeFilter}
+                  onChange={(e) => setDateRangeFilter(e.target.value)}
+                  className="select"
+                  style={{ fontSize: "12px", padding: "6px" }}
+                >
+                  <option value="All Dates">{t("All Dates")}</option>
+                  <option value="Last 30 Days">{t("Last 30 Days")}</option>
+                  <option value="This Month">{t("This Month")}</option>
+                  <option value="Last 3 Months">{t("Last 3 Months")}</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="card-body" style={{ padding: "0 20px" }}>
+              {filteredExpenses.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "var(--text-secondary)" }}>
+                  <IconAlert size={28} style={{ color: "var(--text-tertiary)", marginBottom: "10px" }} />
+                  <div>{t("No claims match your filters")}</div>
+                </div>
+              ) : (
+                filteredExpenses.map((e) => {
+                  const c = data.consultants.find((x) => x.id === e.consultant) || {
+                    color: "#64748b",
+                    avatar: "?",
+                    name: e.consultant,
+                  };
+                  const catIcon: Record<string, React.ReactNode> = {
+                    Travel: <IconPlane size={16} />,
+                    Accommodation: <IconHotel size={16} />,
+                    Meals: <IconUtensils size={16} />,
+                    Transport: <IconCar size={16} />,
+                    Other: <IconPackage size={16} />,
+                  };
+                  const catIconEl = catIcon[e.category as string] || <IconFileText size={16} />;
+
+                  const statusBadge = {
+                    approved: "badge-success",
+                    pending: "badge-warning",
+                    rejected: "badge-danger",
+                  }[e.status as string] || "badge-gray";
+
+                  return (
+                    <div
+                      key={e.id}
+                      onClick={() => setSelectedTrackerId(e.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        padding: "16px 0",
+                        borderBottom: "1px solid var(--border-subtle)",
+                        cursor: "pointer",
+                        background: selectedTrackerId === e.id ? "rgba(46,134,193,0.05)" : "transparent",
+                        margin: "0 -20px",
+                        paddingLeft: "20px",
+                        paddingRight: "20px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                        <div
+                          style={{
+                            background: "var(--ob-bg-elevated)",
+                            width: "38px",
+                            height: "38px",
+                            borderRadius: "10px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "var(--ob-accent-blue)",
+                          }}
+                        >
+                          {catIconEl}
+                        </div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {e.description}
+                          </div>
+                          <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                              <div
+                                style={{
+                                  background: c.color,
+                                  width: "16px",
+                                  height: "16px",
+                                  borderRadius: "50%",
+                                  fontSize: "8px",
+                                  color: "white",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "center",
+                                  fontWeight: 700,
+                                }}
+                              >
+                                {c.avatar}
+                              </div>
+                              {c.name}
+                            </span>
+                            <span>·</span>
+                            <span>{e.project}</span>
+                            <span>·</span>
+                            <span>{e.date}</span>
+                            {e.receipt ? (
+                              <span style={{ color: "var(--ob-teal)", display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "4px" }}>
+                                <IconPaperclip size={10} /> {t("Receipt")}
+                              </span>
+                            ) : (
+                              <span style={{ color: "var(--ob-red)", display: "inline-flex", alignItems: "center", gap: "2px", marginLeft: "4px" }}>
+                                <IconAlert size={10} /> {t("Missing Receipt")}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", alignItems: "center", gap: "16px", flexShrink: 0 }}>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)" }}>
+                            {formatCurrency(e.amount)}
+                          </div>
+                          <span className={`badge ${statusBadge}`} style={{ fontSize: "10px", marginTop: "4px" }}>
+                            {e.status === "pending" ? t("Awaiting Approval") : t(e.status.charAt(0).toUpperCase() + e.status.slice(1))}
+                          </span>
+                        </div>
+
+                        {/* Dropdown actions */}
+                        <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                          <button
+                            className="btn btn-secondary btn-xs"
+                            onClick={(evt) => {
+                              evt.stopPropagation();
+                              setSelectedExpense(e);
+                              setSelectedExpense(null); // trigger state refresh
+                              setSelectedExpense(e);
+                            }}
+                            style={{ fontSize: "10px", padding: "4px 8px", display: "inline-flex", alignItems: "center", justifyContent: "center", textAlign: "center" }}
+                          >
+                            {t("Details")}
+                          </button>
+                          {e.status === "pending" && (user?.role === "super_admin" || user?.role === "project_manager") && (
+                            <div style={{ display: "flex", gap: "2px" }}>
+                              <button
+                                className="btn btn-primary btn-xs"
+                                onClick={(evt) => {
+                                  evt.stopPropagation();
+                                  approveExpense(e.id);
+                                  showToast("Expense approved.", "success");
+                                }}
+                                style={{ fontSize: "9px", padding: "2px 4px", background: "var(--ob-teal)" }}
+                              >
+                                {t("Approve")}
+                              </button>
+                              <button
+                                className="btn btn-danger btn-xs"
+                                onClick={(evt) => {
+                                  evt.stopPropagation();
+                                  rejectExpense(e.id);
+                                  showToast("Expense rejected.", "warning");
+                                }}
+                                style={{ fontSize: "9px", padding: "2px 4px", background: "var(--ob-red)" }}
+                              >
+                                {t("Reject")}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+
+          {/* Spend Summary Charts */}
+          {(() => {
+            const travelSum = visibleExpenses.filter(e => e.category === "Travel").reduce((s, e) => s + e.amount, 0);
+            const travelPct = totalSubmitted > 0 ? Math.round((travelSum / totalSubmitted) * 100) : 0;
+
+            const hotelSum = visibleExpenses.filter(e => e.category === "Accommodation").reduce((s, e) => s + e.amount, 0);
+            const hotelPct = totalSubmitted > 0 ? Math.round((hotelSum / totalSubmitted) * 100) : 0;
+
+            const pendingClaims = visibleExpenses.filter(e => e.status === "pending");
+            const pendingCount = pendingClaims.length;
+
+            return (
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                
+                {/* Monthly Spend Bar Chart */}
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">{t("Monthly Spend Summary")}</span>
+                  </div>
+                  {totalSubmitted > 0 ? (
+                    <div className="card-body" style={{ padding: "16px" }}>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: "10px", height: "180px", width: "100%" }}>
+                        {monthlyData.map((d, i) => {
+                          const maxSpend = Math.max(...monthlyData.map((m) => m.Spend));
+                          const pct = maxSpend > 0 ? (d.Spend / maxSpend) * 100 : 0;
+                          return (
+                            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", height: "100%", justifyContent: "flex-end" }}>
+                              <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600 }}>
+                                {(d.Spend / 1000).toFixed(0)}k
+                              </span>
+                              <div
+                                title={`${d.month}: ₹${d.Spend.toLocaleString()}`}
+                                style={{
+                                  width: "100%",
+                                  height: `${pct}%`,
+                                  background: darkMode
+                                    ? "linear-gradient(180deg, #5BA3D9, #2E6EA6)"
+                                    : "linear-gradient(180deg, #2E86C1, #1a5c87)",
+                                  borderRadius: "4px 4px 0 0",
+                                  transition: "height 0.3s ease",
+                                  cursor: "default",
+                                }}
+                              />
+                              <span style={{ fontSize: "11px", color: "var(--text-secondary)" }}>{d.month}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="card-body" style={{ padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", height: "180px" }}>
+                      <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>
+                        No expenses logged to compute
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* AI Insights Card */}
+                <div className="card">
+                  <div className="card-header">
+                    <span className="card-title">{t("AI Spend Insights")}</span>
+                  </div>
+                  {totalSubmitted > 0 ? (
+                    <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      
+                      {/* Insight Card 1 */}
+                      <div style={{
+                        backgroundColor: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-md)",
+                        boxShadow: "var(--shadow-xs)",
+                        padding: "14px 16px",
+                        borderLeft: "4px solid var(--ob-accent-blue)"
+                      }}>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>
+                          {t("Travel Allocation")}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px", lineHeight: "1.4" }}>
+                          Travel expenses account for {formatCurrency(travelSum)} ({travelPct}% of total spend).
+                        </div>
+                      </div>
+
+                      {/* Insight Card 2 */}
+                      <div style={{
+                        backgroundColor: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-md)",
+                        boxShadow: "var(--shadow-xs)",
+                        padding: "14px 16px",
+                        borderLeft: "4px solid var(--ob-teal)"
+                      }}>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>
+                          {t("Accommodation Distribution")}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px", lineHeight: "1.4" }}>
+                          Hotel and lodging expenses account for {formatCurrency(hotelSum)} ({hotelPct}% of total spend).
+                        </div>
+                      </div>
+
+                      {/* Insight Card 3 */}
+                      <div style={{
+                        backgroundColor: "var(--bg-surface)",
+                        border: "1px solid var(--border-subtle)",
+                        borderRadius: "var(--radius-md)",
+                        boxShadow: "var(--shadow-xs)",
+                        padding: "14px 16px",
+                        borderLeft: "4px solid var(--ob-indigo)"
+                      }}>
+                        <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>
+                          {t("Pending Approvals Pipeline")}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "6px", lineHeight: "1.4" }}>
+                          Currently, {formatCurrency(pendingAmount)} ({pendingCount} claim(s)) are awaiting review in the approval pipeline.
+                        </div>
+                      </div>
+
+                    </div>
+                  ) : (
+                    <div className="card-body" style={{ padding: "16px", display: "flex", alignItems: "center", justifyContent: "center", height: "180px" }}>
+                      <div style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>
+                        No spend insights available
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+              </div>
+            );
+          })()}
+
+        </div>
+
+        {/* Right Column: Analytics & Trackers */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+          
+          {/* Analytics Donut Chart */}
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">{t("Expense Distribution")}</span>
+            </div>
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ height: "180px", width: "100%", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <SvgDonutChart data={categoryData} colors={CATEGORY_COLORS} />
+              </div>
+
+              {/* Legend with percentages */}
+              <div style={{ width: "100%", display: "flex", flexDirection: "column", gap: "6px", marginTop: "10px" }}>
+                {categoryData.map((cat, idx) => (
+                  <div key={idx} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: CATEGORY_COLORS[idx] }} />
+                      <span style={{ color: "var(--text-secondary)" }}>{t(cat.name)}</span>
+                    </div>
+                    <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{cat.percentage}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Receipt Upload Card */}
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">{t("Receipt Upload")}</span>
+            </div>
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.4" }}>
+                {t("Upload travel and expense receipts for verification and reimbursement processing.")}
+              </p>
+
+              {/* Hidden file input for dashboard card */}
+              <input
+                type="file"
+                ref={dashboardFileInputRef}
+                onChange={handleDashboardFileChange}
+                accept="image/jpeg,image/jpg,image/png,application/pdf"
+                style={{ display: "none" }}
+              />
+
+              {!dashboardReceipt ? (
+                // State: No file uploaded
+                <div style={{
+                  border: "2px dashed var(--border-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "20px",
+                  textAlign: "center",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "10px",
+                  backgroundColor: "rgba(46,134,193,0.02)"
+                }}>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={handleDashboardUploadClick}
+                    style={{ width: "100%" }}
+                  >
+                    {t("Upload Receipt")}
+                  </button>
+                  <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
+                    {t("Supported Formats: JPG, JPEG, PNG, PDF")}
+                    <br />
+                    {t("Max File Size: 10 MB")}
+                  </div>
+                </div>
+              ) : (
+                // State: File uploaded
+                <div style={{
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "var(--radius-md)",
+                  padding: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  backgroundColor: "rgba(26,188,156,0.02)"
+                }}>
+                  <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
+                    <div style={{ color: "var(--ob-teal)", marginTop: "2px" }}>
+                      <IconCheckCircle size={18} />
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontSize: "13px",
+                        fontWeight: 700,
+                        color: "var(--text-primary)",
+                        wordBreak: "break-all",
+                        whiteSpace: "normal"
+                      }}>
+                        {dashboardReceipt.fileName}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
+                        {t("Size:")} {dashboardReceipt.fileSize} · {t("Type:")} {dashboardReceipt.fileType}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button
+                      className="btn btn-secondary btn-xs"
+                      onClick={handleDashboardUploadClick}
+                      style={{ flex: 1 }}
+                    >
+                      {t("Replace File")}
+                    </button>
+                    <button
+                      className="btn btn-danger btn-xs"
+                      onClick={handleDashboardRemoveFile}
+                      style={{ flex: 1, background: "var(--ob-red)" }}
+                    >
+                      {t("Remove File")}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Workflow Tracker Card */}
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">{t("Workflow Tracker")}</span>
+            </div>
+            <div className="card-body">
+              {trackedExpense ? (
+                <div>
+                  <div style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "14px" }}>
+                    {t("Tracking:")} <strong>{trackedExpense.description}</strong> ({trackedExpense.id})
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                    {getWorkflowSteps(trackedExpense.status).map((step, idx) => (
+                      <div key={idx} style={{ display: "flex", gap: "12px" }}>
+                        <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                          <div
+                            style={{
+                              width: "20px",
+                              height: "20px",
+                              borderRadius: "50%",
+                              background:
+                                step.state === "done"
+                                  ? "var(--ob-teal)"
+                                  : step.state === "active"
+                                  ? "var(--ob-amber)"
+                                  : step.state === "error"
+                                  ? "var(--ob-red)"
+                                  : "var(--ob-border-mid)",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              fontSize: "10px",
+                              color: "white",
+                              fontWeight: "bold",
+                            }}
+                          >
+                            {step.state === "done" ? "✓" : step.state === "error" ? "✗" : idx + 1}
+                          </div>
+                          {idx < 3 && (
+                            <div style={{ width: "2px", flex: 1, background: "var(--ob-border-subtle)", margin: "4px 0" }} />
+                          )}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>{t(step.title)}</div>
+                          <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "2px" }}>{t(step.desc)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "10px", color: "var(--text-secondary)", fontSize: "12px" }}>
+                  {t("Select a claim to track approval progress")}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Reimbursement Progress */}
+          <div className="card" style={{ padding: "18px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>{t("Reimbursement Progress")}</span>
+              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--ob-teal)" }}>{progressPercent}%</span>
+            </div>
+            <div style={{ width: "100%", height: "6px", background: "var(--ob-border-subtle)", borderRadius: "3px", overflow: "hidden" }}>
+              <div style={{ width: `${progressPercent}%`, height: "100%", background: "var(--ob-teal)", borderRadius: "3px", transition: "width 0.3s ease" }} />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10.5px", color: "var(--text-secondary)", marginTop: "6px" }}>
+              <span>{t("Approved")}: {formatCurrency(approvedAmount)}</span>
+              <span>{t("Total")}: {formatCurrency(totalSubmitted)}</span>
+            </div>
+          </div>
+
+          {/* Recent Activity Feed */}
+          <div className="card">
+            <div className="card-header">
+              <span className="card-title">{t("Recent Activity")}</span>
+            </div>
+            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {recentActivities.map((act) => (
+                <div key={act.id} style={{ display: "flex", justifyContent: "space-between", gap: "10px", fontSize: "12px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{t(act.text)}</span>
+                  <span style={{ color: "var(--text-tertiary)", whiteSpace: "nowrap" }}>{t(act.time)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      {/* Details & Receipt Modal */}
+      {selectedExpense && details && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 9999,
+            padding: "40px 20px",
+          }}
+          onClick={() => setSelectedExpense(null)}
+        >
+          <div
+            className="modal-content"
+            style={{
+              background: "var(--bg-surface)",
+              borderRadius: "12px",
+              width: "680px",
+              maxWidth: "90vw",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 20px 40px rgba(0,0,0,0.25)",
+              animation: "fadeIn 0.2s ease-out",
+              border: "1px solid var(--border-subtle)",
+              margin: "auto",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-subtle)", padding: "28px 28px 16px 28px", flexShrink: 0 }}>
+              <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{t("Expense Claim Details")}</h2>
+              <button
+                className="topbar-btn"
+                onClick={() => setSelectedExpense(null)}
+                style={{ width: "30px", height: "30px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <IconClose size={16} />
+              </button>
+            </div>
+
+            {/* Modal Content Sections — scrolls internally when content exceeds available height */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "20px 28px", display: "flex", flexDirection: "column", gap: "24px" }}>
+              
+              {/* Expense Information */}
+              <div>
+                <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "8px", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "12px", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {t("Expense Information")}
+                  </h3>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px 24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Expense Title")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{t(details.title)}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Expense ID")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{details.id}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Employee Name")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{t(details.employeeName)}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Project Code")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{details.projectCode}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Expense Date")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{details.date}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Expense Category")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{t(details.category)}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Amount")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{formatCurrency(details.amount)}</div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Status")}</div>
+                    <div style={{ display: "flex", alignItems: "center", height: "20px" }}>
+                      <span className={`badge ${
+                        details.status.toLowerCase() === "approved"
+                          ? "badge-success"
+                          : details.status.toLowerCase() === "rejected"
+                          ? "badge-danger"
+                          : "badge-warning"
+                      }`} style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "5px", fontWeight: 600 }}>
+                        {t(details.status)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Receipt Information */}
+              <div>
+                <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "8px", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "12px", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {t("Receipt Information")}
+                  </h3>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px 24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Receipt Attached")}
+                    </div>
+                    <div>
+                      <span className={`badge ${
+                        details.receiptAttached.toLowerCase() === "receipt attached"
+                          ? "badge-success"
+                          : "badge-danger"
+                      }`} style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "5px", fontWeight: 600 }}>
+                        {t(details.receiptAttached)}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Receipt Document")}
+                    </div>
+                    {selectedExpense.receipt ? (() => {
+                      // receipt can be: string URL (new), object with previewUrl (legacy local), or true (very old mock)
+                      const receiptUrl = typeof selectedExpense.receipt === "string"
+                        ? selectedExpense.receipt
+                        : (selectedExpense.receipt?.previewUrl || selectedExpense.receipt?.supabaseUrl || null);
+                      const fileName = typeof selectedExpense.receipt === "string"
+                        ? selectedExpense.receipt.split("/").pop() || "receipt"
+                        : (selectedExpense.receipt?.fileName || "receipt.pdf");
+                      const fileSize = typeof selectedExpense.receipt === "object" && selectedExpense.receipt?.fileSize
+                        ? selectedExpense.receipt.fileSize
+                        : null;
+                      const isImage = typeof selectedExpense.receipt === "object"
+                        ? selectedExpense.receipt?.fileType?.startsWith("image/")
+                        : (typeof selectedExpense.receipt === "string" && /\.(jpg|jpeg|png|webp)$/i.test(selectedExpense.receipt));
+
+                      return (
+                        <div
+                          onClick={() => receiptUrl && window.open(receiptUrl, "_blank")}
+                          title={receiptUrl ? t("Click to view/open receipt") : t("No URL available")}
+                          style={{
+                            background: "var(--bg-surface-2)",
+                            border: "1px solid var(--border-subtle)",
+                            borderRadius: "8px",
+                            padding: "12px",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            cursor: receiptUrl ? "pointer" : "default",
+                            transition: "all 0.15s ease",
+                          }}
+                          onMouseEnter={(e) => { if (receiptUrl) e.currentTarget.style.background = "rgba(46,134,193,0.08)"; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = "var(--bg-surface-2)"; }}
+                        >
+                          <IconPaperclip size={16} style={{ color: "var(--ob-accent-blue)", flexShrink: 0 }} />
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {fileName}
+                            </div>
+                            {fileSize && (
+                              <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>{fileSize}</div>
+                            )}
+                            {receiptUrl && (
+                              <div style={{ fontSize: "10px", color: "#10b981", fontWeight: 600, marginTop: "2px" }}>☁ Stored in cloud</div>
+                            )}
+                          </div>
+                          {receiptUrl && (
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ color: "var(--text-tertiary)", flexShrink: 0 }}>
+                              <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>
+                            </svg>
+                          )}
+                        </div>
+                      );
+                    })() : (
+                      <div style={{ background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)", borderRadius: "8px", padding: "12px", color: "var(--text-secondary)", fontSize: "12px" }}>
+                        {t("No receipt document attached.")}
+                      </div>
+                    )}
+
+                  </div>
+                </div>
+
+                {(() => {
+                  const r = selectedExpense?.receipt;
+                  if (!r) return null;
+                  // String URL ending in image extension = new Supabase format
+                  const isStrImage = typeof r === "string" && /\.(jpg|jpeg|png|webp)$/i.test(r);
+                  const isObjImage = typeof r === "object" && r?.fileType?.startsWith("image/") && r?.previewUrl;
+                  if (!isStrImage && !isObjImage) return null;
+                  const src = typeof r === "string" ? r : r.previewUrl;
+                  return (
+                    <div style={{ marginTop: "16px", width: "100%", maxWidth: "300px" }}>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "6px" }}>
+                        {t("Receipt Image Preview")}
+                      </div>
+                      <img
+                        src={src}
+                        alt="Receipt Preview"
+                        style={{ width: "100%", maxHeight: "150px", borderRadius: "6px", objectFit: "contain", border: "1px solid var(--border-subtle)", background: "var(--bg-surface-2)" }}
+                      />
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Approval Information */}
+              <div>
+                <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "8px", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "12px", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {t("Approval Information")}
+                  </h3>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px 24px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Submitted Date")}
+                    </div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>
+                      {details.submittedDate}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Approval Status")}
+                    </div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>
+                      {t(details.approvalStatus)}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Reimbursement Stage")}
+                    </div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>
+                      {t(details.reimbursementStage)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Additional Information */}
+              <div>
+                <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "8px", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "12px", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {t("Additional Information")}
+                  </h3>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                    {t("Expense Description")}
+                  </div>
+                  <div style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: "1.5", background: "var(--bg-surface-2)", padding: "12px 16px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                    {t(details.description)}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Modal Footer */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedExpense(null)} style={{ padding: "8px 16px", fontSize: "12.5px" }}>{t("Close")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Submit Expense Form Modal */}
+      {showForm && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1100,
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              background: "var(--bg-surface)",
+              borderRadius: "12px",
+              padding: "24px",
+              width: "min(500px, 90%)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              animation: "fadeIn 0.22s ease-out",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0 }}>{t("Submit New Expense")}</h2>
+              <button
+                className="topbar-btn"
+                onClick={() => setShowForm(false)}
+                style={{ width: "30px", height: "30px", padding: 0 }}
+              >
+                <IconClose size={16} />
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <input
+                type="text"
+                placeholder={t("Description")}
+                value={newExpense.description}
+                onChange={(e) => handleFormChange("description", e.target.value)}
+                className="input"
+                style={{ padding: "10px", borderRadius: "6px" }}
+              />
+
+              <input
+                type="number"
+                placeholder={t("Amount (INR)")}
+                value={newExpense.amount}
+                onChange={(e) => handleFormChange("amount", e.target.value)}
+                className="input"
+                style={{ padding: "10px", borderRadius: "6px" }}
+              />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <select
+                  value={newExpense.consultant}
+                  onChange={(e) => handleFormChange("consultant", e.target.value)}
+                  className="select"
+                  style={{ padding: "10px", borderRadius: "6px" }}
+                >
+                  {(user?.role === "super_admin" ? data.consultants : data.consultants.filter((c) => c.id === user?.id)).map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  value={newExpense.project}
+                  onChange={(e) => handleFormChange("project", e.target.value)}
+                  className="select"
+                  style={{ padding: "10px", borderRadius: "6px" }}
+                >
+                  {visibleProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.id}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <select
+                  value={newExpense.category}
+                  onChange={(e) => handleFormChange("category", e.target.value)}
+                  className="select"
+                  style={{ padding: "10px", borderRadius: "6px" }}
+                >
+                  <option value="Travel">{t("Travel")}</option>
+                  <option value="Accommodation">{t("Accommodation")}</option>
+                  <option value="Meals">{t("Meals")}</option>
+                  <option value="Transport">{t("Transport")}</option>
+                  <option value="Other">{t("Other")}</option>
+                </select>
+
+                <input
+                  type="date"
+                  value={newExpense.date}
+                  onChange={(e) => handleFormChange("date", e.target.value)}
+                  className="input"
+                  style={{ padding: "10px", borderRadius: "6px" }}
+                />
+              </div>
+
+              {/* Receipt Upload Box */}
+              <div
+                style={{
+                  border: "2px dashed var(--border-default)",
+                  background: "var(--bg-surface-2)",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                }}
+                onClick={handleUploadClick}
+              >
+              {receiptUploading ? (
+                  <div>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 1s linear infinite", color: "var(--brand-500)", marginBottom: "6px" }}><circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="4"/><path d="M4 12a8 8 0 0 1 8-8"/></svg>
+                    <div style={{ fontSize: "13px", fontWeight: 600 }}>{t("Uploading to cloud…")}</div>
+                    <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>{t("Please wait")}</div>
+                  </div>
+                ) : !receipt ? (
+                  <div>
+                    <IconPaperclip size={20} style={{ color: "var(--text-tertiary)", marginBottom: "4px" }} />
+                    <div style={{ fontSize: "13px", fontWeight: 600 }}>{t("Upload Receipt")}</div>
+                    <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>{t("PDF, JPG, PNG — max 10MB")}</div>
+                  </div>
+                ) : (
+                  <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px", justifyContent: "center" }}>
+                      {receipt.fileType.startsWith("image/") ? (
+                        <img src={receipt.previewUrl} alt="Preview" style={{ width: "40px", height: "40px", borderRadius: "4px", objectFit: "cover" }} />
+                      ) : (
+                        <IconFileText size={28} style={{ color: "var(--ob-accent-blue)" }} />
+                      )}
+                      <div style={{ textAlign: "left" }}>
+                        <div style={{ fontSize: "12.5px", fontWeight: 700, maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {receipt.fileName}
+                        </div>
+                        <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)" }}>
+                          {receipt.fileSize} · {receipt.timestamp}
+                        </div>
+                        <div style={{ fontSize: "10px", color: "#10b981", fontWeight: 600, marginTop: "2px" }}>
+                          ☁ Saved to cloud storage
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+                      <button className="btn btn-secondary btn-xs" onClick={handleUploadClick}>{t("Change Receipt")}</button>
+                      <button className="btn btn-danger btn-xs" onClick={handleRemoveReceipt}>{t("Remove Receipt")}</button>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px" }}>
+              <button className="btn btn-secondary" onClick={() => setShowForm(false)}>{t("Cancel")}</button>
+              <button className="btn btn-primary" onClick={handleSubmitExpense}>{t("Submit Claim")}</button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}

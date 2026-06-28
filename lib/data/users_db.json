@@ -1,0 +1,552 @@
+{
+  "users": [
+    {
+      "id": "U001",
+      "name": "Super Admin",
+      "email": "admin@vsqc.com",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "super_admin",
+      "status": "active",
+      "mfa": true,
+      "last_login_at": "2026-06-20 11:29:28",
+      "must_change_password": false,
+      "projectIds": [],
+      "clientIds": [],
+      "reporteeIds": []
+    },
+    {
+      "id": "SB",
+      "name": "Sarah Al-Rashid",
+      "email": "sarah.rashid@vsqc.com",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "project_manager",
+      "status": "active",
+      "mfa": true,
+      "last_login_at": "2026-06-20 11:29:46",
+      "must_change_password": false,
+      "projectIds": [
+        "P001",
+        "P008"
+      ],
+      "clientIds": [],
+      "reporteeIds": []
+    },
+    {
+      "id": "PN",
+      "name": "Priya Nair",
+      "email": "priya.nair@vsqc.com",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "senior_consultant",
+      "status": "active",
+      "mfa": false,
+      "last_login_at": "2026-06-20 12:06:02",
+      "must_change_password": false,
+      "projectIds": [
+        "P003"
+      ],
+      "clientIds": [],
+      "reporteeIds": [
+        "MK"
+      ]
+    },
+    {
+      "id": "MK",
+      "name": "Maria Kim",
+      "email": "maria.kim@vsqc.com",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "consultant",
+      "status": "active",
+      "mfa": false,
+      "last_login_at": "2026-06-20 12:23:06",
+      "must_change_password": false,
+      "projectIds": [
+        "P001",
+        "P005"
+      ],
+      "clientIds": [],
+      "reporteeIds": [],
+      "reporteeOf": "PN"
+    },
+    {
+      "id": "TK",
+      "name": "Tom Keller",
+      "email": "tom.keller@vsqc.com",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "accounts",
+      "status": "active",
+      "mfa": true,
+      "last_login_at": "2026-06-20 12:10:31",
+      "must_change_password": false,
+      "projectIds": [],
+      "clientIds": [],
+      "reporteeIds": []
+    },
+    {
+      "id": "CC01",
+      "name": "Client Contact",
+      "email": "client@vsqc.com",
+      "passwordHash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f",
+      "role": "client_contact",
+      "status": "active",
+      "mfa": false,
+      "last_login_at": "2026-06-20 12:22:33",
+      "must_change_password": false,
+      "projectIds": [],
+      "clientIds": [
+        "ADNOC"
+      ],
+      "clientId": "ADNOC",
+      "reporteeIds": []
+    }
+  ],
+  "auditLogs": [
+    {
+      "timestamp": "2026-06-20 12:23:06",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:22:33",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:22:16",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:21:38",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:21:01",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:11:34",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:10:31",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:10:13",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:07:19",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:06:56",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:06:02",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:01:07",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 12:00:35",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:59:58",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:55:58",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:53:47",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:48:24",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:47:17",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:45:36",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:38:10",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:32:19",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:30:46",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:30:32",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:30:09",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:29:46",
+      "user": "sarah.rashid@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:SB",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:29:28",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:28:48",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:28:12",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:04:16",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:02:55",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:01:24",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:00:02",
+      "user": "sarah.rashid@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:SB",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:59:06",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:57:06",
+      "user": "sarah.rashid@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:SB",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:55:52",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:46:44",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:44:18",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:35:12",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:34:48",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:32:36",
+      "user": "maria.kim@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:MK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:31:50",
+      "user": "client@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:CC01",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:30:55",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:25:36",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 10:24:59",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:42:35",
+      "user": "sarah.rashid@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:SB",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:41:37",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:32:50",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:29:31",
+      "user": "priya.nair@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:PN",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:28:53",
+      "user": "sarah.rashid@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:SB",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:24:20",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:17:51",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:16:08",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:07:21",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:04:43",
+      "user": "tom.keller@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:TK",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 07:03:52",
+      "user": "admin@vsqc.com",
+      "action": "USER_LOGIN",
+      "resource": "user:U001",
+      "detail": "User logged in successfully",
+      "ip": "::1"
+    },
+    {
+      "timestamp": "2026-06-20 11:30:00",
+      "user": "admin@vsqc.com",
+      "action": "SYSTEM_INIT",
+      "resource": "system",
+      "detail": "RBAC system initialized with default user accounts",
+      "ip": "127.0.0.1"
+    }
+  ]
+}
