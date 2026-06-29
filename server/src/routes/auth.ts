@@ -43,22 +43,26 @@ router.post("/login", async (req, res) => {
     });
 
     if (dbUser) {
-      await prisma.user.update({
-        where: { id: dbUser.id },
-        data: { lastLoginAt: new Date() },
-      });
+      try {
+        await prisma.user.update({
+          where: { id: dbUser.id },
+          data: { lastLoginAt: new Date() },
+        });
 
-      // Log audit
-      await prisma.auditLog.create({
-        data: {
-          timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-          userEmail: dbUser.email,
-          action: "USER_LOGIN",
-          resource: `user:${dbUser.id}`,
-          detail: "User logged in successfully",
-          ip: req.ip || "127.0.0.1",
-        },
-      });
+        // Log audit
+        await prisma.auditLog.create({
+          data: {
+            timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+            userEmail: dbUser.email,
+            action: "USER_LOGIN",
+            resource: `user:${dbUser.id}`,
+            detail: "User logged in successfully",
+            ip: req.ip || "127.0.0.1",
+          },
+        });
+      } catch (writeErr) {
+        console.warn("Could not write to database during login (Vercel read-only filesystem?):", writeErr);
+      }
     }
 
     return res.status(response.status).json(data);
