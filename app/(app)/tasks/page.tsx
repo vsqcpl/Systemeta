@@ -484,6 +484,12 @@ export default function TasksPage() {
   const [isAiEstimating, setIsAiEstimating] = useState(false);
 
   const handleGenerateAiEstimate = () => {
+    if (!aiEstHeading.trim() || !aiEstDesc.trim()) {
+      setAiEstNumber(null);
+      setAiEstResult("Please enter the details to find the estimate");
+      return;
+    }
+
     setIsAiEstimating(true);
     setTimeout(() => {
       let base = 8;
@@ -1010,20 +1016,24 @@ export default function TasksPage() {
                     <div style={{ marginTop: "8px", padding: "16px", background: "rgba(37, 99, 235, 0.05)", border: "1px solid rgba(37, 99, 235, 0.2)", borderRadius: "8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
                       <div>
                         <div style={{ fontSize: "14px", fontWeight: 700, color: "#2563eb", marginBottom: "4px" }}>{aiEstResult}</div>
-                        <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Review the suggested estimate and enter it in the form.</div>
+                        {aiEstNumber !== null && (
+                          <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Review the suggested estimate and enter it in the form.</div>
+                        )}
                       </div>
-                      <button 
-                        type="button" 
-                        onClick={() => {
-                          if (aiEstNumber !== null) {
-                            setNtEstimate(aiEstNumber.toString());
-                            setShowAiEstimate(false);
-                          }
-                        }}
-                        style={{ padding: "6px 14px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
-                      >
-                        <Sparkles size={12} /> Use This Estimate
-                      </button>
+                      {aiEstNumber !== null && (
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            if (aiEstNumber !== null) {
+                              setNtEstimate(aiEstNumber.toString());
+                              setShowAiEstimate(false);
+                            }
+                          }}
+                          style={{ padding: "6px 14px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                        >
+                          <Sparkles size={12} /> Use This Estimate
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

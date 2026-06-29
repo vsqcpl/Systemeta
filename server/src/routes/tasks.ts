@@ -112,7 +112,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
         dueDate,
         estimate: parseFloat(estimate),
         status: status || "todo",
-        tags: tags || [],
+        tags: tags ? (Array.isArray(tags) ? tags.join(", ") : String(tags)) : "",
         isMilestone: isMilestone || false,
       },
     });

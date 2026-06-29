@@ -165,14 +165,6 @@ export default function DashboardPage() {
 
   const currentMonth = "June 2026";
 
-  // Activity Feed Helper
-  const getConsultantInfo = (userInitials: string) => {
-    return data.consultants.find((c) => c.avatar === userInitials) || {
-      name: userInitials,
-      color: "#64748b",
-      avatar: userInitials,
-    };
-  };
 
   // Top 4 consultants for utilization list
   const topConsultants = data.consultants.slice(0, 4);
@@ -442,61 +434,8 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Row 4: Recent Activities, AI Insights, Upcoming Milestones */}
-      <div id="pdf-hide-row4" className="grid-7-3">
-        {/* Left Side: Recent Activities */}
-        <div className="card">
-          <div className="card-header">
-            <span className="card-title">{t("Recent Activity Feed")}</span>
-          </div>
-          <div className="card-body">
-            <div className="timeline">
-              {data.activities.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "32px 16px", color: "var(--text-tertiary)", fontSize: "13px" }}>
-                  {t("No activity logs available")}
-                </div>
-              ) : (
-                data.activities.slice(0, 5).map((act, index) => {
-                  const c = getConsultantInfo(act.user);
-                  return (
-                    <div key={index} className="timeline-item">
-                      <div
-                        className="timeline-dot"
-                        style={{
-                          background: c.color,
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "white",
-                          fontSize: "9px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {c.avatar}
-                      </div>
-                      <div className="timeline-content">
-                        <div className="timeline-title" style={{ fontSize: "13px" }}>
-                          {t(act.action)}: <strong>{t(act.subject)}</strong>
-                        </div>
-                        {act.project ? (
-                          <div className="timeline-sub" style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>
-                            {t("Project")}: {t(act.project)}
-                          </div>
-                        ) : null}
-                        <div className="timeline-time" style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>
-                          {t(act.time)}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Side: AI Insights & Milestones */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+      {/* Row 4: AI Insights, Upcoming Milestones */}
+      <div id="pdf-hide-row4" className="grid-2" style={{ gap: "24px", alignItems: "start" }}>
           {/* AI Insights Card */}
           <div className="card">
             <div className="card-header">
@@ -653,6 +592,5 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
