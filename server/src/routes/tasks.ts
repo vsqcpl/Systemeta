@@ -144,9 +144,20 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
     const { id } = req.params;
     const { status, progress, actualCompletionDate } = req.body;
 
-    const task = await prisma.task.findUnique({ where: { id } });
+    const task = await prisma.task.findUnique({ 
+      where: { id }
+    });
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
+    }
+
+    const membership = await prisma.projectAssignment.findFirst({
+      where: { projectId: task.projectId, userId: req.user.id }
+    });
+    if (!membership && req.user.role !== "super_admin") {
+      return res.status(403).json({ 
+        message: "Forbidden: You are not assigned to this project" 
+      });
     }
 
     const updatedTask = await prisma.task.update({
@@ -178,6 +189,15 @@ router.post("/:id/comments", async (req: AuthenticatedRequest, res) => {
     const task = await prisma.task.findUnique({ where: { id } });
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
+    }
+
+    const membership = await prisma.projectAssignment.findFirst({
+      where: { projectId: task.projectId, userId: req.user.id }
+    });
+    if (!membership && req.user.role !== "super_admin") {
+      return res.status(403).json({ 
+        message: "Forbidden: You are not assigned to this project" 
+      });
     }
 
     // Get commenter's consultant avatar and color

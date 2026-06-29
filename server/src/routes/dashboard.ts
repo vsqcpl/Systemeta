@@ -72,7 +72,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       prisma.timesheetEntry.aggregate({ where: timesheetWhere, _sum: { hours: true } }),
       prisma.aIInsight.findMany(),
       prisma.activity.findMany({
-        orderBy: { id: "desc" }, // Sort by recent
+        orderBy: { createdAt: "desc" }, // Sort by recent chronologically
         take: 10,
       }),
     ]);
@@ -193,7 +193,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       resourceUtilization,
       billableHours: billableHoursAgg._sum.hours || 0,
       teamMembers: teamMembersCount,
-      clientSatisfaction: 100.0, // Start with clean 100% or neutral sat
+      clientSatisfaction: null, // Requires client feedback module integrations. Set to null.
     };
 
     // Format activities list

@@ -311,16 +311,38 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
     let timesheets: any[] = [];
 
-    const canSeeAll = await checkPermission(req.user.id, req.user.role, "Approve Timesheets") ||
-                      await checkPermission(req.user.id, req.user.role, "Cross-Project Visibility") ||
-                      req.user.role === "super_admin" ||
-                      req.user.role === "project_manager" ||
-                      req.user.role === "senior_consultant";
+    const hasApprovePermission = await checkPermission(req.user.id, req.user.role, "Approve Timesheets");
+    const hasCrossProject = await checkPermission(req.user.id, req.user.role, "Cross-Project Visibility");
+    const isElevated = req.user.role === "super_admin" || req.user.role === "accounts" || hasApprovePermission || hasCrossProject;
 
-    if (canSeeAll) {
+    if (isElevated) {
       // Elevated roles see all timesheets
       timesheets = await prisma.timesheet.findMany({
         include: { entries: true },
+      });
+    } else if (req.user.role === "project_manager" || req.user.role === "senior_consultant") {
+      // PMs and Senior Consultants see timesheets containing entries for their assigned projects
+      const assignedProjects = await prisma.projectAssignment.findMany({
+        where: { userId: req.user.id },
+        select: { projectId: true }
+      });
+      const projectIds = assignedProjects.map(a => a.projectId);
+
+      timesheets = await prisma.timesheet.findMany({
+        where: {
+          entries: {
+            some: {
+              projectId: { in: projectIds }
+            }
+          }
+        },
+        include: {
+          entries: {
+            where: {
+              projectId: { in: projectIds }
+            }
+          }
+        }
       });
     } else {
       // Consultant sees only their own timesheets
@@ -357,6 +379,15 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
 
     if (!consultant || !week || !Array.isArray(entries)) {
       return res.status(400).json({ message: "consultant, week, and entries array are required" });
+    }
+
+    for (const e of entries) {
+      const hours = parseFloat(e.hours);
+      if (isNaN(hours) || hours < 0 || hours > 24) {
+        return res.status(400).json({ 
+          message: "Invalid hours: must be between 0 and 24" 
+        });
+      }
     }
 
     // Ownership check: non-admin roles can only log timesheets for themselves

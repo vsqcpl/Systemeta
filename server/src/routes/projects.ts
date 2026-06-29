@@ -191,6 +191,18 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ message: "Project not found" });
     }
 
+    const assignment = await prisma.projectAssignment.findFirst({
+      where: {
+        projectId: id,
+        userId: req.user.id
+      }
+    });
+    if (!assignment && req.user.role !== "super_admin") {
+      return res.status(403).json({ 
+        message: "Forbidden: You can only delete projects you manage" 
+      });
+    }
+
     await prisma.project.delete({
       where: { id },
     });

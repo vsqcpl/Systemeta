@@ -10,9 +10,32 @@ router.use(authMiddleware);
 // GET /api/billing - Get invoices and milestones
 router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
+    let projectsFilter: string[] = [];
+    const isElevated = req.user.role === "super_admin" || req.user.role === "accounts";
+
+    if (!isElevated) {
+      if (req.user.role === "project_manager") {
+        // PM sees invoices/milestones for their managed projects
+        const managedProjects = await prisma.project.findMany({
+          where: { managerName: req.user.name },
+          select: { id: true },
+        });
+        projectsFilter = managedProjects.map((p) => p.id);
+      } else {
+        // Other roles see only assigned projects
+        const assignments = await prisma.projectAssignment.findMany({
+          where: { userId: req.user.id },
+          select: { projectId: true },
+        });
+        projectsFilter = assignments.map((a) => a.projectId);
+      }
+    }
+
+    const whereClause = !isElevated ? { projectId: { in: projectsFilter } } : {};
+
     const [invoices, milestones] = await Promise.all([
-      prisma.invoice.findMany(),
-      prisma.milestone.findMany(),
+      prisma.invoice.findMany({ where: whereClause }),
+      prisma.milestone.findMany({ where: whereClause }),
     ]);
 
     return res.json({
@@ -40,6 +63,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     return res.status(500).json({ message: "Internal server error retrieving billing data" });
   }
 });
+
 
 // POST /api/billing/invoices - Generate an invoice
 router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {

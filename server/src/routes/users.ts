@@ -153,8 +153,8 @@ router.patch("/:id", requirePermission("Admin Panel Access"), async (req: Authen
       return res.status(404).json({ message: "User not found" });
     }
 
-    if ((role === "client_manager" || existingUser.role === "client_manager") && req.user.role !== "super_admin") {
-      return res.status(403).json({ message: "Forbidden: Only Super Admins can manage Client Managers" });
+    if ((role === "super_admin" || role === "client_manager" || existingUser.role === "client_manager") && req.user.role !== "super_admin") {
+      return res.status(403).json({ message: "Forbidden: Only Super Admins can assign this role" });
     }
 
     let nextPasswordHash = existingUser.passwordHash;

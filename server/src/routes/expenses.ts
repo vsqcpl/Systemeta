@@ -110,6 +110,12 @@ router.patch("/:id", requirePermission("Approve Expenses"), async (req: Authenti
       return res.status(404).json({ message: "Expense not found" });
     }
 
+    if (expense.consultantId === req.user.id) {
+      return res.status(403).json({
+        message: "Cannot approve your own expense"
+      });
+    }
+
     const updated = await prisma.expense.update({
       where: { id },
       data: { status },

@@ -53,6 +53,21 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
+    const overlap = await prisma.leaveRequest.findFirst({
+      where: {
+        consultantId: req.user.id,
+        status: { not: "rejected" },
+        OR: [
+          { start: { lte: end }, end: { gte: start } }
+        ]
+      }
+    });
+    if (overlap) {
+      return res.status(409).json({ 
+        message: "You already have a leave request for overlapping dates" 
+      });
+    }
+
     const lastLeave = await prisma.leaveRequest.findFirst({ orderBy: { id: "desc" } });
     const lastNum = lastLeave ? parseInt(lastLeave.id.replace("L", "") || "0", 10) : 0;
     const nextId = "L" + String(lastNum + 1).padStart(3, "0");
@@ -110,6 +125,12 @@ router.patch("/:id", requirePermission("Approve Leave"), async (req: Authenticat
     const leave = await prisma.leaveRequest.findUnique({ where: { id } });
     if (!leave) {
       return res.status(404).json({ message: "Leave request not found" });
+    }
+
+    if (leave.consultantId === req.user.id) {
+      return res.status(403).json({
+        message: "Cannot approve your own leave request"
+      });
     }
 
     const updated = await prisma.leaveRequest.update({
