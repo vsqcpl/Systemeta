@@ -297,7 +297,7 @@ router.post("/estimate-time", async (req: AuthenticatedRequest, res) => {
     // Search historical completed tasks
     const matchedTasks = await prisma.task.findMany({
       where: {
-        title: { contains: taskName, mode: "insensitive" }
+        title: { contains: taskName }
       }
     });
 
