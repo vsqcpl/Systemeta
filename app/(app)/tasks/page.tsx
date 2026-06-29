@@ -465,7 +465,8 @@ export default function TasksPage() {
   const [showTaskModal, setShowTaskModal] = useState(false);
   const [ntTitle, setNtTitle] = useState("");
   const [ntProject, setNtProject] = useState("");
-  const [ntAssignee, setNtAssignee] = useState("");
+  const [ntAssignees, setNtAssignees] = useState<{ id: string; hours: string }[]>([]);
+  const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
   const [ntPriority, setNtPriority] = useState<any>("medium");
   const [ntDue, setNtDue] = useState("");
   const [ntEstimate, setNtEstimate] = useState("");
@@ -533,9 +534,7 @@ export default function TasksPage() {
     if (visibleProjects.length > 0) {
       setNtProject(visibleProjects[0].id);
     }
-    if (data.consultants.length > 0) {
-      setNtAssignee(data.consultants[0].id);
-    }
+    // Fixed Issue 1: Do not force an initial assignee. Let it remain empty.
   }, [data, visibleProjects, showTaskModal]);
 
   // Real-time validation for subtasks deadlines against main task deadline
@@ -567,7 +566,12 @@ export default function TasksPage() {
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ntTitle || !ntProject || !ntAssignee || !ntDue || !ntEstimate) return;
+    if (!ntTitle || !ntProject || ntAssignees.length === 0 || !ntDue || !ntEstimate) return;
+
+    if (parseFloat(ntEstimate) > 0 && totalAllocatedHours !== parseFloat(ntEstimate)) {
+      showToast("Total assignee hours must exactly match task estimated hours", "danger");
+      return;
+    }
 
     // Final validation checklist
     let hasError = false;
@@ -588,7 +592,7 @@ export default function TasksPage() {
     addTask({
       title: ntTitle,
       project: ntProject,
-      assignee: ntAssignee,
+      assignee: ntAssignees.length > 0 ? ntAssignees[0].id : "",
       priority: ntPriority,
       dueDate: ntDue,
       estimate: parseFloat(ntEstimate),
@@ -607,6 +611,7 @@ export default function TasksPage() {
     setNtStatus("todo");
     setSubtasks([]);
     setSubtaskErrors([]);
+    setNtAssignees([]);
     setShowTaskModal(false);
   };
 
@@ -1092,20 +1097,71 @@ export default function TasksPage() {
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
-                      {t("Assignee")}
+                      {t("Assignees")}
                     </label>
                     <select
                       className="login-input"
-                      value={ntAssignee}
-                      onChange={(e) => setNtAssignee(e.target.value)}
-                      required
+                      value=""
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "SELECT_ALL") {
+                          setNtAssignees(data.consultants.map(c => ({ id: c.id, hours: "" })));
+                        } else if (val === "CLEAR_ALL") {
+                          setNtAssignees([]);
+                        } else if (val && !ntAssignees.find(a => a.id === val)) {
+                          setNtAssignees([...ntAssignees, { id: val, hours: "" }]);
+                        }
+                      }}
+                      style={{ marginBottom: "8px" }}
                     >
-                      {data.consultants.map((c) => (
+                      <option value="" disabled>{t("Add an assignee...")}</option>
+                      <option value="SELECT_ALL">{t("Select All")}</option>
+                      <option value="CLEAR_ALL">{t("Clear All")}</option>
+                      {data.consultants.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
                       ))}
                     </select>
+
+                    {ntAssignees.length > 0 && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", background: "var(--bg-surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                        {ntAssignees.map((assignee, idx) => {
+                          const c = data.consultants.find(x => x.id === assignee.id);
+                          return (
+                            <div key={assignee.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
+                                <button type="button" onClick={() => setNtAssignees(ntAssignees.filter(a => a.id !== assignee.id))} style={{ cursor: "pointer", background: "none", border: "none", color: "var(--danger-500)", padding: 0, display: "flex", fontSize: "16px", fontWeight: 600 }}>×</button>
+                                <span style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-primary)" }}>{c?.name}</span>
+                              </div>
+                              <div style={{ flex: 1, borderBottom: "1px dashed var(--border-subtle)", opacity: 0.5 }} />
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <input
+                                  type="number"
+                                  className="login-input"
+                                  style={{ width: "64px", padding: "4px 8px", fontSize: "13px", height: "auto", textAlign: "center" }}
+                                  placeholder="0"
+                                  min="0"
+                                  value={assignee.hours}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    const updated = [...ntAssignees];
+                                    updated[idx].hours = val;
+                                    setNtAssignees(updated);
+                                  }}
+                                />
+                                <span style={{ fontSize: "12px", color: "var(--text-secondary)", minWidth: "20px" }}>hrs</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    {totalAllocatedHours !== parseFloat(ntEstimate || "0") && parseFloat(ntEstimate || "0") > 0 && (
+                      <div style={{ fontSize: "12px", color: "var(--danger-500)", marginTop: "8px", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px" }}>
+                        Total assignee hours must exactly match task estimated hours
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -1312,7 +1368,7 @@ export default function TasksPage() {
                   >
                     {t("Cancel")}
                   </button>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }}>
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }} disabled={parseFloat(ntEstimate || "0") > 0 && totalAllocatedHours !== parseFloat(ntEstimate || "0")}>
                     {t("Create Task")}
                   </button>
                 </div>
