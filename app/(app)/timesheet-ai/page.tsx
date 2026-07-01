@@ -270,7 +270,9 @@ export default function TimesheetAIPage() {
     if (!data.consultants || data.consultants.length === 0) return [];
     return data.consultants.map((c) => {
       const attendance = 100;
-      const efficiency = 90;
+      const penaltyStr = typeof window !== 'undefined' ? sessionStorage.getItem(`efficiency_penalty_${c.name}`) : "0";
+      const penalty = penaltyStr ? parseInt(penaltyStr, 10) : 0;
+      const efficiency = Math.max(0, 90 - penalty);
       const score = Math.round((c.utilization + efficiency) / 2);
       return {
         name: c.name,

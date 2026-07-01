@@ -36,8 +36,104 @@ export default function TimesheetsPage() {
   const [workNotes, setWorkNotes] = useState("");
   const [currentLocation, setCurrentLocation] = useState("");
 
+  // Modal State for Punch In/Out Workflow
+  const [showPunchInModal, setShowPunchInModal] = useState(false);
+  const [showPunchOutModal, setShowPunchOutModal] = useState(false);
+  const [tempProjectClient, setTempProjectClient] = useState("Internal Operations");
+  const [tempCurrentLocation, setTempCurrentLocation] = useState("");
+  const [tempWorkNotes, setTempWorkNotes] = useState("");
+
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
   const [taskHours, setTaskHours] = useState<Record<number, string>>({});
+  const [sessionRecord, setSessionRecord] = useState({
+    visible: false,
+    task: "",
+    location: "",
+    startTime: "",
+    endTime: "",
+    remarks: "",
+    status: ""
+  });
+
+  const allTasks = useMemo(() => {
+    const tasksObj = data.tasks as any;
+    if (!tasksObj) return [];
+    return [
+      ...(tasksObj.todo || []),
+      ...(tasksObj.inprogress || []),
+      ...(tasksObj.review || []),
+      ...(tasksObj.done || []),
+    ];
+  }, [data.tasks]);
+
+  useEffect(() => {
+    if (allTasks.length > 0 && (projectClient === "Internal Operations" || !projectClient)) {
+      setProjectClient(allTasks[0].title);
+      setTempProjectClient(allTasks[0].title);
+    }
+  }, [allTasks, projectClient]);
+
+
+  // Helper to format duration
+  const formatDurationText = (ms: number) => {
+    const diffSecs = Math.floor(ms / 1000);
+    const hours = Math.floor(diffSecs / 3600);
+    const minutes = Math.floor((diffSecs % 3600) / 60);
+    const seconds = diffSecs % 60;
+    
+    if (hours > 0) return `${hours} Hour${hours > 1 ? 's' : ''} ${minutes} Minute${minutes !== 1 ? 's' : ''} ${seconds} Second${seconds !== 1 ? 's' : ''}`;
+    if (minutes > 0) return `${minutes} Minute${minutes !== 1 ? 's' : ''} ${seconds} Second${seconds !== 1 ? 's' : ''}`;
+    return `${seconds} Second${seconds !== 1 ? 's' : ''}`;
+  };
+
+  const handlePunchAction = () => {
+    if (!punchedIn) {
+      setTempProjectClient(projectClient); // default to current
+      setTempCurrentLocation(currentLocation);
+      setShowPunchInModal(true);
+    } else {
+      setTempWorkNotes("");
+      setShowPunchOutModal(true);
+    }
+  };
+
+  const submitPunchIn = () => {
+    setProjectClient(tempProjectClient);
+    setCurrentLocation(tempCurrentLocation);
+    setTimeLogged("Work In Progress");
+    setWorkNotes("");
+    
+    setSessionRecord({
+      visible: true,
+      task: tempProjectClient,
+      location: tempCurrentLocation,
+      startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      endTime: "",
+      remarks: "",
+      status: "In Progress"
+    });
+
+    setShowPunchInModal(false);
+    togglePunch(); // starts the global timer
+  };
+
+  const submitPunchOut = () => {
+    if (punchStartTime) {
+      const diffMs = Date.now() - new Date(punchStartTime).getTime();
+      setTimeLogged(formatDurationText(diffMs));
+    }
+    setWorkNotes(tempWorkNotes);
+    
+    setSessionRecord(prev => ({
+      ...prev,
+      endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      remarks: tempWorkNotes,
+      status: "Completed"
+    }));
+
+    setShowPunchOutModal(false);
+    togglePunch(); // stops the global timer
+  };
 
   const handleTaskToggle = (taskId: number) => {
     setSelectedTasks((prev) =>
@@ -430,7 +526,7 @@ export default function TimesheetsPage() {
               </div>
               <button
                 className={`punch-btn ${punchedIn ? "punch-out" : "punch-in"}`}
-                onClick={togglePunch}
+                onClick={handlePunchAction}
                 style={{
                   padding: "10px 24px",
                   borderRadius: "9999px",
@@ -509,104 +605,54 @@ export default function TimesheetsPage() {
             </div>
           </div>
 
-          {/* Daily Log Details Form */}
-          <div className="premium-log-card mb-4">
-            <div style={{ display: "flex", flexDirection: "column", borderLeft: "3px solid #2E86C1", paddingLeft: "12px", marginBottom: "16px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Briefcase size={16} style={{ color: "#2E86C1" }} />
-                <span className="card-title" style={{ fontSize: "16px", fontWeight: 700 }}>
-                  {t("Log Work Details")}
+          {/* Daily Log Details - Session Record */}
+          {sessionRecord.visible && (
+            <div className="premium-log-card mb-4">
+              <div style={{ display: "flex", flexDirection: "column", borderLeft: "3px solid #2E86C1", paddingLeft: "12px", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <Briefcase size={16} style={{ color: "#2E86C1" }} />
+                  <span className="card-title" style={{ fontSize: "16px", fontWeight: 700 }}>
+                    {t("Log Work Details")} - {sessionRecord.status}
+                  </span>
+                </div>
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
+                  {t("Session record for current task")}
                 </span>
               </div>
-              <span style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>
-                {t("Record your project work, time logged, and activity notes for today")}
-              </span>
-            </div>
-            <div style={{
-              height: "1px",
-              background: "linear-gradient(90deg, rgba(46, 134, 193, 0.3) 0%, rgba(46, 134, 193, 0.05) 100%)",
-              marginBottom: "20px"
-            }} />
-            
-            <div className="premium-form-grid">
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>
-                  <Folder size={14} />
-                  {t("Project / Client")}
-                </label>
-                <select
-                  className="select premium-select"
-                  value={projectClient}
-                  onChange={(e) => setProjectClient(e.target.value)}
-                  style={{ width: "100%", height: "38px" }}
-                >
-                  <option value="Internal Operations">{t("Internal Operations")}</option>
-                  <option value="Client – Acme Corp">{t("Client – Acme Corp")}</option>
-                  <option value="Client – Globex Ltd">{t("Client – Globex Ltd")}</option>
-                  <option value="Client – Initech">{t("Client – Initech")}</option>
-                  <option value="Client – Umbrella Inc">{t("Client – Umbrella Inc")}</option>
-                  <option value="Training & Development">{t("Training & Development")}</option>
-                  <option value="Non-Billable / Admin">{t("Non-Billable / Admin")}</option>
-                </select>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>
-                  <Clock size={14} />
-                  {t("Time Logged")}
-                </label>
-                <select
-                  className="select premium-select"
-                  value={timeLogged}
-                  onChange={(e) => setTimeLogged(e.target.value)}
-                  style={{ width: "100%", height: "38px" }}
-                >
-                  <option value="30 Minutes">{t("30 Minutes")}</option>
-                  <option value="1 Hour">{t("1 Hour")}</option>
-                  <option value="2 Hours">25% • {t("2 Hours")}</option>
-                  <option value="4 Hours">50% • {t("4 Hours")}</option>
-                  <option value="6 Hours">75% • {t("6 Hours")}</option>
-                  <option value="8 Hours (Full Day)">100% • {t("8 Hours (Full Day)")}</option>
-                </select>
-              </div>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "20px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>
-                <MapPin size={14} />
-                {t("Current Location")}
-              </label>
-              <input
-                type="text"
-                className="input premium-input"
-                placeholder={t("Enter your current location...")}
-                value={currentLocation}
-                onChange={(e) => setCurrentLocation(e.target.value)}
-                style={{ width: "100%", height: "38px" }}
-              />
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "20px" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>
-                <SquarePen size={14} />
-                {t("Work Notes / Remarks")}
-              </label>
-              <div style={{ position: "relative" }}>
-                <textarea
-                  className="input premium-textarea"
-                  rows={4}
-                  maxLength={500}
-                  placeholder={t("Enter any notes or remarks about today's work...")}
-                  value={workNotes}
-                  onChange={(e) => setWorkNotes(e.target.value)}
-                  style={{ resize: "vertical", width: "100%", paddingBottom: "24px" }}
-                />
-                <div style={{ position: "absolute", bottom: "8px", right: "12px", fontSize: "11px", color: "var(--text-tertiary)", pointerEvents: "none" }}>
-                  {workNotes.length} / 500
+              <div style={{
+                height: "1px",
+                background: "linear-gradient(90deg, rgba(46, 134, 193, 0.3) 0%, rgba(46, 134, 193, 0.05) 100%)",
+                marginBottom: "20px"
+              }} />
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "13.5px", color: "var(--text-primary)" }}>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <span style={{ fontWeight: 700, minWidth: "120px", color: "#2E86C1" }}>{t("Assigned Task")} :</span>
+                  <span>{sessionRecord.task}</span>
                 </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <span style={{ fontWeight: 700, minWidth: "120px", color: "#2E86C1" }}>{t("Location")} :</span>
+                  <span>{sessionRecord.location || "N/A"}</span>
+                </div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <span style={{ fontWeight: 700, minWidth: "120px", color: "#2E86C1" }}>{t("Start Time")} :</span>
+                  <span>{sessionRecord.startTime}</span>
+                </div>
+                {sessionRecord.endTime && (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <span style={{ fontWeight: 700, minWidth: "120px", color: "#2E86C1" }}>{t("End Time")} :</span>
+                    <span>{sessionRecord.endTime}</span>
+                  </div>
+                )}
+                {sessionRecord.remarks && (
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <span style={{ fontWeight: 700, minWidth: "120px", color: "#2E86C1" }}>{t("Remarks")} :</span>
+                    <span style={{ whiteSpace: "pre-wrap" }}>{sessionRecord.remarks}</span>
+                  </div>
+                )}
               </div>
             </div>
-          </div>
+          )}
 
           {/* Grid Card */}
           <div className="card">
@@ -813,6 +859,80 @@ export default function TimesheetsPage() {
             </div>
           </div>
       </>
+
+      {/* Modals for Punch Workflow */}
+      {showPunchInModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
+        }}>
+          <div className="premium-log-card" style={{ width: "400px", maxWidth: "90%" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "20px", color: "var(--text-primary)" }}>{t("Start Work Session")}</h3>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Assigned Task")}</label>
+              <select
+                className="select premium-select"
+                value={tempProjectClient}
+                onChange={(e) => setTempProjectClient(e.target.value)}
+                style={{ width: "100%", height: "38px" }}
+              >
+                {allTasks.map((task: any) => (
+                  <option key={task.id} value={task.title}>
+                    {task.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
+              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Current Location")}</label>
+              <input
+                type="text"
+                className="input premium-input"
+                placeholder={t("e.g. Mumbai Office, Client Site")}
+                value={tempCurrentLocation}
+                onChange={(e) => setTempCurrentLocation(e.target.value)}
+                style={{ width: "100%", height: "38px" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button className="btn btn-secondary" onClick={() => setShowPunchInModal(false)}>{t("Cancel")}</button>
+              <button className="btn btn-primary" onClick={submitPunchIn}>{t("Start Work")}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPunchOutModal && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999
+        }}>
+          <div className="premium-log-card" style={{ width: "450px", maxWidth: "90%" }}>
+            <h3 style={{ marginTop: 0, marginBottom: "8px", color: "var(--text-primary)" }}>{t("End Work Session")}</h3>
+            <p style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "20px" }}>{t("Please provide notes on the work completed during this session.")}</p>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
+              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Work Notes / Remarks")}</label>
+              <textarea
+                className="input premium-textarea"
+                rows={4}
+                placeholder={t("e.g. Completed API integration for billing dashboard.")}
+                value={tempWorkNotes}
+                onChange={(e) => setTempWorkNotes(e.target.value)}
+                style={{ width: "100%", resize: "vertical" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button className="btn btn-secondary" onClick={() => setShowPunchOutModal(false)}>{t("Cancel")}</button>
+              <button className="btn btn-primary" onClick={submitPunchOut}>{t("Submit Work")}</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

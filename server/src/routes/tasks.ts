@@ -142,7 +142,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
 router.patch("/:id", async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { status, progress, actualCompletionDate } = req.body;
+    const { status, progress, actualCompletionDate, assigneeId } = req.body;
 
     const task = await prisma.task.findUnique({ 
       where: { id }
@@ -166,6 +166,7 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
         status: status || undefined,
         progress: progress !== undefined ? parseInt(progress) : undefined,
         actualCompletionDate: actualCompletionDate !== undefined ? actualCompletionDate : undefined,
+        assigneeId: assigneeId || undefined,
       },
     });
 

@@ -263,10 +263,98 @@ function TaskDrawer({
   const c = consultants.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
   const addTaskComment = useAppStore((state) => state.addTaskComment);
   const addSubtaskToTask = useAppStore((state) => state.addSubtaskToTask);
+  const moveTask = useAppStore((state) => state.moveTask);
+  const showToast = useAppStore((state) => state.showToast);
+
   const [commentText, setCommentText] = React.useState("");
   const [showAddSubtask, setShowAddSubtask] = React.useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState("");
   const [newSubtaskDue, setNewSubtaskDue] = React.useState("");
+
+  // Rejection Form State
+  const [showRejectForm, setShowRejectForm] = React.useState(false);
+  const [rejectReason, setRejectReason] = React.useState("");
+  const [rejectAssignee, setRejectAssignee] = React.useState(task.assignee);
+  const [rejectEfficiency, setRejectEfficiency] = React.useState("5");
+
+  const handleSatisfiedYes = () => {
+    moveTask(task.id, "done", new Date().toISOString().split("T")[0]);
+    showToast("Task moved to Done", "success");
+    onClose();
+  };
+
+  const handleSatisfiedNo = () => {
+    setShowRejectForm(true);
+  };
+
+  const handleSubmitRejection = () => {
+    if (!rejectReason.trim()) {
+      showToast("Please provide a reason", "danger");
+      return;
+    }
+    
+    // 1. Sync efficiency penalty via sessionStorage (Targeting Timesheet Module)
+    if (rejectEfficiency && !isNaN(Number(rejectEfficiency))) {
+      const currentPenaltyStr = sessionStorage.getItem(`efficiency_penalty_${c.name}`) || "0";
+      const currentPenalty = parseInt(currentPenaltyStr, 10);
+      sessionStorage.setItem(`efficiency_penalty_${c.name}`, (currentPenalty + parseInt(rejectEfficiency, 10)).toString());
+    }
+
+    // 2. Local State Optimistic Update: Move to inprogress & update assignee
+    useAppStore.setState((state) => {
+      const newTasks = { ...state.data.tasks };
+      let foundTask = null;
+
+      // Remove from current column
+      for (const column of Object.keys(newTasks)) {
+        const list = newTasks[column as keyof typeof newTasks];
+        const idx = list.findIndex(t => t.id === task.id);
+        if (idx !== -1) {
+          foundTask = { ...list[idx], assignee: rejectAssignee };
+          newTasks[column as keyof typeof newTasks] = list.filter(t => t.id !== task.id);
+          break;
+        }
+      }
+
+      // Add to inprogress
+      if (foundTask) {
+        newTasks.inprogress = [foundTask, ...(newTasks.inprogress || [])];
+      }
+
+      return { data: { ...state.data, tasks: newTasks } };
+    });
+
+    // 3. Add comment
+    addTaskComment(task.id, `Task Rejected: ${rejectReason}`);
+
+    // 4. Update Assignee and Status via API
+    fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        status: "inprogress",
+        assigneeId: rejectAssignee
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to update task");
+        // Refetch with cache buster to ensure next reload is fully synced with DB
+        return fetch(`/api/tasks?_t=${Date.now()}`, { cache: "no-store" });
+      })
+      .then((res) => res.json())
+      .then((tasks) => {
+        // Update with fresh un-cached DB data
+        useAppStore.setState((state) => ({
+          data: { ...state.data, tasks },
+        }));
+      })
+      .catch((err) => {
+        showToast("Error updating task: " + err.message, "danger");
+      });
+      
+    showToast("Task rejected and moved to In Progress", "warning");
+    onClose();
+  };
 
   const handleAddComment = () => {
     if (!commentText.trim()) return;
@@ -308,6 +396,68 @@ function TaskDrawer({
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><IconClose size={13} /></button>
         </div>
         <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", lineHeight: 1.4 }}>{task.title}</h2>
+
+        {col === "review" && (
+          <div style={{ marginBottom: "20px", padding: "16px", border: "1px solid var(--border-default)", borderRadius: "10px", background: "var(--bg-surface-2)" }}>
+            {!showRejectForm ? (
+              <>
+                <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>Are you satisfied with this work?</h3>
+                <div style={{ display: "flex", gap: "10px" }}>
+                  <button className="btn btn-success btn-sm" onClick={handleSatisfiedYes}>Yes</button>
+                  <button className="btn btn-danger btn-sm" onClick={handleSatisfiedNo}>No</button>
+                </div>
+              </>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>Reject Work</h3>
+                
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Reason</label>
+                  <textarea 
+                    className="input" 
+                    placeholder="Provide reason for rejecting..."
+                    value={rejectReason}
+                    onChange={(e) => setRejectReason(e.target.value)}
+                    style={{ width: "100%", minHeight: "60px", resize: "vertical", fontSize: "12px" }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>New Assignee</label>
+                  <select 
+                    className="select" 
+                    value={rejectAssignee}
+                    onChange={(e) => setRejectAssignee(e.target.value)}
+                    style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                  >
+                    {consultants.map(cons => (
+                      <option key={cons.id} value={cons.id}>{cons.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Reduce Efficiency (Current Assignee: {c.name})</label>
+                  <input 
+                    type="number"
+                    className="input" 
+                    value={rejectEfficiency}
+                    onChange={(e) => setRejectEfficiency(e.target.value)}
+                    min="0"
+                    max="100"
+                    style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                  />
+                </div>
+
+                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "8px" }}>
+                  <button className="btn btn-sm" style={{ background: "var(--bg-surface-3)" }} onClick={() => setShowRejectForm(false)}>Cancel</button>
+                  <button className="btn btn-primary btn-sm" onClick={handleSubmitRejection}>Submit</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
           {[
             { label: t("Assignee"), value: (<div style={{ display: "flex", alignItems: "center", gap: "6px" }}><div className="avatar" style={{ background: c.color, width: "20px", height: "20px", minWidth: "20px", fontSize: "8px" }}>{c.avatar}</div><span>{c.name}</span></div>) },
