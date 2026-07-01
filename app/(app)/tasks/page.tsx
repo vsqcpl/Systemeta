@@ -265,6 +265,11 @@ function TaskDrawer({
   const addSubtaskToTask = useAppStore((state) => state.addSubtaskToTask);
   const moveTask = useAppStore((state) => state.moveTask);
   const showToast = useAppStore((state) => state.showToast);
+  const deleteTaskComments = useAppStore((state) => state.deleteTaskComments);
+  const { user } = useAuth();
+
+  const [manageCommentsMode, setManageCommentsMode] = React.useState(false);
+  const [selectedCommentIds, setSelectedCommentIds] = React.useState<string[]>([]);
 
   const [commentText, setCommentText] = React.useState("");
   const [showAddSubtask, setShowAddSubtask] = React.useState(false);
@@ -568,14 +573,95 @@ function TaskDrawer({
 
         {task.comments && task.comments.length > 0 && (
           <div style={{ marginBottom: "20px" }}>
-            <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "12px" }}>{t("Comments")} ({task.comments.length})</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                {t("Comments")} ({task.comments.length})
+              </div>
+              {task.comments.some((c) => c.user === user?.name) && (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: "11px", padding: "2px 8px", color: manageCommentsMode ? "var(--text-primary)" : "var(--text-secondary)" }}
+                  onClick={() => {
+                    if (manageCommentsMode) {
+                      setManageCommentsMode(false);
+                      setSelectedCommentIds([]);
+                    } else {
+                      setManageCommentsMode(true);
+                    }
+                  }}
+                >
+                  {manageCommentsMode ? t("Cancel") : t("Manage")}
+                </button>
+              )}
+            </div>
+
+            {manageCommentsMode && (
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", padding: "8px", background: "var(--bg-surface-2)", borderRadius: "6px" }}>
+                <button
+                  className="btn btn-ghost btn-sm"
+                  style={{ fontSize: "11px", padding: "2px 8px" }}
+                  onClick={() => {
+                    const userCommentIds = task.comments!.filter(c => c.user === user?.name).map(c => c.id);
+                    if (selectedCommentIds.length === userCommentIds.length) {
+                      setSelectedCommentIds([]);
+                    } else {
+                      setSelectedCommentIds(userCommentIds);
+                    }
+                  }}
+                >
+                  {selectedCommentIds.length === task.comments!.filter(c => c.user === user?.name).length && selectedCommentIds.length > 0 ? "Deselect All" : "Select All"}
+                </button>
+                {selectedCommentIds.length > 0 && (
+                  <button
+                    className="btn btn-sm"
+                    style={{ fontSize: "11px", padding: "2px 8px", background: "#ef4444", color: "white", border: "none" }}
+                    onClick={() => {
+                      if (window.confirm(`Are you sure you want to delete ${selectedCommentIds.length} comment(s)?`)) {
+                        deleteTaskComments(task.id, selectedCommentIds);
+                        setManageCommentsMode(false);
+                        setSelectedCommentIds([]);
+                      }
+                    }}
+                  >
+                    {t("Delete Selected")} ({selectedCommentIds.length})
+                  </button>
+                )}
+              </div>
+            )}
+
             {task.comments.map((cm) => (
-              <div key={cm.id} style={{ display: "flex", gap: "10px", marginBottom: "14px" }}>
+              <div key={cm.id} style={{ display: "flex", gap: "10px", marginBottom: "14px", alignItems: "flex-start" }}>
+                {manageCommentsMode && cm.user === user?.name && (
+                  <input
+                    type="checkbox"
+                    checked={selectedCommentIds.includes(cm.id)}
+                    onChange={(e) => {
+                      if (e.target.checked) setSelectedCommentIds([...selectedCommentIds, cm.id]);
+                      else setSelectedCommentIds(selectedCommentIds.filter(id => id !== cm.id));
+                    }}
+                    style={{ marginTop: "6px" }}
+                  />
+                )}
                 <div className="avatar" style={{ background: cm.color, width: "28px", height: "28px", minWidth: "28px", fontSize: "9px" }}>{cm.avatar}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
                     <span style={{ fontSize: "12px", fontWeight: 600 }}>{cm.user}</span>
-                    <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{cm.time}</span>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{cm.time}</span>
+                      {!manageCommentsMode && cm.user === user?.name && (
+                        <button
+                          style={{ background: "none", border: "none", cursor: "pointer", padding: "2px", display: "flex", alignItems: "center", color: "var(--text-tertiary)" }}
+                          title="Delete comment"
+                          onClick={() => {
+                            if (window.confirm("Are you sure you want to delete this comment?")) {
+                              deleteTaskComments(task.id, [cm.id]);
+                            }
+                          }}
+                        >
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                        </button>
+                      )}
+                    </div>
                   </div>
                   <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: 1.5 }}>{cm.text}</div>
                 </div>

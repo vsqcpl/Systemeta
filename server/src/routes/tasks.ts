@@ -228,6 +228,53 @@ router.post("/:id/comments", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// DELETE /api/tasks/:id/comments - Delete comments authored by the current user
+router.delete("/:id/comments", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { commentIds } = req.body;
+
+    if (!commentIds || !Array.isArray(commentIds) || commentIds.length === 0) {
+      return res.status(400).json({ message: "Comment IDs are required" });
+    }
+
+    const task = await prisma.task.findUnique({ where: { id } });
+    if (!task) {
+      return res.status(404).json({ message: "Task not found" });
+    }
+
+    // Verify all comments exist and belong to the current user
+    const comments = await prisma.taskComment.findMany({
+      where: {
+        id: { in: commentIds },
+        taskId: id,
+      }
+    });
+
+    if (comments.length !== commentIds.length) {
+      return res.status(404).json({ message: "One or more comments not found" });
+    }
+
+    const unauthorized = comments.some(c => c.userName !== req.user.name);
+    if (unauthorized) {
+      return res.status(403).json({ message: "Forbidden: You can only delete your own comments" });
+    }
+
+    // Perform deletion
+    await prisma.taskComment.deleteMany({
+      where: {
+        id: { in: commentIds },
+        taskId: id,
+      }
+    });
+
+    return res.status(200).json({ message: "Comments deleted successfully" });
+  } catch (error) {
+    console.error("DELETE /tasks/:id/comments error:", error);
+    return res.status(500).json({ message: "Internal server error deleting comments" });
+  }
+});
+
 // POST /api/tasks/:id/subtasks - Add a subtask to an existing task
 router.post("/:id/subtasks", async (req: AuthenticatedRequest, res) => {
   try {

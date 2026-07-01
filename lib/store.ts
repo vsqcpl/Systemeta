@@ -310,6 +310,7 @@ interface AppStore {
   addExpense: (expense: Omit<Expense, "id" | "status" | "receipt"> & { receiptUrl?: string }) => void;
   moveTask: (taskId: string, targetCol: "todo" | "inprogress" | "review" | "done", actualCompletionDate?: string) => void;
   addTaskComment: (taskId: string, text: string) => void;
+  deleteTaskComments: (taskId: string, commentIds: string[]) => void;
   addSubtaskToTask: (taskId: string, subtask: { title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string }) => void;
   approveLeaveRequest: (id: string) => void;
   rejectLeaveRequest: (id: string) => void;
@@ -3227,6 +3228,46 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error adding comment: " + err.message, "danger");
+      });
+  },
+
+  deleteTaskComments: (taskId, commentIds) => {
+    // 1. Optimistic UI update
+    set((state) => {
+      const newTasks = { ...state.data.tasks };
+      for (const column of Object.keys(newTasks)) {
+        const list = newTasks[column as keyof typeof newTasks];
+        const taskIdx = list.findIndex(t => t.id === taskId);
+        if (taskIdx !== -1) {
+          const task = list[taskIdx];
+          if (task.comments) {
+            const updatedComments = task.comments.filter((c: any) => !commentIds.includes(c.id));
+            list[taskIdx] = { ...task, comments: updatedComments };
+          }
+          break;
+        }
+      }
+      return { data: { ...state.data, tasks: newTasks } };
+    });
+
+    // 2. Perform API call
+    fetch(`/api/tasks/${taskId}/comments`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ commentIds }),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to delete comments");
+        useAppStore.getState().showToast("Comments deleted successfully", "success");
+      })
+      .catch((err) => {
+        useAppStore.getState().showToast("Error deleting comments: " + err.message, "danger");
+        // Re-fetch to revert optimistic update on error
+        fetch("/api/tasks")
+          .then((r) => r.json())
+          .then((tasks) => {
+            set((state) => ({ data: { ...state.data, tasks } }));
+          });
       });
   },
 
