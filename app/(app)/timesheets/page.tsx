@@ -42,6 +42,7 @@ export default function TimesheetsPage() {
   const [tempProjectClient, setTempProjectClient] = useState("Internal Operations");
   const [tempCurrentLocation, setTempCurrentLocation] = useState("");
   const [tempWorkNotes, setTempWorkNotes] = useState("");
+  const [punchSessions, setPunchSessions] = useState<any[]>([]);
 
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
   const [taskHours, setTaskHours] = useState<Record<number, string>>({});
@@ -54,6 +55,8 @@ export default function TimesheetsPage() {
     remarks: "",
     status: ""
   });
+  
+  const [showPreviousLogs, setShowPreviousLogs] = useState(false);
 
   const allTasks = useMemo(() => {
     const tasksObj = data.tasks as any;
@@ -97,42 +100,130 @@ export default function TimesheetsPage() {
     }
   };
 
-  const submitPunchIn = () => {
+  const submitPunchIn = async () => {
     setProjectClient(tempProjectClient);
     setCurrentLocation(tempCurrentLocation);
     setTimeLogged("Work In Progress");
     setWorkNotes("");
     
-    setSessionRecord({
-      visible: true,
-      task: tempProjectClient,
-      location: tempCurrentLocation,
-      startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      endTime: "",
-      remarks: "",
-      status: "In Progress"
-    });
-
     setShowPunchInModal(false);
-    togglePunch(); // starts the global timer
+
+    try {
+      const res = await fetch('/api/timesheets/punch-in', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          project: tempProjectClient,
+          location: tempCurrentLocation
+        })
+      });
+      const resData = await res.json();
+      if (resData.success) {
+        setPunchSessions(prev => [...prev, resData.session]);
+        useAppStore.setState({ punchedIn: true, punchStartTime: resData.session.punchIn });
+        
+        // Synchronize with global store data immediately for AI modules
+        const storeData = useAppStore.getState().data;
+        const userTimesheet = storeData.timesheets.find(
+          (t) => t.consultant === user?.id && t.week === targetWeekKey
+        ) || {
+          id: `ts-${Date.now()}`,
+          consultant: user?.id,
+          week: targetWeekKey,
+          entries: []
+        };
+        const newEntry = {
+          id: resData.session.id,
+          timesheetId: (userTimesheet as any).id,
+          day: new Date(resData.session.date).getDay() === 0 ? 6 : new Date(resData.session.date).getDay() - 1,
+          projectId: resData.session.project,
+          task: resData.session.task,
+          hours: 0,
+          billable: true,
+          punchInTime: resData.session.punchIn,
+          punchOutTime: null
+        };
+        const updatedTimesheet = { ...userTimesheet, entries: [...(userTimesheet as any).entries.filter((e: any) => e.id !== resData.session.id), newEntry] };
+        const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet);
+        useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
+
+        setSessionRecord({
+          visible: true,
+          task: tempProjectClient,
+          location: tempCurrentLocation,
+          startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          endTime: "",
+          remarks: "",
+          status: "In Progress"
+        });
+      } else {
+        showToast("Failed to punch in.", "danger");
+      }
+    } catch(e) {
+      console.error(e);
+      showToast("Error punching in.", "danger");
+    }
   };
 
-  const submitPunchOut = () => {
-    if (punchStartTime) {
-      const diffMs = Date.now() - new Date(punchStartTime).getTime();
-      setTimeLogged(formatDurationText(diffMs));
-    }
-    setWorkNotes(tempWorkNotes);
-    
-    setSessionRecord(prev => ({
-      ...prev,
-      endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      remarks: tempWorkNotes,
-      status: "Completed"
-    }));
-
+  const submitPunchOut = async () => {
     setShowPunchOutModal(false);
-    togglePunch(); // stops the global timer
+    
+    try {
+      const res = await fetch('/api/timesheets/punch-out', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workNotes: tempWorkNotes })
+      });
+      const resData = await res.json();
+      
+      if (resData.success) {
+        setPunchSessions(prev => prev.map(s => s.id === resData.session.id ? resData.session : s));
+        useAppStore.setState({ punchedIn: false, punchStartTime: null });
+        
+        if (resData.session.punchIn && resData.session.punchOut) {
+          const diffMs = new Date(resData.session.punchOut).getTime() - new Date(resData.session.punchIn).getTime();
+          setTimeLogged(formatDurationText(diffMs));
+        }
+
+        // Synchronize with global store data immediately for AI modules
+        const storeData = useAppStore.getState().data;
+        const userTimesheet = storeData.timesheets.find(
+          (t) => t.consultant === user?.id && t.week === targetWeekKey
+        ) || {
+          id: `ts-${Date.now()}`,
+          consultant: user?.id,
+          week: targetWeekKey,
+          entries: []
+        };
+        const updatedEntry = {
+          id: resData.session.id,
+          timesheetId: (userTimesheet as any).id,
+          day: new Date(resData.session.date).getDay() === 0 ? 6 : new Date(resData.session.date).getDay() - 1,
+          projectId: resData.session.project,
+          task: resData.session.task,
+          hours: resData.session.punchOut ? parseFloat(((new Date(resData.session.punchOut).getTime() - new Date(resData.session.punchIn).getTime()) / 3600000).toFixed(2)) : 0,
+          billable: true,
+          punchInTime: resData.session.punchIn,
+          punchOutTime: resData.session.punchOut
+        };
+        const updatedTimesheet = { ...userTimesheet, entries: [...(userTimesheet as any).entries.filter((e: any) => e.id !== resData.session.id), updatedEntry] };
+        const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet);
+        useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
+        
+        setWorkNotes(tempWorkNotes);
+        setSessionRecord(prev => ({
+          ...prev,
+          endTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          remarks: tempWorkNotes,
+          status: "Completed"
+        }));
+      } else {
+        showToast("Failed to punch out.", "danger");
+      }
+    } catch(e) {
+      console.error(e);
+      showToast("Error punching out.", "danger");
+    }
   };
 
   const handleTaskToggle = (taskId: number) => {
@@ -269,8 +360,120 @@ export default function TimesheetsPage() {
   }, [punchedIn, punchStartTime]);
 
   // Weeks definition
-  const weekStart = new Date("2026-06-09");
-  weekStart.setDate(weekStart.getDate() + weekOffset * 7);
+  const weekStart = useMemo(() => {
+    const start = new Date("2026-06-09");
+    start.setDate(start.getDate() + weekOffset * 7);
+    return start;
+  }, [weekOffset]);
+
+  const targetWeekKey = weekStart.toISOString().substring(0, 10);
+
+  // Fetch persisted punch sessions
+  useEffect(() => {
+    if (!user) return;
+    const start = new Date(weekStart);
+    const end = new Date(weekStart);
+    end.setDate(end.getDate() + 6);
+    
+    const startStr = start.toISOString().split('T')[0];
+    const endStr = end.toISOString().split('T')[0];
+    
+    fetch(`/api/timesheets/punch-sessions`)
+      .then(res => res.json())
+      .then(resData => {
+        if (resData.success) {
+          setPunchSessions(resData.sessions);
+          
+          // Inject fetched sessions directly into the store so AI Center reads them naturally
+          const storeData = useAppStore.getState().data;
+          const userTimesheet = storeData.timesheets.find(
+            (t) => t.consultant === user.id && t.week === targetWeekKey
+          ) || {
+            id: `ts-${Date.now()}`,
+            consultant: user.id,
+            week: targetWeekKey,
+            entries: []
+          };
+          
+          // Create timesheet entries array mimicking what AI module expects
+          const newEntries = resData.sessions.map((s: any) => ({
+            id: s.id,
+            timesheetId: (userTimesheet as any).id,
+            day: new Date(s.date).getDay() === 0 ? 6 : new Date(s.date).getDay() - 1, // Approximation for Mon-Sun
+            projectId: s.project,
+            task: s.task,
+            hours: s.punchOut ? parseFloat(((new Date(s.punchOut).getTime() - new Date(s.punchIn).getTime()) / 3600000).toFixed(2)) : 0,
+            billable: true,
+            punchInTime: s.punchIn,
+            punchOutTime: s.punchOut
+          }));
+          
+          const oldMockEntries = (userTimesheet as any).entries.filter((e: any) => !e.punchInTime);
+          const updatedTimesheet = { ...userTimesheet, entries: [...oldMockEntries, ...newEntries] };
+          const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet);
+          
+          useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
+
+          // If viewing current week, restore running timer state safely
+          if (weekOffset === 0) {
+            const todayStr = new Date().toISOString().split('T')[0];
+            const todaysSessions = resData.sessions.filter((s: any) => s.date === todayStr);
+            const activeSession = todaysSessions.find((s: any) => !s.punchOut);
+            
+            const currentState = useAppStore.getState();
+            
+            if (activeSession) {
+              if (!currentState.punchedIn) {
+                useAppStore.setState({ punchedIn: true, punchStartTime: activeSession.punchIn });
+              }
+              setSessionRecord({
+                visible: true,
+                task: activeSession.project || "Internal Operations",
+                location: activeSession.location || "",
+                startTime: new Date(activeSession.punchIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                endTime: "",
+                remarks: "",
+                status: "In Progress"
+              });
+              setTimeLogged("Work In Progress");
+            } else {
+              if (currentState.punchedIn) {
+                useAppStore.setState({ punchedIn: false, punchStartTime: null });
+              }
+              if (todaysSessions.length > 0) {
+                // Get the last completed session of the day
+                const lastSession = todaysSessions[todaysSessions.length - 1];
+                setSessionRecord({
+                  visible: true,
+                  task: lastSession.project || "Internal Operations",
+                  location: lastSession.location || "",
+                  startTime: new Date(lastSession.punchIn).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                  endTime: lastSession.punchOut ? new Date(lastSession.punchOut).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "",
+                  remarks: lastSession.workNotes || "",
+                  status: "Completed"
+                });
+                if (lastSession.punchIn && lastSession.punchOut) {
+                  const diffMs = new Date(lastSession.punchOut).getTime() - new Date(lastSession.punchIn).getTime();
+                  setTimeLogged(formatDurationText(diffMs));
+                }
+              } else {
+                setSessionRecord({
+                  visible: false,
+                  task: "",
+                  location: "",
+                  startTime: "",
+                  endTime: "",
+                  remarks: "",
+                  status: ""
+                });
+                setTimeLogged("0.0h");
+              }
+            }
+          }
+        }
+      })
+      .catch(console.error);
+  }, [weekOffset, user, weekStart, targetWeekKey]);
 
   const getWeekRangeLabel = () => {
     const start = new Date(weekStart);
@@ -286,22 +489,28 @@ export default function TimesheetsPage() {
     return `${t(dayNames[i])} ${d.getDate()}`;
   });
 
-  const targetWeekKey = weekStart.toISOString().substring(0, 10);
-
   // Retrieve timesheet for current week & user from store
   const userTimesheet = data.timesheets.find(
-    (t) => t.consultant === (user?.id || "TK") && t.week === targetWeekKey
+    (t: any) => t.consultant === (user?.id || "TK") && t.week === targetWeekKey
   );
 
-  // Helper to get hours value for cell
+  // Helper to get hours value for cell from persisted sessions
   const getCellHours = (project: string, task: string, day: number, defaultVal: number) => {
-    if (userTimesheet) {
-      const match = userTimesheet.entries.find(
-        (e) => e.day === day && e.project === project && e.task === task
-      );
-      return match ? match.hours : 0;
+    const dayDate = new Date(weekStart);
+    dayDate.setDate(dayDate.getDate() + day);
+    const dayStr = dayDate.toISOString().split("T")[0];
+
+    const daySessions = punchSessions.filter(s => s.date === dayStr && s.project === project);
+
+    if (daySessions.length > 0) {
+      const totalMs = daySessions.reduce((sum, s) => {
+        if (!s.punchOut) return sum; // Active sessions do not add to table until punched out
+        const diff = new Date(s.punchOut).getTime() - new Date(s.punchIn).getTime();
+        return sum + diff;
+      }, 0);
+      return totalMs > 0 ? parseFloat((totalMs / 3600000).toFixed(2)) : 0;
     }
-    // If no custom timesheet created yet, return original default week offset is 0
+    
     return weekOffset === 0 ? defaultVal : 0;
   };
 
@@ -653,6 +862,60 @@ export default function TimesheetsPage() {
               </div>
             </div>
           )}
+
+          {/* Previous Work Logs */}
+          <div className="card mb-4" style={{ overflow: "hidden" }}>
+            <div 
+              className="card-header" 
+              style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }} 
+              onClick={() => setShowPreviousLogs(!showPreviousLogs)}
+            >
+              <span className="card-title" style={{ fontSize: "14px" }}>{t("Previous Timesheet Details")}</span>
+              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                {showPreviousLogs ? "▲" : "▼"}
+              </span>
+            </div>
+            {showPreviousLogs && (
+              <div className="card-body" style={{ padding: "0" }}>
+                {punchSessions.length === 0 ? (
+                  <div style={{ padding: "16px", textAlign: "center", color: "var(--text-secondary)", fontSize: "13px" }}>
+                    {t("No previous sessions logged.")}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", maxHeight: "300px", overflowY: "auto" }}>
+                    {punchSessions.slice().reverse().map((s: any, i: number) => {
+                      if (!s.punchOut) return null; // Only show completed sessions
+                      const inDate = new Date(s.punchIn);
+                      const outDate = new Date(s.punchOut);
+                      const durationMs = outDate.getTime() - inDate.getTime();
+                      return (
+                        <div key={i} style={{ 
+                          padding: "12px 16px", 
+                          borderBottom: i < punchSessions.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center"
+                        }}>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                            <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
+                              {s.project || "Internal Operations"}
+                            </span>
+                            <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                              {inDate.toLocaleDateString()} · {inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </span>
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                            <span className="badge badge-success">{formatDurationText(durationMs)}</span>
+                            {s.location && <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{s.location}</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Grid Card */}
           <div className="card">

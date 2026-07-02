@@ -3,7 +3,22 @@
 import React, { useState, useEffect, useRef, useMemo } from "react";
 
 import { useAppStore, useTranslation } from "@/lib/store";
-import { formatCurrency } from "@/lib/utils";
+import { getGlobalCurrencySymbol, getGlobalCurrencyFormat } from "@/lib/utils";
+
+// Local Exact Formatting Function - Overrides global suffix rounding (Cr, L)
+const formatCurrency = (val: number) => {
+  const sym = getGlobalCurrencySymbol();
+  const fmt = getGlobalCurrencyFormat();
+  
+  const formatter = new Intl.NumberFormat(fmt === "indian" ? "en-IN" : "en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  
+  const isNegative = val < 0;
+  const formatted = formatter.format(Math.abs(val));
+  return (isNegative ? "-" : "") + sym + formatted;
+};
 import { useAuth } from "@/hooks/useAuth";
 import { filterExpenses, filterProjects } from "@/lib/dataFilters";
 import ActionGuard from "@/components/guards/ActionGuard";
@@ -100,6 +115,7 @@ export default function ExpensesPage() {
   const showToast = useAppStore((state) => state.showToast);
   const approveExpense = useAppStore((state) => state.approveExpense);
   const rejectExpense = useAppStore((state) => state.rejectExpense);
+  const deleteExpense = useAppStore((state) => state.deleteExpense);
   const addExpense = useAppStore((state) => state.addExpense);
 
   // Stable memoized arrays — MUST use useMemo, never inline .filter()
@@ -116,69 +132,8 @@ export default function ExpensesPage() {
     [data.projects, user?.id]
   );
 
-  // Dynamic categoryData calculation
-  const categoryData = useMemo(() => {
-    const categories = ["Travel", "Accommodation", "Meals", "Transport", "Other"];
-    const map = categories.reduce((acc, cat) => ({ ...acc, [cat]: 0 }), {} as Record<string, number>);
-    let total = 0;
-    
-    visibleExpenses.forEach((e) => {
-      const cat = e.category;
-      if (categories.includes(cat)) {
-        map[cat] += e.amount;
-        total += e.amount;
-      } else {
-        map["Other"] += e.amount;
-        total += e.amount;
-      }
-    });
-    
-    return categories.map((name) => {
-      const val = map[name];
-      const percentage = total > 0 ? Math.round((val / total) * 100) : 0;
-      return { name, value: val, percentage };
-    });
-  }, [visibleExpenses]);
-
-  // Dynamic monthlyData calculation (Jan-Jun)
-  const monthlyData = useMemo(() => {
-    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    const map = months.reduce((acc, m) => ({ ...acc, [m]: 0 }), {} as Record<string, number>);
-    
-    visibleExpenses.forEach((e) => {
-      const dateParts = e.date.split("-");
-      if (dateParts.length >= 2) {
-        const monthIdx = parseInt(dateParts[1], 10) - 1;
-        if (monthIdx >= 0 && monthIdx < 12) {
-          const mName = months[monthIdx];
-          map[mName] += e.amount;
-        }
-      }
-    });
-    
-    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map((m) => ({
-      month: m,
-      Spend: map[m] || 0,
-    }));
-  }, [visibleExpenses]);
-
-  // Dynamic recentActivities calculation
-  const recentActivities = useMemo(() => {
-    return visibleExpenses
-      .slice(0, 5)
-      .map((e, idx) => {
-        const statusText = e.status === "approved" ? "approved" : e.status === "rejected" ? "rejected" : "submitted";
-        const type = e.status === "approved" ? "approve" : e.status === "rejected" ? "reject" : "submit";
-        const consultantObj = data.consultants.find((c: any) => c.id === e.consultant);
-        const name = consultantObj ? consultantObj.name : e.consultant || "Someone";
-        return {
-          id: idx,
-          text: `${name} ${statusText} ${e.category.toLowerCase()} expense claim for ${formatCurrency(e.amount)} (${e.project})`,
-          time: e.date,
-          type,
-        };
-      });
-  }, [visibleExpenses, data.consultants]);
+  // Analytics calculations have been moved down below the filteredExpenses declaration
+  // to ensure a single source of truth and full synchronization.
 
   // Filter States
   const [selectedProject, setSelectedProject] = useState("All Projects");
@@ -191,6 +146,7 @@ export default function ExpensesPage() {
   const [showForm, setShowForm] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null);
+  const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
 
   // Form State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -204,54 +160,6 @@ export default function ExpensesPage() {
     timestamp: string;
   } | null>(null);
 
-  // Dashboard Receipt Upload Card State
-  const dashboardFileInputRef = useRef<HTMLInputElement>(null);
-  const [dashboardReceipt, setDashboardReceipt] = useState<{
-    fileName: string;
-    fileSize: string;
-    fileType: string;
-  } | null>(null);
-
-  const handleDashboardUploadClick = () => {
-    dashboardFileInputRef.current?.click();
-  };
-
-  const handleDashboardFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const maxSize = 10 * 1024 * 1024; // 10MB
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
-
-    if (!allowedTypes.includes(file.type)) {
-      showToast("Unsupported file type! Only JPG, PNG, and PDF are allowed.", "danger");
-      return;
-    }
-
-    if (file.size > maxSize) {
-      showToast("File size exceeds 10MB limit.", "danger");
-      return;
-    }
-
-    const isReplace = dashboardReceipt !== null;
-    setDashboardReceipt({
-      fileName: file.name,
-      fileSize: (file.size / (1024 * 1024)).toFixed(2) + " MB",
-      fileType: file.type.split("/")[1]?.toUpperCase() || file.type,
-    });
-
-    if (isReplace) {
-      showToast("Receipt replaced successfully.", "success");
-    } else {
-      showToast("Receipt uploaded successfully.", "success");
-    }
-  };
-
-  const handleDashboardRemoveFile = () => {
-    setDashboardReceipt(null);
-    if (dashboardFileInputRef.current) dashboardFileInputRef.current.value = "";
-    showToast("Receipt removed successfully.", "success");
-  };
 
   const [newExpense, setNewExpense] = useState({
     description: "",
@@ -468,49 +376,151 @@ export default function ExpensesPage() {
   if (!data) return null;
 
   // Advanced Filtering
-  const filteredExpenses = visibleExpenses.filter((e) => {
-    const matchesSearch =
-      e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      e.id.toLowerCase().includes(searchTerm.toLowerCase());
+  const filteredExpenses = useMemo(() => {
+    return visibleExpenses.filter((e) => {
+      const matchesSearch =
+        e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        e.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-    const matchesProject = selectedProject === "All Projects" || e.project === selectedProject;
-    const matchesCategory = categoryFilter === "All Categories" || e.category === categoryFilter;
-    
-    let matchesStatus = true;
-    if (statusFilter !== "All Statuses") {
-      if (statusFilter === "Approved") matchesStatus = e.status === "approved";
-      else if (statusFilter === "Awaiting Approval") matchesStatus = e.status === "pending";
-      else if (statusFilter === "Rejected") matchesStatus = e.status === "rejected";
-      else if (statusFilter === "Under Review") matchesStatus = e.status === "pending"; // simulate under review
-    }
-
-    let matchesDate = true;
-    if (dateRangeFilter !== "All Dates") {
-      const dateLimit = new Date();
-      if (dateRangeFilter === "Last 30 Days") {
-        dateLimit.setDate(dateLimit.getDate() - 30);
-      } else if (dateRangeFilter === "This Month") {
-        dateLimit.setDate(1);
-      } else if (dateRangeFilter === "Last 3 Months") {
-        dateLimit.setMonth(dateLimit.getMonth() - 3);
+      const matchesProject = selectedProject === "All Projects" || e.project === selectedProject;
+      const matchesCategory = categoryFilter === "All Categories" || e.category === categoryFilter;
+      
+      let matchesStatus = true;
+      if (statusFilter !== "All Statuses") {
+        if (statusFilter === "Approved") matchesStatus = e.status === "approved";
+        else if (statusFilter === "Awaiting Approval") matchesStatus = e.status === "pending";
+        else if (statusFilter === "Rejected") matchesStatus = e.status === "rejected";
+        else if (statusFilter === "Under Review") matchesStatus = e.status === "pending"; // simulate under review
       }
-      const claimDate = new Date(e.date);
-      matchesDate = claimDate >= dateLimit;
-    }
 
-    return matchesSearch && matchesProject && matchesCategory && matchesStatus && matchesDate;
-  });
+      let matchesDate = true;
+      if (dateRangeFilter !== "All Dates") {
+        const dateLimit = new Date();
+        if (dateRangeFilter === "Last 30 Days") {
+          dateLimit.setDate(dateLimit.getDate() - 30);
+        } else if (dateRangeFilter === "This Month") {
+          dateLimit.setDate(1);
+        } else if (dateRangeFilter === "Last 3 Months") {
+          dateLimit.setMonth(dateLimit.getMonth() - 3);
+        }
+        const claimDate = new Date(e.date);
+        matchesDate = claimDate >= dateLimit;
+      }
+
+      return matchesSearch && matchesProject && matchesCategory && matchesStatus && matchesDate;
+    });
+  }, [visibleExpenses, searchTerm, selectedProject, categoryFilter, statusFilter, dateRangeFilter]);
+
+  // Business Logic: Exclude rejected expenses from analytics calculations
+  const analyticsExpenses = useMemo(() => filteredExpenses.filter((e) => e.status !== "rejected"), [filteredExpenses]);
+
+  // Precise calculation helper to prevent floating-point errors and support massive amounts
+  const preciseSum = (expenses: any[]) => {
+    let maxDec = 0;
+    for (const e of expenses) {
+      if (!e.amount) continue;
+      let s = e.amount.toString();
+      if (s.includes('e')) s = Number(e.amount).toLocaleString('fullwide', {useGrouping:false, maximumFractionDigits: 20});
+      const parts = s.split('.');
+      if (parts[1] && parts[1].length > maxDec) maxDec = parts[1].length;
+    }
+    
+    let totalBig = BigInt(0);
+    for (const e of expenses) {
+      if (!e.amount) continue;
+      let s = e.amount.toString();
+      if (s.includes('e')) s = Number(e.amount).toLocaleString('fullwide', {useGrouping:false, maximumFractionDigits: 20});
+      const parts = s.split('.');
+      const intPart = parts[0] || '0';
+      const decPart = parts[1] || '';
+      const paddedDec = decPart.padEnd(maxDec, '0');
+      totalBig += BigInt(intPart + paddedDec);
+    }
+    
+    const totalStr = totalBig.toString();
+    if (maxDec === 0) return Number(totalStr);
+    
+    const isNeg = totalStr.startsWith('-');
+    const absStr = isNeg ? totalStr.slice(1) : totalStr;
+    const paddedAbs = absStr.padStart(maxDec + 1, '0');
+    const intResult = paddedAbs.slice(0, paddedAbs.length - maxDec);
+    const decResult = paddedAbs.slice(paddedAbs.length - maxDec);
+    return Number((isNeg ? '-' : '') + intResult + '.' + decResult);
+  };
 
   // KPI calculations
-  const totalSubmitted = filteredExpenses.reduce((s, e) => s + e.amount, 0);
-  const pendingAmount = filteredExpenses
-    .filter((e) => e.status === "pending")
-    .reduce((s, e) => s + e.amount, 0);
-  const approvedAmount = filteredExpenses
-    .filter((e) => e.status === "approved")
-    .reduce((s, e) => s + e.amount, 0);
-  const avgClaim = filteredExpenses.length ? totalSubmitted / filteredExpenses.length : 0;
+  const totalAllSubmitted = useMemo(() => preciseSum(filteredExpenses), [filteredExpenses]);
+  const totalSubmitted = useMemo(() => preciseSum(analyticsExpenses), [analyticsExpenses]);
+  const pendingAmount = useMemo(() => preciseSum(analyticsExpenses.filter((e) => e.status === "pending")), [analyticsExpenses]);
+  const approvedAmount = useMemo(() => preciseSum(analyticsExpenses.filter((e) => e.status === "approved")), [analyticsExpenses]);
+  const avgClaim = analyticsExpenses.length ? totalSubmitted / analyticsExpenses.length : 0;
   const progressPercent = totalSubmitted > 0 ? Math.round((approvedAmount / totalSubmitted) * 100) : 0;
+
+  // Analytics calculations updated to use analyticsExpenses as the single source of truth
+  const categoryData = useMemo(() => {
+    const categories = ["Travel", "Accommodation", "Meals", "Transport", "Other"];
+    const grouped: Record<string, any[]> = {};
+    categories.forEach(c => grouped[c] = []);
+    grouped["Other"] = [];
+    
+    analyticsExpenses.forEach((e) => {
+      if (categories.includes(e.category)) {
+        grouped[e.category].push(e);
+      } else {
+        grouped["Other"].push(e);
+      }
+    });
+    
+    return categories.map((name) => {
+      const val = preciseSum(grouped[name]);
+      const percentage = totalSubmitted > 0 ? (val / totalSubmitted) * 100 : 0;
+      return { name, value: val, percentage };
+    });
+  }, [analyticsExpenses, totalSubmitted]);
+
+  const monthlyData = useMemo(() => {
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    const grouped: Record<string, any[]> = {};
+    months.forEach(m => grouped[m] = []);
+    
+    analyticsExpenses.forEach((e) => {
+      const dateParts = e.date.split("-");
+      if (dateParts.length >= 2) {
+        const monthIdx = parseInt(dateParts[1], 10) - 1;
+        if (monthIdx >= 0 && monthIdx < 12) {
+          grouped[months[monthIdx]].push(e);
+        }
+      }
+    });
+    
+    return ["Jan", "Feb", "Mar", "Apr", "May", "Jun"].map((m) => ({
+      month: m,
+      Spend: preciseSum(grouped[m]),
+    }));
+  }, [analyticsExpenses]);
+
+  const recentActivities = useMemo(() => {
+    const sorted = [...visibleExpenses].sort((a, b) => {
+      const timeA = new Date(a.date).getTime();
+      const timeB = new Date(b.date).getTime();
+      return timeB - timeA;
+    });
+
+    return sorted
+      .slice(0, 5)
+      .map((e, idx) => {
+        const statusText = e.status === "approved" ? "approved" : e.status === "rejected" ? "rejected" : "submitted";
+        const type = e.status === "approved" ? "approve" : e.status === "rejected" ? "reject" : "submit";
+        const consultantObj = data.consultants.find((c: any) => c.id === e.consultant);
+        const name = consultantObj ? consultantObj.name : e.consultant || "Someone";
+        return {
+          id: idx,
+          text: `${name} ${statusText} ${e.category.toLowerCase()} expense claim for ${formatCurrency(e.amount)} (${e.project})`,
+          time: e.date,
+          type,
+        };
+      });
+  }, [visibleExpenses, data.consultants]);
 
   // Selected Expense for Workflow Tracker
   const trackedExpense = visibleExpenses.find((e) => e.id === (selectedTrackerId || ""));
@@ -563,7 +573,7 @@ export default function ExpensesPage() {
             {t("Total Expenses Submitted")}
           </div>
           <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
-            {formatCurrency(totalSubmitted)}
+            {formatCurrency(totalAllSubmitted)}
           </div>
           <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>{t("Across all expense categories")}</div>
         </div>
@@ -596,7 +606,7 @@ export default function ExpensesPage() {
             {t("Average Claim Value")}
           </div>
           <div style={{ fontSize: "24px", fontWeight: 800, color: "var(--text-primary)" }}>
-            {formatCurrency(Math.round(avgClaim))}
+            {formatCurrency(avgClaim)}
           </div>
           <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px" }}>{t("Average amount per expense claim")}</div>
         </div>
@@ -846,13 +856,13 @@ export default function ExpensesPage() {
 
           {/* Spend Summary Charts */}
           {(() => {
-            const travelSum = visibleExpenses.filter(e => e.category === "Travel").reduce((s, e) => s + e.amount, 0);
+            const travelSum = preciseSum(analyticsExpenses.filter(e => e.category === "Travel"));
             const travelPct = totalSubmitted > 0 ? Math.round((travelSum / totalSubmitted) * 100) : 0;
 
-            const hotelSum = visibleExpenses.filter(e => e.category === "Accommodation").reduce((s, e) => s + e.amount, 0);
+            const hotelSum = preciseSum(analyticsExpenses.filter(e => e.category === "Accommodation"));
             const hotelPct = totalSubmitted > 0 ? Math.round((hotelSum / totalSubmitted) * 100) : 0;
 
-            const pendingClaims = visibleExpenses.filter(e => e.status === "pending");
+            const pendingClaims = analyticsExpenses.filter(e => e.status === "pending");
             const pendingCount = pendingClaims.length;
 
             return (
@@ -998,108 +1008,14 @@ export default function ExpensesPage() {
                       <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: CATEGORY_COLORS[idx] }} />
                       <span style={{ color: "var(--text-secondary)" }}>{t(cat.name)}</span>
                     </div>
-                    <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{cat.percentage}%</span>
+                    <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{cat.percentage.toFixed(2)}%</span>
                   </div>
                 ))}
               </div>
             </div>
           </div>
 
-          {/* Receipt Upload Card */}
-          <div className="card">
-            <div className="card-header">
-              <span className="card-title">{t("Receipt Upload")}</span>
-            </div>
-            <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              <p style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: "1.4" }}>
-                {t("Upload travel and expense receipts for verification and reimbursement processing.")}
-              </p>
 
-              {/* Hidden file input for dashboard card */}
-              <input
-                type="file"
-                ref={dashboardFileInputRef}
-                onChange={handleDashboardFileChange}
-                accept="image/jpeg,image/jpg,image/png,application/pdf"
-                style={{ display: "none" }}
-              />
-
-              {!dashboardReceipt ? (
-                // State: No file uploaded
-                <div style={{
-                  border: "2px dashed var(--border-subtle)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "20px",
-                  textAlign: "center",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "10px",
-                  backgroundColor: "rgba(46,134,193,0.02)"
-                }}>
-                  <button
-                    className="btn btn-primary btn-sm"
-                    onClick={handleDashboardUploadClick}
-                    style={{ width: "100%" }}
-                  >
-                    {t("Upload Receipt")}
-                  </button>
-                  <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
-                    {t("Supported Formats: JPG, JPEG, PNG, PDF")}
-                    <br />
-                    {t("Max File Size: 10 MB")}
-                  </div>
-                </div>
-              ) : (
-                // State: File uploaded
-                <div style={{
-                  border: "1px solid var(--border-subtle)",
-                  borderRadius: "var(--radius-md)",
-                  padding: "12px",
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "8px",
-                  backgroundColor: "rgba(26,188,156,0.02)"
-                }}>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "flex-start" }}>
-                    <div style={{ color: "var(--ob-teal)", marginTop: "2px" }}>
-                      <IconCheckCircle size={18} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        fontSize: "13px",
-                        fontWeight: 700,
-                        color: "var(--text-primary)",
-                        wordBreak: "break-all",
-                        whiteSpace: "normal"
-                      }}>
-                        {dashboardReceipt.fileName}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>
-                        {t("Size:")} {dashboardReceipt.fileSize} · {t("Type:")} {dashboardReceipt.fileType}
-                      </div>
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
-                    <button
-                      className="btn btn-secondary btn-xs"
-                      onClick={handleDashboardUploadClick}
-                      style={{ flex: 1 }}
-                    >
-                      {t("Replace File")}
-                    </button>
-                    <button
-                      className="btn btn-danger btn-xs"
-                      onClick={handleDashboardRemoveFile}
-                      style={{ flex: 1, background: "var(--ob-red)" }}
-                    >
-                      {t("Remove File")}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
 
           {/* Workflow Tracker Card */}
           <div className="card">
@@ -1159,20 +1075,7 @@ export default function ExpensesPage() {
             </div>
           </div>
 
-          {/* Reimbursement Progress */}
-          <div className="card" style={{ padding: "18px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>{t("Reimbursement Progress")}</span>
-              <span style={{ fontSize: "13px", fontWeight: 700, color: "var(--ob-teal)" }}>{progressPercent}%</span>
-            </div>
-            <div style={{ width: "100%", height: "6px", background: "var(--ob-border-subtle)", borderRadius: "3px", overflow: "hidden" }}>
-              <div style={{ width: `${progressPercent}%`, height: "100%", background: "var(--ob-teal)", borderRadius: "3px", transition: "width 0.3s ease" }} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10.5px", color: "var(--text-secondary)", marginTop: "6px" }}>
-              <span>{t("Approved")}: {formatCurrency(approvedAmount)}</span>
-              <span>{t("Total")}: {formatCurrency(totalSubmitted)}</span>
-            </div>
-          </div>
+
 
           {/* Recent Activity Feed */}
           <div className="card">
@@ -1464,6 +1367,9 @@ export default function ExpensesPage() {
             {/* Modal Footer */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedExpense(null)} style={{ padding: "8px 16px", fontSize: "12.5px" }}>{t("Close")}</button>
+              <button className="btn btn-danger btn-sm" onClick={() => setExpenseToDelete(selectedExpense.id)} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
+                🗑 {t("Delete Expense")}
+              </button>
             </div>
           </div>
         </div>
@@ -1636,6 +1542,67 @@ export default function ExpensesPage() {
               <button className="btn btn-primary" onClick={handleSubmitExpense}>{t("Submit Claim")}</button>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Delete Expense Confirmation Modal */}
+      {expenseToDelete && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1200,
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              background: "var(--bg-surface)",
+              borderRadius: "12px",
+              padding: "24px",
+              width: "min(400px, 90%)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)",
+              animation: "fadeIn 0.22s ease-out",
+            }}
+          >
+            <div style={{ fontSize: "18px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px" }}>
+              {t("Delete Expense?")}
+            </div>
+            <p style={{ fontSize: "14px", color: "var(--text-secondary)", marginBottom: "8px" }}>
+              {t("Are you sure you want to permanently delete this expense claim?")}
+            </p>
+            <p style={{ fontSize: "13px", color: "var(--ob-red)", marginBottom: "24px", fontWeight: 600 }}>
+              {t("This action cannot be undone.")}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                className="btn btn-secondary"
+                onClick={() => setExpenseToDelete(null)}
+              >
+                {t("Cancel")}
+              </button>
+              <button
+                className="btn btn-danger"
+                style={{ background: "var(--ob-red)", color: "#fff" }}
+                onClick={async () => {
+                  if (expenseToDelete) {
+                    await deleteExpense(expenseToDelete);
+                    if (selectedExpense?.id === expenseToDelete) {
+                      setSelectedExpense(null);
+                    }
+                    setExpenseToDelete(null);
+                  }
+                }}
+              >
+                {t("Delete")}
+              </button>
+            </div>
           </div>
         </div>
       )}

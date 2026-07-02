@@ -455,4 +455,97 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// --- Punch Session API ---
+
+// POST /api/timesheets/punch-in
+router.post("/punch-in", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { project, task, location, workNotes, date } = req.body;
+    
+    // Auto-close any active sessions
+    const activeSession = await prisma.punchSession.findFirst({
+      where: { consultantId: req.user.id, punchOut: null }
+    });
+    
+    if (activeSession) {
+      await prisma.punchSession.update({
+        where: { id: activeSession.id },
+        data: { punchOut: new Date() }
+      });
+    }
+
+    const session = await prisma.punchSession.create({
+      data: {
+        consultantId: req.user.id,
+        punchIn: new Date(),
+        project: project || "Internal Operations",
+        task: task || "",
+        location: location || "",
+        workNotes: workNotes || "",
+        date: date || new Date().toISOString().split("T")[0]
+      }
+    });
+
+    return res.json({ success: true, session });
+  } catch (error) {
+    console.error("POST /punch-in error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// POST /api/timesheets/punch-out
+router.post("/punch-out", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { workNotes } = req.body;
+    
+    const activeSession = await prisma.punchSession.findFirst({
+      where: { consultantId: req.user.id, punchOut: null },
+      orderBy: { punchIn: 'desc' }
+    });
+
+    if (!activeSession) {
+      return res.status(400).json({ success: false, message: "No active punch session found." });
+    }
+
+    const updated = await prisma.punchSession.update({
+      where: { id: activeSession.id },
+      data: { 
+        punchOut: new Date(),
+        ...(workNotes ? { workNotes } : {})
+      }
+    });
+
+    return res.json({ success: true, session: updated });
+  } catch (error) {
+    console.error("POST /punch-out error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// GET /api/timesheets/punch-sessions
+router.get("/punch-sessions", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    let whereClause: any = { consultantId: req.user.id };
+    
+    if (startDate && endDate) {
+      whereClause.date = {
+        gte: String(startDate),
+        lte: String(endDate)
+      };
+    }
+
+    const sessions = await prisma.punchSession.findMany({
+      where: whereClause,
+      orderBy: { punchIn: 'asc' }
+    });
+
+    return res.json({ success: true, sessions });
+  } catch (error) {
+    console.error("GET /punch-sessions error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 export default router;

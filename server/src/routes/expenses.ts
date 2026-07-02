@@ -151,4 +151,37 @@ router.patch("/:id", requirePermission("Approve Expenses"), async (req: Authenti
   }
 });
 
+// DELETE /api/expenses/:id - Delete expense
+router.delete("/:id", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const expense = await prisma.expense.findUnique({ where: { id } });
+    if (!expense) {
+      return res.status(404).json({ message: "Expense not found" });
+    }
+
+    if (expense.consultantId !== req.user.id && !["super_admin", "project_manager"].includes(req.user.role)) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    await prisma.expense.delete({ where: { id } });
+
+    await prisma.auditLog.create({
+      data: {
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        userEmail: req.user.email,
+        action: "EXPENSE_DELETED",
+        resource: `expense:${id}`,
+        detail: `Deleted expense claim ${id}`,
+        ip: req.ip || "127.0.0.1",
+      },
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("DELETE /expenses/:id error:", error);
+    return res.status(500).json({ message: "Internal server error deleting expense" });
+  }
+});
+
 export default router;

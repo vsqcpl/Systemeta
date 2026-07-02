@@ -37,10 +37,10 @@ function MiniBarChart({ data }: { data: { week: string; efficiency: number }[] }
 }
 
 // ── Circular Score Widget ────────────────────────────────────────────────────
-function CircleScore({ value, label, color }: { value: number; label: string; color: string }) {
+function CircleScore({ value, label, color }: { value: number | "N/A"; label: string; color: string }) {
   const r = 22;
   const circ = 2 * Math.PI * r;
-  const dash = (value / 100) * circ;
+  const dash = value === "N/A" ? 0 : (value / 100) * circ;
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", minWidth: "50px" }}>
       <svg width="52" height="52" viewBox="0 0 60 60">
@@ -52,7 +52,7 @@ function CircleScore({ value, label, color }: { value: number; label: string; co
           strokeLinecap="round"
           style={{ transition: "stroke-dasharray 0.6s ease" }}
         />
-        <text x="30" y="35" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">{value}%</text>
+        <text x="30" y="35" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">{value === "N/A" ? "N/A" : `${value}%`}</text>
       </svg>
       <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "center", wordBreak: "break-word", overflowWrap: "anywhere" }}>{label}</span>
     </div>
@@ -603,7 +603,92 @@ export default function TimesheetAIPage() {
 
             {selectedConsultant ? (
               <>
-                {/* Consultant selector */}
+                {/* Utilization Metric Calculation - Scoped exclusively to the Performance Metrics Dashboard card */}
+                {(() => {
+                  const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === selectedConsultant.name) : [];
+                  
+                  // Step 1 - Aggregate Logged Hours
+                  let totalHours = 0;
+                  userTimesheets.forEach((ts: any) => {
+                    if (ts.entries && Array.isArray(ts.entries)) {
+                      ts.entries.forEach((entry: any) => {
+                        if (entry.punchInTime && entry.punchOutTime) {
+                          const inTime = new Date(entry.punchInTime).getTime();
+                          const outTime = new Date(entry.punchOutTime).getTime();
+                          if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+                            totalHours += (outTime - inTime) / (1000 * 60 * 60);
+                          }
+                        }
+                      });
+                    }
+                  });
+                  
+                  // Step 2 - Calculate Capacity
+                  const capacity = userTimesheets.length * 40;
+                  
+                  // Step 3 & 4 - Compute Utilization Percentage, Round and Cap
+                  let calculatedUtilization: number | "N/A" = "N/A";
+                  if (userTimesheets.length > 0 && capacity > 0) {
+                    const utilPct = (totalHours / capacity) * 100;
+                    calculatedUtilization = Math.min(100, Math.round(utilPct));
+                  }
+
+                  // --- Attendance Metric Calculation - Scoped exclusively to the Performance Metrics Dashboard card ---
+                  let calculatedAttendance: number | "N/A" = "N/A";
+                  if (userTimesheets.length > 0) {
+                    const dailyHours: Record<string, number> = {};
+                    let earliestDate: Date | null = null;
+                    let latestDate: Date | null = null;
+
+                    userTimesheets.forEach((ts: any) => {
+                      if (ts.entries && Array.isArray(ts.entries)) {
+                        ts.entries.forEach((entry: any) => {
+                          if (entry.punchInTime && entry.punchOutTime) {
+                            const inTime = new Date(entry.punchInTime);
+                            const outTime = new Date(entry.punchOutTime);
+                            
+                            if (!isNaN(inTime.getTime()) && !isNaN(outTime.getTime()) && outTime >= inTime) {
+                              const hours = (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
+                              
+                              const year = inTime.getFullYear();
+                              const month = String(inTime.getMonth() + 1).padStart(2, '0');
+                              const day = String(inTime.getDate()).padStart(2, '0');
+                              const dateKey = `${year}-${month}-${day}`;
+                              
+                              dailyHours[dateKey] = (dailyHours[dateKey] || 0) + hours;
+
+                              const dateOnly = new Date(year, inTime.getMonth(), inTime.getDate());
+                              
+                              if (!earliestDate || dateOnly < earliestDate) earliestDate = dateOnly;
+                              if (!latestDate || dateOnly > latestDate) latestDate = dateOnly;
+                            }
+                          }
+                        });
+                      }
+                    });
+
+                    if (earliestDate && latestDate) {
+                      const msPerDay = 1000 * 60 * 60 * 24;
+                      const totalDays = Math.round(((latestDate as Date).getTime() - (earliestDate as Date).getTime()) / msPerDay) + 1;
+                      
+                      let presentDays = 0;
+                      Object.values(dailyHours).forEach(hours => {
+                        if (hours >= 8) {
+                          presentDays++;
+                        }
+                      });
+
+                      if (totalDays > 0) {
+                        const attPct = (presentDays / totalDays) * 100;
+                        calculatedAttendance = Math.min(100, Math.round(attPct));
+                      }
+                    }
+                  }
+                  // ----------------------------------------------------------------------------------------------------
+                  
+                  return (
+                    <>
+                      {/* Consultant selector */}
                 <div style={{ marginBottom: "16px" }}>
                   <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Select Consultant</label>
                   <select
@@ -620,8 +705,33 @@ export default function TimesheetAIPage() {
 
                 {/* Circle KPIs */}
                 <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: "12px 6px", padding: "12px 8px", marginBottom: "16px", background: "var(--bg-surface-2)", borderRadius: "12px", border: "1px solid var(--border-subtle)" }}>
-                  <CircleScore value={selectedConsultant.utilisation} label="Utilisation"   color="#2563eb" />
-                  <CircleScore value={selectedConsultant.attendance}  label="Attendance"    color="#059669" />
+                  {/* Utilization Metric - Scoped exclusively to the Performance Metrics Dashboard card */}
+                  {(() => {
+                    const r = 22;
+                    const circ = 2 * Math.PI * r;
+                    const dash = calculatedUtilization === "N/A" ? 0 : ((calculatedUtilization as number) / 100) * circ;
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", minWidth: "50px" }}>
+                        <svg width="52" height="52" viewBox="0 0 60 60">
+                          <circle cx="30" cy="30" r={r} fill="none" stroke="var(--border-subtle)" strokeWidth="5" />
+                          <circle
+                            cx="30" cy="30" r={r} fill="none" stroke="#2563eb" strokeWidth="5"
+                            strokeDasharray={`${dash} ${circ - dash}`}
+                            strokeDashoffset={circ / 4}
+                            strokeLinecap="round"
+                            style={{ transition: "stroke-dasharray 0.6s ease" }}
+                          />
+                          <text x="30" y="35" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">
+                            {calculatedUtilization === "N/A" ? "N/A" : `${calculatedUtilization}%`}
+                          </text>
+                        </svg>
+                        <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "center", wordBreak: "break-word", overflowWrap: "anywhere" }}>
+                          Utilisation
+                        </span>
+                      </div>
+                    );
+                  })()}
+                  <CircleScore value={calculatedAttendance}           label="Attendance"    color="#059669" />
                   <CircleScore value={selectedConsultant.efficiency}  label="Efficiency"    color="#1ABC9C" />
                   <CircleScore value={selectedConsultant.score}       label="Productivity"  color="#d97706" />
                 </div>
@@ -661,14 +771,19 @@ export default function TimesheetAIPage() {
                 <div style={{ background: "rgba(26,188,156,0.07)", border: "1px solid rgba(26,188,156,0.2)", borderRadius: "10px", padding: "12px 14px", marginTop: "auto" }}>
                   <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#1ABC9C", marginBottom: "4px" }}>💡 AI Insight</div>
                   <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, wordBreak: "break-word", overflowWrap: "break-word" }}>
-                    "{selectedConsultant.name}" utilization is <strong style={{ color: "var(--text-primary)" }}>{selectedConsultant.utilisation}%</strong>
-                    {selectedConsultant.utilisation > 85
+                    "{selectedConsultant.name}" utilization is <strong style={{ color: "var(--text-primary)" }}>{calculatedUtilization === "N/A" ? "N/A" : `${calculatedUtilization}%`}</strong>
+                    {calculatedUtilization === "N/A" 
+                      ? " — no timesheet data available. Ensure the consultant has logged their hours."
+                      : (calculatedUtilization as number) > 85
                       ? " — approaching over-allocation. Consider redistributing tasks to balance workload across the team."
-                      : selectedConsultant.utilisation < 75
+                      : (calculatedUtilization as number) < 75
                       ? " — below target. Review task assignment to improve billable hours ratio this month."
                       : " — within healthy range. Monitor weekly to maintain consistent productivity levels."}
                   </div>
                 </div>
+                    </>
+                  );
+                })()}
               </>
             ) : (
               <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)", fontSize: "13px", marginTop: "auto", marginBottom: "auto" }}>

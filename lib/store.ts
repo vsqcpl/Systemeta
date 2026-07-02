@@ -318,6 +318,7 @@ interface AppStore {
   deleteLeaveRequest: (id: string) => Promise<boolean>;
   approveExpense: (id: string) => void;
   rejectExpense: (id: string) => void;
+  deleteExpense: (id: string) => Promise<boolean>;
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   updateUserMFA: (id: string, mfa: boolean) => void;
@@ -3139,6 +3140,29 @@ export const useAppStore = create<AppStore>((set, get) => ({
       .catch((err) => {
         useAppStore.getState().showToast("Error submitting expense: " + err.message, "danger");
       });
+  },
+
+  deleteExpense: async (id) => {
+    try {
+      const res = await fetch(`/api/expenses/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Failed to delete expense");
+      
+      const expensesRes = await fetch("/api/expenses");
+      const expenses = await expensesRes.json();
+      
+      set((state) => ({
+        data: {
+          ...state.data,
+          expenses,
+        },
+      }));
+      
+      useAppStore.getState().showToast("Expense deleted successfully.", "success");
+      return true;
+    } catch (error: any) {
+      useAppStore.getState().showToast("Error deleting expense: " + error.message, "danger");
+      return false;
+    }
   },
 
   moveTask: (taskId, targetCol, actualCompletionDate) => {
