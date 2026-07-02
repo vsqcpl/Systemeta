@@ -110,7 +110,7 @@ router.patch("/:id", requirePermission("Approve Expenses"), async (req: Authenti
       return res.status(404).json({ message: "Expense not found" });
     }
 
-    if (expense.consultantId === req.user.id) {
+    if (expense.consultantId === req.user.id && req.user.role !== "super_admin") {
       return res.status(403).json({
         message: "Cannot approve your own expense"
       });
