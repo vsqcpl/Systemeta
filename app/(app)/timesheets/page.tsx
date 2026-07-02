@@ -144,7 +144,7 @@ export default function TimesheetsPage() {
           punchOutTime: null
         };
         const updatedTimesheet = { ...userTimesheet, entries: [...(userTimesheet as any).entries.filter((e: any) => e.id !== resData.session.id), newEntry] };
-        const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet);
+        const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet as any);
         useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
 
         setSessionRecord({
@@ -207,7 +207,7 @@ export default function TimesheetsPage() {
           punchOutTime: resData.session.punchOut
         };
         const updatedTimesheet = { ...userTimesheet, entries: [...(userTimesheet as any).entries.filter((e: any) => e.id !== resData.session.id), updatedEntry] };
-        const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet);
+        const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet as any);
         useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
         
         setWorkNotes(tempWorkNotes);
