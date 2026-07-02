@@ -55,36 +55,11 @@ async function callGroqAPI(prompt: string, systemPrompt: string): Promise<string
   return json.content as string;
 }
 
-// ─── Statistical helpers ──────────────────────────────────────────────────────
-function linearRegression(x: number[], y: number[]): { slope: number; intercept: number; r2: number } {
-  const n = x.length;
-  const sumX = x.reduce((a, b) => a + b, 0);
-  const sumY = y.reduce((a, b) => a + b, 0);
-  const sumXY = x.reduce((a, v, i) => a + v * y[i], 0);
-  const sumX2 = x.reduce((a, v) => a + v * v, 0);
-  const meanY = sumY / n;
-  const slope = (n * sumXY - sumX * sumY) / (n * sumX2 - sumX * sumX);
-  const intercept = (sumY - slope * sumX) / n;
-  const ssTot = y.reduce((a, v) => a + (v - meanY) ** 2, 0);
-  const ssRes = y.reduce((a, v, i) => a + (v - (slope * x[i] + intercept)) ** 2, 0);
-  const r2 = ssTot === 0 ? 1 : 1 - ssRes / ssTot;
-  return { slope, intercept, r2 };
-}
-
-function weightedAverage(values: number[], weights: number[]): number {
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  return values.reduce((a, v, i) => a + v * weights[i], 0) / totalWeight;
-}
-
+// ─── Milestone readiness helper (pure math — no ML) ──────────────────────────
 function milestoneReadiness(taskCompletion: number, daysLeft: number, totalDays: number): number {
   const timeProgress = 1 - daysLeft / totalDays;
-  const ahead = taskCompletion - timeProgress;
-  const rawScore = 50 + ahead * 100;
-  return Math.min(100, Math.max(0, rawScore));
-}
-
-function consultantUtilizationScore(currentLoad: number, skillMatch: number, availability: number): number {
-  return weightedAverage([currentLoad, skillMatch, availability], [0.35, 0.40, 0.25]) * 100;
+  const rawScore = taskCompletion * (1 - daysLeft / totalDays) * 100;
+  return Math.min(100, Math.max(0, Math.round(rawScore)));
 }
 
 function getFlatTasks(tasksState: any): any[] {
@@ -241,144 +216,129 @@ export default function AIPage() {
   }, [data]);
 
 
-  // ── Task-Time Estimation with Groq ──
+  // ── Task-Time Estimation → backend endpoint (GenAI + RAG) ──
   const handleRunEstimate = async (e: React.FormEvent) => {
     e.preventDefault(); setEstLoading(true); setRateLimitMsg(null);
     try {
-      const complexityMultiplier: Record<string, number> = {
-        "GST & Compliance Audit": 1.1,
-        "Process Diagnostic Study": 1.3,
-        "SOP Drafting & Sign-off": 1.2,
-        "SAP FICO Configuration": 1.5,
-        "Corporate Restructuring": 1.6,
-        "Financial Due Diligence": 1.4,
-        "ISO Certification Prep": 1.2,
-        "Vendor RFP Evaluation": 1.0
-      };
-      const priorityMultiplier: Record<string, number> = { Low: 1.3, Medium: 1.0, High: 0.85 };
-      const teamSizeN = parseInt(estTeamSize) || 3;
-      const cx = complexityMultiplier[estTask] ?? 1.0;
-      const px = priorityMultiplier[estPriority] ?? 1.0;
-      const teamFactor = Math.max(0.5, 1 / Math.log(teamSizeN + 1));
-      const estimatedDays = Math.round(10 * cx * px * teamFactor);
-      const historicalTasks = Math.floor(Math.random() * 8) + 4;
-      const x = [1, 2, 3, 4, 5]; const y = [8, 10, 13, 15, 19].map(v => v * cx);
-      const reg = linearRegression(x, y);
-      const confidence = Math.round(Math.min(98, 70 + reg.r2 * 25));
-      const groqResponse = await callGroqAPI(
-        `Task: ${estTask}, Priority: ${estPriority}, Team Size: ${teamSizeN} people. Statistical estimate: ${estimatedDays} days with ${confidence}% confidence. Provide 2-line PM insight to help manage expectations.`,
-        "You are an expert project management AI. Be concise—max 2 sentences. Focus on actionable advice."
-      );
-      setEstResult({ time: `${estimatedDays} days`, historical: historicalTasks, confidence: `${confidence}%`, regressionR2: reg.r2.toFixed(3), insight: groqResponse });
-      showToast("Task estimation calculated with AI insights.", "success");
+      const res = await fetch("/api/ai/estimate-time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskName: estTask, priority: estPriority, teamSize: estTeamSize }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      setEstResult(result);
+      showToast("Task estimation calculated with Groq AI + historical RAG.", "success");
     } catch (err: any) {
-      if (err?.message?.includes("Rate limit")) { setRateLimitMsg(err.message); showToast(err.message, "danger"); }
-      else {
-        const teamSizeN = parseInt(estTeamSize) || 3;
-        const baseDays = Math.round(10 * (estPriority === "High" ? 0.85 : estPriority === "Low" ? 1.3 : 1.0));
-        setEstResult({ time: `${baseDays} days`, historical: 5, confidence: "85%", regressionR2: "0.87", insight: "Statistical estimate based on historical velocity data." });
-        showToast("Estimated using statistical model (AI unavailable).", "success");
-      }
+      showToast("Estimation failed: " + (err?.message || "Unknown error"), "danger");
     } finally { setEstLoading(false); }
   };
 
-  // ── Predict Deadlines with Groq ──
+  // ── Predict Deadlines → backend endpoint (Rule-Based + GenAI root-cause) ──
   const handlePredictDeadline = async (e: React.FormEvent) => {
     e.preventDefault(); setPredLoading(true); setRateLimitMsg(null);
     try {
-      const complexityDays: Record<string, number> = { Easy: 3, Medium: 7, Complex: 14 };
-      const teamN = parseInt(predTeamSize) || 2;
-      const baseDays = complexityDays[predComplexity] ?? 7;
-      const adjusted = Math.round(baseDays / Math.sqrt(teamN));
-      const startD = new Date(predStartDate); const deadlineD = new Date(startD);
-      deadlineD.setDate(startD.getDate() + adjusted + 2);
-      const deadlineStr = deadlineD.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
-      const riskLevel = adjusted > 10 ? "High" : adjusted > 6 ? "Medium" : "Low";
-      const groqResponse = await callGroqAPI(
-        `Task "${predTaskName}", Complexity: ${predComplexity}, Team: ${teamN} people, Start: ${predStartDate}. Deadline predicted: ${deadlineStr} (${adjusted} days effort + 2 buffer). Risk: ${riskLevel}. Provide one sentence of PM advice.`,
-        "You are a project scheduling expert. Give concise deadline management advice in 1-2 sentences."
-      );
-      setPredResult({ deadline: deadlineStr, risk: riskLevel, buffer: "2 days", effort: `${adjusted} days`, insight: groqResponse });
+      const res = await fetch("/api/ai/predict-deadline", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskName: predTaskName, startDate: predStartDate, teamSize: predTeamSize, complexity: predComplexity }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      setPredResult(result);
       showToast("Deadline prediction generated.", "success");
     } catch (err: any) {
-      if (err?.message?.includes("Rate limit")) { setRateLimitMsg(err.message); showToast(err.message, "danger"); }
-      else {
-        const teamN = parseInt(predTeamSize) || 2;
-        const baseDays = ({ Easy: 3, Medium: 7, Complex: 14 } as Record<string, number>)[predComplexity] ?? 7;
-        const adjusted = Math.round(baseDays / Math.sqrt(teamN));
-        const d = new Date(predStartDate); d.setDate(d.getDate() + adjusted + 2);
-        setPredResult({ deadline: d.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" }), risk: adjusted > 10 ? "High" : "Medium", buffer: "2 days", effort: `${adjusted} days`, insight: "Deadline computed using statistical scheduling model." });
-        showToast("Deadline predicted using statistical model.", "success");
-      }
+      showToast("Prediction failed: " + (err?.message || "Unknown error"), "danger");
     } finally { setPredLoading(false); }
   };
 
-  // ── Billing Milestone Insights with Groq ──
+  // ── Billing Milestone Insights → backend endpoint (Math + GenAI narrative) ──
   const handleBillingInsight = async (e: React.FormEvent) => {
     e.preventDefault(); setBillingLoading(true); setRateLimitMsg(null);
     try {
-      const completion = parseFloat(billingTaskCompletion) / 100;
-      const daysLeft = parseInt(billingDaysLeft); const totalDays = parseInt(billingTotalDays);
-      const budget = parseFloat(billingBudget);
-      const readiness = milestoneReadiness(completion, daysLeft, totalDays);
-      const burnRate = (completion * budget) / Math.max(1, totalDays - daysLeft);
-      const timeProgress = 1 - daysLeft / totalDays;
-      const scheduleVariance = ((completion - timeProgress) * 100).toFixed(1);
-      const projectedRevenue = budget * Math.min(1.05, completion / Math.max(0.01, 1 - daysLeft / totalDays));
-      const riskCategory = readiness >= 75 ? "On Track" : readiness >= 50 ? "At Risk" : "Critical";
-      const groqResponse = await callGroqAPI(
-        `Billing Milestone for project "${billingProject}", milestone "${billingMilestone}". Task completion: ${billingTaskCompletion}%, Days remaining: ${daysLeft}/${totalDays}, Budget: ₹${(budget / 100000).toFixed(1)}L. Milestone Readiness Score: ${readiness.toFixed(1)}%, Schedule Variance: ${scheduleVariance}%, Status: ${riskCategory}. Provide a 2-3 sentence prioritized report linking billing readiness to task completion. What should the PM focus on for revenue recognition?`,
-        "You are a financial project management AI specializing in billing milestone optimization and revenue recognition. Be specific and actionable."
-      );
-      setBillingResult({ readiness: readiness.toFixed(1), riskCategory, scheduleVariance, burnRate: `₹${(burnRate / 1000).toFixed(1)}K/day`, projectedRevenue: `₹${(projectedRevenue / 100000).toFixed(2)}L`, insight: groqResponse });
+      const res = await fetch("/api/ai/billing-insights", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          project: billingProject,
+          milestone: billingMilestone,
+          completion: billingTaskCompletion,
+          daysLeft: billingDaysLeft,
+          totalDays: billingTotalDays,
+          budget: billingBudget,
+        }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      setBillingResult(result);
       showToast("Billing milestone analysis complete.", "success");
     } catch (err: any) {
-      if (err?.message?.includes("Rate limit")) { setRateLimitMsg(err.message); showToast(err.message, "danger"); }
-      else {
-        const completion = parseFloat(billingTaskCompletion) / 100;
-        const daysLeft = parseInt(billingDaysLeft); const totalDays = parseInt(billingTotalDays);
-        const readiness = milestoneReadiness(completion, daysLeft, totalDays);
-        const riskCategory = readiness >= 75 ? "On Track" : readiness >= 50 ? "At Risk" : "Critical";
-        setBillingResult({ readiness: readiness.toFixed(1), riskCategory, scheduleVariance: ((completion - (1 - daysLeft / totalDays)) * 100).toFixed(1), burnRate: "N/A", projectedRevenue: "N/A", insight: "Milestone readiness computed using statistical schedule variance analysis." });
-        showToast("Billing insight computed statistically.", "success");
-      }
+      showToast("Billing analysis failed: " + (err?.message || "Unknown error"), "danger");
     } finally { setBillingLoading(false); }
   };
 
-  // ── Automated Task Assignment with Groq ──
+  // ── Automated Task Assignment → backend endpoint (GenAI ranking + RAG) ──
   const handleAutoAssign = async (e: React.FormEvent) => {
     e.preventDefault(); setAssignLoading(true); setRateLimitMsg(null);
     try {
-      const users = data?.users || [];
-      const consultants = users.filter((u: any) => u.role === "consultant" || u.role === "senior_consultant" || u.role === "project_manager");
-      const scored = consultants.map((c: any) => {
-        const currentLoad = Math.random() * 0.7; const skillMatch = Math.random() * 0.9 + 0.1; const availability = 1 - currentLoad;
-        const score = consultantUtilizationScore(1 - currentLoad, skillMatch, availability);
-        return { name: c.name || c.email, role: c.role, score: Math.round(score) };
-      }).sort((a: any, b: any) => b.score - a.score);
-      const top3 = scored.slice(0, 3);
-      const fallbackTop = consultants.slice(0, 2).map((c: any) => ({ name: c.name || c.email, role: c.role, score: 80 }));
-      const topConsultants = top3.length ? top3 : fallbackTop;
-      const poolDescription = topConsultants.length ? topConsultants.map((c: any) => `${c.name} (${c.role}, fit score: ${c.score}%)`).join(", ") : "General Pool";
-      const groqResponse = await callGroqAPI(
-        `Task: "${assignTask}", Required Skills: ${assignSkills}, Duration: ${assignDuration} days, Priority: ${assignPriority}. Available consultants ranked by statistical utilization & skill-fit score: ${poolDescription}. Suggest the best assignment strategy in 2-3 sentences.`,
-        "You are an expert resource manager AI. Suggest task assignments based on consultant skill-fit and utilization. Be concise and specific."
-      );
-      setAssignResult({ topConsultants, insight: groqResponse, taskName: assignTask, skills: assignSkills });
+      const res = await fetch("/api/ai/auto-assign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ taskName: assignTask, skills: assignSkills, priority: assignPriority, duration: assignDuration }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      setAssignResult(result);
       showToast("Task assignment suggestions generated.", "success");
     } catch (err: any) {
-      if (err?.message?.includes("Rate limit")) { setRateLimitMsg(err.message); showToast(err.message, "danger"); }
-      else {
-        const users = data?.users || [];
-        const consultants = users.filter((u: any) => u.role === "consultant" || u.role === "senior_consultant" || u.role === "project_manager");
-        const fallbackTop = consultants.slice(0, 2).map((c: any) => ({ name: c.name || c.email, role: c.role, score: 80 }));
-        setAssignResult({ topConsultants: fallbackTop, insight: "Assignment computed using availability and skill-matching statistical model.", taskName: assignTask, skills: assignSkills });
-        showToast("Assignment computed statistically.", "success");
-      }
+      showToast("Assignment failed: " + (err?.message || "Unknown error"), "danger");
     } finally { setAssignLoading(false); }
   };
 
+  // ── Schedule Clash Detection state ──
+  const [clashResult, setClashResult] = React.useState<any>(null);
+  const [clashLoading, setClashLoading] = React.useState(false);
+
+  const handleDetectClashes = async () => {
+    setClashLoading(true);
+    try {
+      const res = await fetch("/api/ai/schedule-clashes", { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) throw new Error(await res.text());
+      setClashResult(await res.json());
+      showToast("Clash detection complete.", "success");
+    } catch (err: any) {
+      showToast("Clash detection failed: " + (err?.message || "Unknown error"), "danger");
+    } finally { setClashLoading(false); }
+  };
+
+  // ── Daily Delay Alerts state ──
+  const [delayAlertResult, setDelayAlertResult] = React.useState<any>(null);
+  const [delayAlertLoading, setDelayAlertLoading] = React.useState(false);
+
+  const handleScanDelays = async () => {
+    setDelayAlertLoading(true);
+    try {
+      const res = await fetch("/api/ai/daily-delay-alerts", { method: "POST", headers: { "Content-Type": "application/json" } });
+      if (!res.ok) throw new Error(await res.text());
+      setDelayAlertResult(await res.json());
+      showToast("Delay scan complete — alerts dispatched.", "success");
+    } catch (err: any) {
+      showToast("Delay scan failed: " + (err?.message || "Unknown error"), "danger");
+    } finally { setDelayAlertLoading(false); }
+  };
+
   const remainingCalls = groqRateLimiter.remainingCalls();
+  // Also keep flat-task helper for read-only display modals
+  const getFlatTasksLocal = (tasksState: any): any[] => {
+    if (!tasksState) return [];
+    if (Array.isArray(tasksState)) return tasksState;
+    const flat: any[] = [];
+    if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
+    if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
+    if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
+    if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
+    return flat;
+  };
 
   return (
     <div style={{ animation: "fadeIn 0.5s ease-out" }}>
@@ -390,7 +350,7 @@ export default function AIPage() {
           </div>
           <div>
             <h1 className="page-title">{t("AI Insights Center")}</h1>
-            <p className="page-subtitle">Intelligent automation powered by Groq AI + statistical models</p>
+            <p className="page-subtitle">Zero-ML intelligence powered by Groq AI · Rule-based engines · RAG over live data</p>
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
@@ -421,14 +381,14 @@ export default function AIPage() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "rgba(46, 134, 193, 0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconCrystalBall size={20} style={{ color: "#2E86C1" }} /></div>
-                  <div><h3 style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Task-Time Estimation</h3><span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>Predictive Analytics · Linear Regression</span></div>
+                  <div><h3 style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Task-Time Estimation</h3><span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>GenAI + RAG · Historical Database Context</span></div>
                 </div>
                 <span className="badge badge-brand" style={{ fontSize: "10px" }}>Groq AI</span>
               </div>
               <ul style={{ margin: "0 0 20px", padding: "0 0 0 18px", color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.7" }}>
-                <li>Brooks' Law-adjusted time estimation using historical velocity</li>
-                <li>Linear regression R² confidence scoring</li>
-                <li>AI insight for realistic deadline setting</li>
+                <li>RAG over similar historical tasks from live database</li>
+                <li>Groq AI confidence scoring with anti-hallucination constraints</li>
+                <li>Strict JSON output with PM insight for deadline setting</li>
               </ul>
             </div>
             <div style={{ display: "flex", gap: "10px", marginTop: "auto" }}>
@@ -498,7 +458,7 @@ export default function AIPage() {
               </div>
               <ul style={{ margin: "0 0 20px", padding: "0 0 0 18px", color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.7" }}>
                 <li>Suggests assignments based on consultant availability & skill profile</li>
-                <li>Weighted utilisation scoring (Bayesian composite model)</li>
+                <li>Groq AI ranking using live consultant queue and utilisation data</li>
                 <li>PM can accept, modify, or override AI suggestions</li>
               </ul>
             </div>
@@ -652,7 +612,7 @@ export default function AIPage() {
         <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
           <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(480px, 95%)", maxHeight: "90vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Task-Time Estimation</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Uses Brooks' Law + Linear Regression + Groq AI</p>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Uses historical RAG context + Groq AI (temperature 0, strict JSON)</p>
             {!estResult ? (
               <form onSubmit={handleRunEstimate} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -699,8 +659,8 @@ export default function AIPage() {
             ) : (
               <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                 <div style={{ padding: "16px", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
-                  {[{ label: "Estimated Completion Time", value: estResult.time, color: "var(--success-600)" }, { label: "Similar Historical Tasks", value: `${estResult.historical} tasks`, color: "var(--text-primary)" }, { label: "AI Confidence Score", value: estResult.confidence, color: "var(--brand-600)" }, { label: "Regression R² (data fit)", value: estResult.regressionR2, color: "var(--text-secondary)" }].map((row, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 3 ? "1px solid var(--border-subtle)" : "none" }}>
+                  {[{ label: "Estimated Completion Time", value: estResult.time, color: "var(--success-600)" }, { label: "Similar Historical Tasks", value: `${estResult.historical} tasks`, color: "var(--text-primary)" }, { label: "Groq AI Confidence Score", value: estResult.confidence, color: "var(--brand-600)" }].map((row, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: i < 2 ? "1px solid var(--border-subtle)" : "none" }}>
                       <span style={{ color: "var(--text-secondary)", fontSize: "13px" }}>{row.label}</span>
                       <strong style={{ color: row.color, fontSize: "13px" }}>{row.value}</strong>
                     </div>
@@ -722,7 +682,7 @@ export default function AIPage() {
         <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
           <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(480px, 95%)", maxHeight: "90vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Predict Deadline</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Statistical scheduling + Groq AI insight</p>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Rule-based date scheduling + Groq AI root-cause insight</p>
             {!predResult ? (
               <form onSubmit={handlePredictDeadline} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}><label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>Task Name</label><input type="text" required placeholder="e.g. Integrate Payment Gateway" className="input" value={predTaskName} onChange={(e) => setPredTaskName(e.target.value)} /></div>
@@ -862,7 +822,7 @@ export default function AIPage() {
         <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
           <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(500px, 95%)", maxHeight: "90vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Automated Task Assignment</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Bayesian utilisation scoring + Groq AI suggestion</p>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Groq AI consultant ranking via live utilisation + RAG context</p>
             {!assignResult ? (
               <form onSubmit={handleAutoAssign} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}><label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>Task Name</label><input type="text" required placeholder="e.g. GST Audit Review" className="input" value={assignTask} onChange={(e) => setAssignTask(e.target.value)} /></div>
@@ -940,62 +900,40 @@ export default function AIPage() {
         );
       })()}
 
-      {/* Scan Delays Modal */}
-      {activeModal === "scan-delays" && (() => {
-        const flatTasksForDelays = getFlatTasks(data?.tasks);
-        const today = new Date();
-        today.setHours(0,0,0,0);
-        const overdueTasks = flatTasksForDelays.filter((t: any) => {
-          const isCompleted = data?.tasks?.done?.some((dt: any) => dt.id === t.id);
-          if (isCompleted) return false;
-          if (!t.dueDate) return false;
-          const due = new Date(t.dueDate);
-          due.setHours(0,0,0,0);
-          return due < today;
-        });
-
-        const handleCloseScan = () => {
-          setActiveModal(null);
-          showToast(`Scan completed: ${overdueTasks.length} delayed tasks detected.`, "success");
-        };
-
-        return (
-          <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
-            <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(500px, 95%)", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
-              <h2 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Delayed Tasks Analytics</h2>
-              {overdueTasks.length > 0 ? (
-                <div className="table-wrapper" style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr style={{ background: "var(--bg-surface-2)", borderBottom: "1px solid var(--border-subtle)" }}><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Task</th><th style={{ padding: "10px", textAlign: "center", fontSize: "12px", fontWeight: 600 }}>Planned</th><th style={{ padding: "10px", textAlign: "center", fontSize: "12px", fontWeight: 600 }}>Actual</th><th style={{ padding: "10px", textAlign: "center", fontSize: "12px", fontWeight: 600 }}>Delay</th></tr></thead>
-                    <tbody>
-                      {overdueTasks.map((t: any, i: number) => {
-                        const due = new Date(t.dueDate);
-                        due.setHours(0,0,0,0);
-                        const delay = Math.max(1, Math.ceil((today.getTime() - due.getTime()) / 86400000));
-                        const planned = t.estimate || 3;
-                        const actual = planned + delay;
-                        return (
-                          <tr key={i} style={{ borderBottom: i < overdueTasks.length - 1 ? "1px solid var(--border-subtle)" : "none" }}>
-                            <td style={{ padding: "10px", fontSize: "12.5px" }}>{t.title}</td>
-                            <td style={{ padding: "10px", textAlign: "center", fontSize: "12.5px" }}>{planned}d</td>
-                            <td style={{ padding: "10px", textAlign: "center", fontSize: "12.5px" }}>{actual}d</td>
-                            <td style={{ padding: "10px", textAlign: "center", fontSize: "12.5px", fontWeight: 700, color: "var(--danger-600)" }}>{delay}d</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+      {/* Scan Delays Modal — rule-based, backend-driven */}
+      {activeModal === "scan-delays" && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
+          <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(500px, 95%)", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Daily Delay Alert Scan</h2>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Rule-based engine · Zero AI calls · Alerts dispatched to assignees</p>
+            {!delayAlertResult ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ padding: "16px", background: "rgba(234,179,8,0.06)", borderRadius: "8px", border: "1px solid rgba(234,179,8,0.3)", fontSize: "13px", color: "var(--text-secondary)" }}>
+                  This scan queries all active tasks whose due date is in the past and dispatches breach notifications to assignees — no AI call is made.
                 </div>
-              ) : (
-                <div style={{ padding: "20px", textAlign: "center", color: "var(--text-tertiary)", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px dashed var(--border-default)", marginBottom: "16px" }}>
-                  No delayed tasks detected in the database
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button className="btn btn-primary btn-sm" disabled={delayAlertLoading} onClick={handleScanDelays}>{delayAlertLoading ? "Scanning..." : "Run Delay Scan"}</button>
                 </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}><button className="btn btn-primary btn-sm" onClick={handleCloseScan}>Close</button></div>
-            </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ padding: "16px", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Tasks Breached</span>
+                  <strong style={{ fontSize: "22px", fontWeight: 800, color: delayAlertResult.alertedTasksCount > 0 ? "var(--danger-600)" : "var(--success-600)" }}>{delayAlertResult.alertedTasksCount}</strong>
+                </div>
+                <div style={{ padding: "12px", background: "rgba(34,197,94,0.06)", borderRadius: "8px", borderLeft: "3px solid #22c55e", fontSize: "12.5px", color: "var(--text-secondary)" }}>
+                  {delayAlertResult.alertedTasksCount > 0 ? `${delayAlertResult.alertedTasksCount} breach notification(s) dispatched to assignees.` : "All tasks are on-schedule. No breach notifications were needed."}
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setDelayAlertResult(null)}>Run Again</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => { setActiveModal(null); setDelayAlertResult(null); }}>Close</button>
+                </div>
+              </div>
+            )}
           </div>
-        );
-      })()}
+        </div>
+      )}
 
       {/* Analyze Roots Modal */}
       {activeModal === "analyze-roots" && (() => {
@@ -1059,126 +997,82 @@ export default function AIPage() {
         );
       })()}
 
-      {/* Detect Clashes Modal */}
-      {activeModal === "detect-clashes" && (() => {
-        const flatActiveTasks = getFlatTasks(data?.tasks).filter((t: any) => {
-          return !data?.tasks?.done?.some((dt: any) => dt.id === t.id);
-        });
-        
-        const tasksByAssignee: Record<string, any[]> = {};
-        flatActiveTasks.forEach((t: any) => {
-          if (!t.assignee) return;
-          if (!tasksByAssignee[t.assignee]) {
-            tasksByAssignee[t.assignee] = [];
-          }
-          tasksByAssignee[t.assignee].push(t);
-        });
-
-        const conflictsList = Object.entries(tasksByAssignee)
-          .filter(([_, tasks]) => tasks.length > 1)
-          .map(([assigneeId, tasks]) => {
-            const consultant = data?.consultants?.find((c: any) => c.id === assigneeId) || data?.users?.find((u: any) => u.id === assigneeId);
-            const name = consultant ? (consultant.name || (consultant as any).email) : assigneeId;
-            return {
-              resource: name,
-              taskA: tasks[0].title,
-              taskB: tasks[1].title,
-              conflict: "Time Overlap"
-            };
-          });
-
-        const handleCloseClash = () => {
-          setActiveModal(null);
-          showToast(`Clash detection scan finished: ${conflictsList.length} conflict(s) detected.`, "success");
-        };
-
-        return (
-          <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
-            <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(500px, 95%)", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
-              <h2 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Conflict Table</h2>
-              {conflictsList.length > 0 ? (
-                <div className="table-wrapper" style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", overflow: "hidden", marginBottom: "16px" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead><tr style={{ background: "var(--bg-surface-2)", borderBottom: "1px solid var(--border-subtle)" }}><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Resource</th><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Task A</th><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Task B</th><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Conflict</th></tr></thead>
-                    <tbody>
-                      {conflictsList.map((c, i) => (
-                        <tr key={i} style={{ borderBottom: i < conflictsList.length - 1 ? "1px solid var(--border-subtle)" : "none" }}>
-                          <td style={{ padding: "10px", fontSize: "12.5px" }}>{c.resource}</td>
-                          <td style={{ padding: "10px", fontSize: "12.5px" }}>{c.taskA}</td>
-                          <td style={{ padding: "10px", fontSize: "12.5px" }}>{c.taskB}</td>
-                          <td style={{ padding: "10px", fontSize: "12.5px", fontWeight: 700, color: "var(--danger-600)" }}>{c.conflict}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+      {/* Detect Clashes Modal — backend interval-tree + OR-Tools solver */}
+      {activeModal === "detect-clashes" && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
+          <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(520px, 95%)", maxHeight: "85vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Schedule Clash Detection</h2>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Interval-tree overlap analysis · OR-Tools resolution suggestions</p>
+            {!clashResult ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ padding: "16px", background: "rgba(108,126,199,0.06)", borderRadius: "8px", border: "1px solid rgba(108,126,199,0.3)", fontSize: "13px", color: "var(--text-secondary)" }}>
+                  Scans all active tasks for date-range overlaps across consultants and computes resolution options.
                 </div>
-              ) : (
-                <div style={{ padding: "20px", textAlign: "center", color: "var(--text-tertiary)", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px dashed var(--border-default)", marginBottom: "16px" }}>
-                  No resource scheduling conflicts detected in the database
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button className="btn btn-primary btn-sm" disabled={clashLoading} onClick={handleDetectClashes}>{clashLoading ? "Scanning..." : "Detect Clashes"}</button>
                 </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}><button className="btn btn-primary btn-sm" onClick={handleCloseClash}>Close</button></div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* Review Conflicts Modal */}
-      {activeModal === "review-conflicts" && (() => {
-        const flatActiveTasks = getFlatTasks(data?.tasks).filter((t: any) => {
-          return !data?.tasks?.done?.some((dt: any) => dt.id === t.id);
-        });
-        
-        const tasksByAssignee: Record<string, any[]> = {};
-        flatActiveTasks.forEach((t: any) => {
-          if (!t.assignee) return;
-          if (!tasksByAssignee[t.assignee]) {
-            tasksByAssignee[t.assignee] = [];
-          }
-          tasksByAssignee[t.assignee].push(t);
-        });
-
-        const conflictsList = Object.entries(tasksByAssignee)
-          .filter(([_, tasks]) => tasks.length > 1)
-          .map(([assigneeId, tasks]) => {
-            const consultant = data?.consultants?.find((c: any) => c.id === assigneeId) || data?.users?.find((u: any) => u.id === assigneeId);
-            const name = consultant ? (consultant.name || (consultant as any).email) : assigneeId;
-            return {
-              resource: name,
-              taskA: tasks[0].title,
-              taskB: tasks[1].title,
-            };
-          });
-
-        const resolutionSuggestions = conflictsList.flatMap((c: any) => [
-          `Move ${c.taskB} (assigned to ${c.resource}) to next week`,
-          `Assign alternate consultant to ${c.taskB} to offload ${c.resource}`,
-          `Split workload for ${c.taskA} and ${c.taskB} between ${c.resource} and another team member`
-        ]);
-
-        return (
-          <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
-            <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(460px, 90%)", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
-              <h2 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Conflict Resolution Review</h2>
-              {resolutionSuggestions.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: "14px", marginBottom: "20px" }}>
-                  <div>
-                    <strong style={{ fontSize: "13px", color: "var(--text-primary)", display: "block", marginBottom: "6px" }}>AI Suggestions:</strong>
-                    <ul style={{ paddingLeft: "16px", margin: 0, fontSize: "12.5px", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "6px" }}>
-                      {resolutionSuggestions.map((s, i) => <li key={i}>{s}</li>)}
-                    </ul>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ padding: "12px 16px", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Conflicts Detected</span>
+                  <strong style={{ fontSize: "22px", fontWeight: 800, color: clashResult.conflictsCount > 0 ? "var(--danger-600)" : "var(--success-600)" }}>{clashResult.conflictsCount}</strong>
+                </div>
+                {clashResult.conflictsCount > 0 ? (
+                  <div className="table-wrapper" style={{ border: "1px solid var(--border-subtle)", borderRadius: "8px", overflow: "hidden" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                      <thead><tr style={{ background: "var(--bg-surface-2)", borderBottom: "1px solid var(--border-subtle)" }}><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Task A</th><th style={{ padding: "10px", textAlign: "left", fontSize: "12px", fontWeight: 600 }}>Task B</th></tr></thead>
+                      <tbody>
+                        {(clashResult.conflicts || []).map((c: any, i: number) => (
+                          <tr key={i} style={{ borderBottom: i < clashResult.conflicts.length - 1 ? "1px solid var(--border-subtle)" : "none" }}>
+                            <td style={{ padding: "10px", fontSize: "12.5px" }}>{c.taskATitle}</td>
+                            <td style={{ padding: "10px", fontSize: "12.5px" }}>{c.taskBTitle}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
+                ) : (
+                  <div style={{ padding: "20px", textAlign: "center", color: "var(--text-tertiary)", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px dashed var(--border-default)" }}>No scheduling conflicts detected — all resources are clear!</div>
+                )}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setClashResult(null)}>Scan Again</button>
+                  <button className="btn btn-primary btn-sm" onClick={() => { setActiveModal("review-conflicts"); }}>Review Resolutions</button>
                 </div>
-              ) : (
-                <div style={{ padding: "20px", textAlign: "center", color: "var(--text-tertiary)", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px dashed var(--border-default)", marginBottom: "20px" }}>
-                  No active conflicts to resolve
-                </div>
-              )}
-              <div style={{ display: "flex", justifyContent: "flex-end" }}><button className="btn btn-primary btn-sm" onClick={() => { setActiveModal(null); showToast("Conflict log reviewed.", "success"); }}>Close</button></div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Review Conflicts Modal — OR-Tools resolution suggestions */}
+      {activeModal === "review-conflicts" && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
+          <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(460px, 90%)", maxHeight: "85vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Conflict Resolution Review</h2>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Suggestions from OR-Tools heuristic solver</p>
+            {clashResult && Array.isArray(clashResult.resolutionSuggestions) && clashResult.resolutionSuggestions.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginBottom: "20px" }}>
+                {(clashResult.resolutionSuggestions || []).map((s: any, i: number) => (
+                  <div key={i} style={{ padding: "12px 14px", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 700, color: "#6C7EC7", marginBottom: "4px" }}>RESOLUTION {i + 1}</div>
+                    <div style={{ fontSize: "12.5px", color: "var(--text-secondary)" }}>{s.suggestion || s}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: "20px", textAlign: "center", color: "var(--text-tertiary)", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px dashed var(--border-default)", marginBottom: "20px" }}>
+                {clashResult ? "No active conflicts to resolve — schedule is clear!" : "Run Clash Detection first to see resolution options."}
+              </div>
+            )}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              {!clashResult && <button className="btn btn-secondary btn-sm" onClick={() => setActiveModal("detect-clashes")}>Run Detection First</button>}
+              <button className="btn btn-primary btn-sm" onClick={() => { setActiveModal(null); showToast("Conflict resolutions reviewed.", "success"); }}>Close</button>
             </div>
           </div>
-        );
-      })()}
+        </div>
+      )}
 
     </div>
   );
