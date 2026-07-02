@@ -471,6 +471,8 @@ export default function DashboardPage() {
                       borderRadius: "8px",
                       background: "var(--bg-surface-2)",
                       border: "1px solid var(--border-subtle)",
+                      flexDirection: "column",
+                      alignItems: "stretch",
                     }}
                   >
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>

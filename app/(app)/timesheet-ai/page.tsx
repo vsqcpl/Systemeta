@@ -336,9 +336,10 @@ export default function TimesheetAIPage() {
         }
       });
       
-      const planned = t.estimate || 8;
-      const actual = actualHours || planned;
-      const status = actual > planned ? "over" : "under";
+      const rawEstimate = typeof t.estimate === 'number' ? t.estimate : (t.estimate ? parseFloat(String(t.estimate).replace(/[^\d.-]/g, '')) : null);
+      const planned = rawEstimate !== null && !isNaN(rawEstimate) ? rawEstimate : null;
+      const actual = actualHours;
+      const status = planned !== null && actual > planned ? "over" : "under";
       
       return {
         task: t.title,
@@ -370,13 +371,16 @@ export default function TimesheetAIPage() {
   }, [data.timesheets]);
 
   // Card 1 state
-  const [selectedTask, setSelectedTask] = useState<any>(null);
+  const [selectedTaskName, setSelectedTaskName] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (efficiencyTasks.length > 0 && !selectedTask) {
-      setSelectedTask(efficiencyTasks[0]);
+  const selectedTask = useMemo(() => {
+    if (efficiencyTasks.length === 0) return null;
+    if (selectedTaskName) {
+      const found = efficiencyTasks.find(t => t.task === selectedTaskName);
+      if (found) return found;
     }
-  }, [efficiencyTasks, selectedTask]);
+    return efficiencyTasks[0];
+  }, [efficiencyTasks, selectedTaskName]);
 
   // Card 2 state
   const [selectedConsultant, setSelectedConsultant] = useState<any>(null);
@@ -433,7 +437,9 @@ export default function TimesheetAIPage() {
     }
   };
 
-  const efficiencyPct = selectedTask ? Math.round((selectedTask.planned / selectedTask.actual) * 100) : 0;
+  const efficiencyPct = selectedTask && selectedTask.planned !== null 
+    ? Math.round((selectedTask.planned / selectedTask.actual) * 100)
+    : null;
   const totalSelected = expenses.filter((e) => selectedExpenses.includes(e.id)).reduce((s, e) => s + e.amount, 0);
 
   const categoryColor: Record<string, string> = {
@@ -496,9 +502,9 @@ export default function TimesheetAIPage() {
               <>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "10px", marginBottom: "18px" }}>
                   {[
-                    { label: "Planned Hours", val: `${selectedTask.planned}h`, color: "#2563eb" },
-                    { label: "Actual Hours",  val: `${selectedTask.actual}h`,  color: selectedTask.status === "over" ? "#e11d48" : "#059669" },
-                    { label: "Efficiency",    val: `${efficiencyPct}%`,         color: efficiencyPct >= 90 ? "#059669" : efficiencyPct >= 80 ? "#d97706" : "#e11d48" },
+                    { label: "Planned Hours", val: selectedTask.planned !== null ? `${selectedTask.planned}h` : "Not set", color: selectedTask.planned !== null ? "#2563eb" : "var(--text-tertiary)" },
+                    { label: "Actual Hours",  val: `${selectedTask.actual}h`,  color: selectedTask.planned !== null && selectedTask.status === "over" ? "#e11d48" : "#059669" },
+                    { label: "Efficiency",    val: efficiencyPct !== null ? (Number.isFinite(efficiencyPct) ? `${efficiencyPct}%` : "N/A") : "—",         color: efficiencyPct !== null && efficiencyPct >= 90 ? "#059669" : (efficiencyPct !== null && efficiencyPct >= 80 ? "#d97706" : (efficiencyPct !== null ? "#e11d48" : "var(--text-tertiary)")) },
                   ].map((k) => (
                     <div key={k.label} style={{ background: "var(--bg-surface-2)", borderRadius: "10px", padding: "12px 6px", textAlign: "center", border: "1px solid var(--border-subtle)", minWidth: 0 }}>
                       <div style={{ fontSize: "18px", fontWeight: 800, color: k.color, wordBreak: "break-word", overflowWrap: "anywhere" }}>{k.val}</div>
@@ -513,7 +519,7 @@ export default function TimesheetAIPage() {
                   <select
                     className="select"
                     value={selectedTask.task}
-                    onChange={(e) => setSelectedTask(efficiencyTasks.find((t) => t.task === e.target.value) ?? efficiencyTasks[0])}
+                    onChange={(e) => setSelectedTaskName(e.target.value)}
                     style={{ width: "100%", fontSize: "12.5px" }}
                   >
                     {efficiencyTasks.map((t) => (
@@ -522,11 +528,7 @@ export default function TimesheetAIPage() {
                   </select>
                 </div>
 
-                {/* Mini bar chart – historical trend */}
-                <div style={{ marginBottom: "16px" }}>
-                  <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "4px" }}>Efficiency Trend (Last Weeks)</div>
-                  <MiniBarChart data={weeklyTrend} />
-                </div>
+
 
                 {/* Task list — over / under */}
                 <div style={{ marginBottom: "16px" }}>
@@ -537,7 +539,7 @@ export default function TimesheetAIPage() {
                   {efficiencyTasks.map((t) => (
                     <div
                       key={t.task}
-                      onClick={() => setSelectedTask(t)}
+                      onClick={() => setSelectedTaskName(t.task)}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px",
                         padding: "8px 10px", borderRadius: "7px", marginBottom: "5px",
@@ -549,15 +551,15 @@ export default function TimesheetAIPage() {
                     >
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>{t.task}</div>
-                        <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)", wordBreak: "break-word", overflowWrap: "break-word" }}>{t.project} · Planned {t.planned}h · Actual {t.actual}h</div>
+                        <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)", wordBreak: "break-word", overflowWrap: "break-word" }}>{t.project} · Planned {t.planned !== null ? `${t.planned}h` : 'Not set'} · Actual {t.actual}h</div>
                       </div>
                       <span style={{
                         fontSize: "10px", fontWeight: 700, padding: "2px 8px", borderRadius: "999px",
-                        background: t.status === "over" ? "rgba(225,29,72,0.1)" : "rgba(5,150,105,0.1)",
-                        color: t.status === "over" ? "#e11d48" : "#059669",
+                        background: t.planned !== null && t.status === "over" ? "rgba(225,29,72,0.1)" : "rgba(5,150,105,0.1)",
+                        color: t.planned !== null && t.status === "over" ? "#e11d48" : "#059669",
                         flexShrink: 0,
                       }}>
-                        {t.status === "over" ? `+${t.actual - t.planned}h` : `-${t.planned - t.actual}h`}
+                        {t.planned === null ? "—" : (t.status === "over" ? `+${t.actual - t.planned}h` : `-${t.planned - t.actual}h`)}
                       </span>
                     </div>
                   ))}
@@ -567,9 +569,11 @@ export default function TimesheetAIPage() {
                 <div style={{ background: "rgba(37,99,235,0.06)", border: "1px solid rgba(37,99,235,0.18)", borderRadius: "10px", padding: "12px 14px", marginTop: "auto" }}>
                   <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#2563eb", marginBottom: "4px" }}>💡 AI Recommendation</div>
                   <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, wordBreak: "break-word", overflowWrap: "break-word" }}>
-                    {selectedTask.status === "over"
-                      ? `"${selectedTask.task}" exceeded expected duration by ${Math.round(((selectedTask.actual - selectedTask.planned) / selectedTask.planned) * 100)}%. Consider allocating additional resources or breaking this task into smaller sub-tasks.`
-                      : `"${selectedTask.task}" completed ahead of schedule. Capacity freed can be reallocated to at-risk tasks in the current sprint.`}
+                    {selectedTask.planned === null 
+                      ? `"${selectedTask.task}" does not have a planned estimate. Update the task estimate in the Project Management module to receive AI recommendations on resource allocation.`
+                      : (selectedTask.status === "over"
+                          ? `"${selectedTask.task}" exceeded expected duration by ${selectedTask.planned > 0 ? Math.round(((selectedTask.actual - selectedTask.planned) / selectedTask.planned) * 100) : 0}%. Consider allocating additional resources or breaking this task into smaller sub-tasks.`
+                          : `"${selectedTask.task}" completed ahead of schedule or is tracking well. Capacity freed can be reallocated to at-risk tasks in the current sprint.`)}
                   </div>
                 </div>
               </>
