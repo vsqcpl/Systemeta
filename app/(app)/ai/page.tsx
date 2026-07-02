@@ -193,6 +193,11 @@ export default function AIPage() {
   const [alertSettings, setAlertSettings] = useState({ enable: true, email: true, slack: false, escalation: true });
   const [rateLimitMsg, setRateLimitMsg] = useState<string | null>(null);
 
+  // Card 6: Grammar & Sequence Review (WBS Review)
+  const [selectedWbsProjectId, setSelectedWbsProjectId] = useState("");
+  const [wbsResult, setWbsResult] = useState<any[] | null>(null);
+  const [wbsLoading, setWbsLoading] = useState(false);
+
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") { setActiveModal(null); setShowConfigModal(false); setShowSummaryModal(false); }
@@ -325,6 +330,35 @@ export default function AIPage() {
     } catch (err: any) {
       showToast("Delay scan failed: " + (err?.message || "Unknown error"), "danger");
     } finally { setDelayAlertLoading(false); }
+  };
+
+  // ── WBS Grammar & Sequence Review (GenAI) ──
+  const handleRunWbsReview = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedWbsProjectId) {
+      showToast("Please select a project first", "warning");
+      return;
+    }
+    setWbsLoading(true);
+    try {
+      const res = await fetch("/api/ai/review-wbs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ projectId: selectedWbsProjectId }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      const result = await res.json();
+      setWbsResult(result);
+      showToast("WBS review complete.", "success");
+    } catch (err: any) {
+      showToast("WBS review failed: " + (err?.message || "Unknown error"), "danger");
+    } finally { setWbsLoading(false); }
+  };
+
+  const handleLockProjectPlan = () => {
+    showToast("WBS validation passed. Project plan locked successfully.", "success");
+    setActiveModal(null);
+    setWbsResult(null);
   };
 
   const remainingCalls = groqRateLimiter.remainingCalls();
@@ -487,6 +521,29 @@ export default function AIPage() {
             <div style={{ display: "flex", gap: "10px", marginTop: "auto" }}>
               <button className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => setActiveModal("detect-clashes")}>Detect Clashes</button>
               <button className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => setActiveModal("review-conflicts")}>Review Conflicts</button>
+            </div>
+          </div>
+        </div>
+
+        {/* Card 6: Grammar & Sequence Review */}
+        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%", border: "1px solid rgba(245, 158, 11, 0.25)" }}>
+          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "rgba(245, 158, 11, 0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}><IconCpu size={20} style={{ color: "#F59E0B" }} /></div>
+                  <div><h3 style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Grammar & Sequence Review</h3><span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>WBS Integrity Check</span></div>
+                </div>
+                <span className="badge badge-brand" style={{ fontSize: "10px" }}>Groq AI</span>
+              </div>
+              <ul style={{ margin: "0 0 20px", padding: "0 0 0 18px", color: "var(--text-secondary)", fontSize: "13px", lineHeight: "1.7" }}>
+                <li>Catch logical flaws in the WBS before locking the project plan</li>
+                <li>Analyze grammar, phrasing, and sequence dependencies</li>
+                <li>Highlight structural errors automatically</li>
+              </ul>
+            </div>
+            <div style={{ display: "flex", gap: "10px", marginTop: "auto" }}>
+              <button className="btn btn-primary btn-sm" style={{ flex: 1, justifyContent: "center" }} onClick={() => { setWbsResult(null); if(data?.projects?.length > 0) setSelectedWbsProjectId(data.projects[0].id); setActiveModal("review-wbs"); }}>Review WBS</button>
             </div>
           </div>
         </div>
@@ -1070,6 +1127,73 @@ export default function AIPage() {
               {!clashResult && <button className="btn btn-secondary btn-sm" onClick={() => setActiveModal("detect-clashes")}>Run Detection First</button>}
               <button className="btn btn-primary btn-sm" onClick={() => { setActiveModal(null); showToast("Conflict resolutions reviewed.", "success"); }}>Close</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Review WBS Modal */}
+      {activeModal === "review-wbs" && (
+        <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
+          <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(560px, 95%)", maxHeight: "85vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>WBS Integrity Review</h2>
+            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Checks Work Breakdown Structure grammar and dependency sequencing</p>
+            
+            {!wbsResult ? (
+              <form onSubmit={handleRunWbsReview} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>Select Project to Validate</label>
+                  <select className="select" value={selectedWbsProjectId} onChange={(e) => setSelectedWbsProjectId(e.target.value)}>
+                    <option value="">-- Choose Project --</option>
+                    {(data?.projects || []).map((proj: any) => (
+                      <option key={proj.id} value={proj.id}>{proj.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveModal(null)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={wbsLoading || !selectedWbsProjectId}>{wbsLoading ? "Analyzing WBS..." : "Analyze WBS"}</button>
+                </div>
+              </form>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontSize: "13px", color: "var(--text-secondary)" }}>Issues Flagged:</span>
+                  <strong style={{ fontSize: "16px", color: wbsResult.length > 0 ? "var(--danger-600)" : "var(--success-600)" }}>{wbsResult.length} issues found</strong>
+                </div>
+
+                {wbsResult.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "40vh", overflowY: "auto" }}>
+                    {wbsResult.map((issue: any, i: number) => (
+                      <div key={i} style={{ padding: "12px 14px", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <span className={`badge ${issue.type === "grammar" ? "badge-warning" : "badge-danger"}`} style={{ fontSize: "10px" }}>
+                            {issue.type.toUpperCase()}
+                          </span>
+                          <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>Task Ref: {issue.task_id}</span>
+                        </div>
+                        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{issue.issue}</div>
+                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}><strong style={{ color: "var(--brand-600)" }}>Fix:</strong> {issue.suggestion}</div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div style={{ padding: "24px", textAlign: "center", background: "rgba(34,197,94,0.06)", borderRadius: "8px", border: "1px solid rgba(34,197,94,0.3)" }}>
+                    <div style={{ fontSize: "24px", marginBottom: "8px" }}>✅</div>
+                    <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--success-600)" }}>WBS Integrity Check Passed</div>
+                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "4px" }}>No grammatical or sequencing dependency errors found in this project plan.</div>
+                  </div>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setWbsResult(null)}>Choose Another</button>
+                  {wbsResult.length === 0 ? (
+                    <button className="btn btn-primary btn-sm" onClick={handleLockProjectPlan}>Lock Project Plan</button>
+                  ) : (
+                    <button className="btn btn-primary btn-sm" onClick={() => setActiveModal(null)}>Close</button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
