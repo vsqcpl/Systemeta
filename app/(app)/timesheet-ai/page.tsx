@@ -275,6 +275,7 @@ export default function TimesheetAIPage() {
       const efficiency = Math.max(0, 90 - penalty);
       const score = Math.round((c.utilization + efficiency) / 2);
       return {
+        id: c.id,
         name: c.name,
         utilisation: c.utilization,
         attendance,
@@ -384,6 +385,7 @@ export default function TimesheetAIPage() {
 
   // Card 2 state
   const [selectedConsultant, setSelectedConsultant] = useState<any>(null);
+  const [selectedDashboardTask, setSelectedDashboardTask] = useState<string>("All Tasks");
 
   useEffect(() => {
     if (consultants.length > 0 && !selectedConsultant) {
@@ -612,6 +614,7 @@ export default function TimesheetAIPage() {
                   userTimesheets.forEach((ts: any) => {
                     if (ts.entries && Array.isArray(ts.entries)) {
                       ts.entries.forEach((entry: any) => {
+                        if (selectedDashboardTask !== "All Tasks" && entry.task !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
                         if (entry.punchInTime && entry.punchOutTime) {
                           const inTime = new Date(entry.punchInTime).getTime();
                           const outTime = new Date(entry.punchOutTime).getTime();
@@ -643,6 +646,7 @@ export default function TimesheetAIPage() {
                     userTimesheets.forEach((ts: any) => {
                       if (ts.entries && Array.isArray(ts.entries)) {
                         ts.entries.forEach((entry: any) => {
+                          if (selectedDashboardTask !== "All Tasks" && entry.task !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
                           if (entry.punchInTime && entry.punchOutTime) {
                             const inTime = new Date(entry.punchInTime);
                             const outTime = new Date(entry.punchOutTime);
@@ -685,21 +689,156 @@ export default function TimesheetAIPage() {
                     }
                   }
                   // ----------------------------------------------------------------------------------------------------
+
+                  // --- Efficiency Metric Calculation - Scoped exclusively to the Performance Metrics Dashboard card ---
+                  let calculatedEfficiency: number | "N/A" = "N/A";
+                  if (selectedConsultant && data.tasks) {
+                    const getFlatTasksLocal = (tasksState: any) => {
+                      if (!tasksState) return [];
+                      if (Array.isArray(tasksState)) return tasksState;
+                      const flat: any[] = [];
+                      if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
+                      if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
+                      if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
+                      if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
+                      return flat;
+                    };
+                    const allTasks = getFlatTasksLocal(data.tasks);
+                    let totalPlannedHours = 0;
+                    let totalActualHours = 0;
+
+                    allTasks.forEach((task: any) => {
+                      if (selectedDashboardTask !== "All Tasks" && task.title !== selectedDashboardTask && task.id !== selectedDashboardTask) return;
+                      let isAssigned = false;
+                      let assignedUsersArray: any[] = [];
+                      
+                      if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+                        assignedUsersArray = task.assignedUsers;
+                        isAssigned = assignedUsersArray.some((u: any) => u.userId === selectedConsultant.id || u.name === selectedConsultant.name);
+                      } else if (Array.isArray(task.assignee)) {
+                        isAssigned = task.assignee.includes(selectedConsultant.id) || task.assignee.includes(selectedConsultant.name);
+                      } else if (typeof task.assignee === 'string') {
+                        isAssigned = task.assignee === selectedConsultant.id || task.assignee === selectedConsultant.name || task.assignee.includes(selectedConsultant.name);
+                      }
+                      if (task.assigneeId && selectedConsultant.id && task.assigneeId === selectedConsultant.id) {
+                        isAssigned = true;
+                      }
+
+                      if (isAssigned) {
+                        let plannedHours = 0;
+                        if (assignedUsersArray.length > 0) {
+                          const userAssignment = assignedUsersArray.find((u: any) => u.userId === selectedConsultant.id || u.name === selectedConsultant.name);
+                          if (userAssignment && typeof userAssignment.hours === 'number') {
+                            plannedHours = userAssignment.hours;
+                          } else {
+                            plannedHours = (task.estimate || 0) / assignedUsersArray.length;
+                          }
+                        } else {
+                          let numAssignees = 1;
+                          if (typeof task.assignee === 'string' && task.assignee.includes(',')) {
+                            numAssignees = task.assignee.split(',').filter(Boolean).length || 1;
+                          } else if (Array.isArray(task.assignee)) {
+                            numAssignees = task.assignee.length || 1;
+                          }
+                          plannedHours = (task.estimate || 0) / numAssignees;
+                        }
+                        
+                        let actualHours = 0;
+                        userTimesheets.forEach((ts: any) => {
+                          if (ts.entries && Array.isArray(ts.entries)) {
+                            ts.entries.forEach((entry: any) => {
+                              if (entry.task === task.title || entry.task === task.id) {
+                                if (entry.punchInTime && entry.punchOutTime) {
+                                  const inTime = new Date(entry.punchInTime).getTime();
+                                  const outTime = new Date(entry.punchOutTime).getTime();
+                                  if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+                                    actualHours += (outTime - inTime) / (1000 * 60 * 60);
+                                  }
+                                }
+                              }
+                            });
+                          }
+                        });
+
+                        totalPlannedHours += plannedHours;
+                        totalActualHours += actualHours;
+                      }
+                    });
+
+                    if (totalActualHours > 0 && totalPlannedHours > 0) {
+                      calculatedEfficiency = Math.round((totalPlannedHours / totalActualHours) * 100);
+                    }
+                  }
+
+                  // --- Productivity Metric Calculation ---
+                  let calculatedProductivity: number | "N/A" = "N/A";
+                  if (typeof calculatedUtilization === "number" && typeof calculatedEfficiency === "number") {
+                    calculatedProductivity = Math.round((calculatedUtilization + calculatedEfficiency) / 2);
+                  } else if (typeof calculatedUtilization === "number") {
+                    calculatedProductivity = calculatedUtilization;
+                  } else if (typeof calculatedEfficiency === "number") {
+                    calculatedProductivity = calculatedEfficiency;
+                  }
+                  // ----------------------------------------------------------------------------------------------------
                   
                   return (
                     <>
                       {/* Consultant selector */}
                 <div style={{ marginBottom: "16px" }}>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Select Consultant</label>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Select User</label>
                   <select
                     className="select"
                     value={selectedConsultant.name}
-                    onChange={(e) => setSelectedConsultant(consultants.find((c) => c.name === e.target.value) ?? consultants[0])}
+                    onChange={(e) => {
+                      setSelectedConsultant(consultants.find((c) => c.name === e.target.value) ?? consultants[0]);
+                      setSelectedDashboardTask("All Tasks");
+                    }}
                     style={{ width: "100%", fontSize: "12.5px" }}
                   >
                     {consultants.map((c) => (
                       <option key={c.name} value={c.name}>{c.name}</option>
                     ))}
+                  </select>
+                </div>
+
+                {/* Task selector */}
+                <div style={{ marginBottom: "16px" }}>
+                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Select Task</label>
+                  <select
+                    className="select"
+                    value={selectedDashboardTask}
+                    onChange={(e) => setSelectedDashboardTask(e.target.value)}
+                    style={{ width: "100%", fontSize: "12.5px" }}
+                  >
+                    <option value="All Tasks">All Assigned Tasks</option>
+                    {(() => {
+                      const getFlatTasksLocal = (tasksState: any) => {
+                        if (!tasksState) return [];
+                        if (Array.isArray(tasksState)) return tasksState;
+                        const flat: any[] = [];
+                        if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
+                        if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
+                        if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
+                        if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
+                        return flat;
+                      };
+                      return getFlatTasksLocal(data.tasks).filter((task: any) => {
+                        let isAssigned = false;
+                        if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+                          isAssigned = task.assignedUsers.some((u: any) => u.userId === selectedConsultant.id || u.name === selectedConsultant.name);
+                        } else if (Array.isArray(task.assignee)) {
+                          isAssigned = task.assignee.includes(selectedConsultant.id) || task.assignee.includes(selectedConsultant.name);
+                        } else if (typeof task.assignee === 'string') {
+                          isAssigned = task.assignee === selectedConsultant.id || task.assignee === selectedConsultant.name || task.assignee.includes(selectedConsultant.name);
+                        }
+                        if (task.assigneeId && selectedConsultant.id && task.assigneeId === selectedConsultant.id) {
+                          isAssigned = true;
+                        }
+                        return isAssigned;
+                      }).map((t: any) => (
+                        <option key={t.id} value={t.title}>{t.title} ({t.project})</option>
+                      ));
+                    })()}
                   </select>
                 </div>
 
@@ -732,38 +871,150 @@ export default function TimesheetAIPage() {
                     );
                   })()}
                   <CircleScore value={calculatedAttendance}           label="Attendance"    color="#059669" />
-                  <CircleScore value={selectedConsultant.efficiency}  label="Efficiency"    color="#1ABC9C" />
-                  <CircleScore value={selectedConsultant.score}       label="Productivity"  color="#d97706" />
+                  <CircleScore value={calculatedEfficiency}           label="Efficiency"    color="#1ABC9C" />
+                  <CircleScore value={calculatedProductivity}         label="Productivity"  color="#d97706" />
                 </div>
 
                 {/* Consultant comparison table */}
                 <div style={{ marginBottom: "16px", flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Team Comparison</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
-                    {consultants.map((c) => (
-                      <div
-                        key={c.name}
-                        onClick={() => setSelectedConsultant(c)}
-                        style={{
-                          display: "flex", alignItems: "center", gap: "10px",
-                          padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
-                          background: selectedConsultant.name === c.name ? "var(--bg-surface-2)" : "transparent",
-                          border: `1px solid ${selectedConsultant.name === c.name ? "var(--border-default)" : "transparent"}`,
-                          transition: "all 0.15s",
-                        }}
-                      >
-                        <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "linear-gradient(135deg,#2563eb,#1ABC9C)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: "white", flexShrink: 0 }}>
-                          {c.name.split(" ").map((n: string) => n[0]).join("")}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>{c.name}</div>
-                          <div style={{ height: "4px", background: "var(--border-subtle)", borderRadius: "2px", marginTop: "4px" }}>
-                            <div style={{ height: "100%", width: `${c.score}%`, background: "linear-gradient(90deg,#2563eb,#1ABC9C)", borderRadius: "2px", transition: "width 0.4s" }} />
+                    {consultants.map((c) => {
+                      const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === c.name) : [];
+                      let totalHours = 0;
+                      userTimesheets.forEach((ts: any) => {
+                        if (ts.entries && Array.isArray(ts.entries)) {
+                          ts.entries.forEach((entry: any) => {
+                            if (selectedDashboardTask !== "All Tasks" && entry.task !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
+                            if (entry.punchInTime && entry.punchOutTime) {
+                              const inTime = new Date(entry.punchInTime).getTime();
+                              const outTime = new Date(entry.punchOutTime).getTime();
+                              if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+                                totalHours += (outTime - inTime) / (1000 * 60 * 60);
+                              }
+                            }
+                          });
+                        }
+                      });
+                      const capacity = userTimesheets.length * 40;
+                      let rowUtil: number | "N/A" = "N/A";
+                      if (userTimesheets.length > 0 && capacity > 0) {
+                        rowUtil = Math.min(100, Math.round((totalHours / capacity) * 100));
+                      }
+
+                      let rowEff: number | "N/A" = "N/A";
+                      if (data.tasks) {
+                        const getFlatTasksLocal = (tasksState: any) => {
+                          if (!tasksState) return [];
+                          if (Array.isArray(tasksState)) return tasksState;
+                          const flat: any[] = [];
+                          if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
+                          if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
+                          if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
+                          if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
+                          return flat;
+                        };
+                        const allTasks = getFlatTasksLocal(data.tasks);
+                        let totalPlannedHours = 0;
+                        let totalActualHours = 0;
+
+                        allTasks.forEach((task: any) => {
+                          if (selectedDashboardTask !== "All Tasks" && task.title !== selectedDashboardTask && task.id !== selectedDashboardTask) return;
+                          let isAssigned = false;
+                          let assignedUsersArray: any[] = [];
+                          
+                          if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+                            assignedUsersArray = task.assignedUsers;
+                            isAssigned = assignedUsersArray.some((u: any) => u.userId === c.id || u.name === c.name);
+                          } else if (Array.isArray(task.assignee)) {
+                            isAssigned = task.assignee.includes(c.id) || task.assignee.includes(c.name);
+                          } else if (typeof task.assignee === 'string') {
+                            isAssigned = task.assignee === c.id || task.assignee === c.name || task.assignee.includes(c.name);
+                          }
+                          if (task.assigneeId && c.id && task.assigneeId === c.id) {
+                            isAssigned = true;
+                          }
+
+                          if (isAssigned) {
+                            let plannedHours = 0;
+                            if (assignedUsersArray.length > 0) {
+                              const userAssignment = assignedUsersArray.find((u: any) => u.userId === c.id || u.name === c.name);
+                              if (userAssignment && typeof userAssignment.hours === 'number') {
+                                plannedHours = userAssignment.hours;
+                              } else {
+                                plannedHours = (task.estimate || 0) / assignedUsersArray.length;
+                              }
+                            } else {
+                              let numAssignees = 1;
+                              if (typeof task.assignee === 'string' && task.assignee.includes(',')) {
+                                numAssignees = task.assignee.split(',').filter(Boolean).length || 1;
+                              } else if (Array.isArray(task.assignee)) {
+                                numAssignees = task.assignee.length || 1;
+                              }
+                              plannedHours = (task.estimate || 0) / numAssignees;
+                            }
+                            
+                            let actualHours = 0;
+                            userTimesheets.forEach((ts: any) => {
+                              if (ts.entries && Array.isArray(ts.entries)) {
+                                ts.entries.forEach((entry: any) => {
+                                  if (entry.task === task.title || entry.task === task.id) {
+                                    if (entry.punchInTime && entry.punchOutTime) {
+                                      const inTime = new Date(entry.punchInTime).getTime();
+                                      const outTime = new Date(entry.punchOutTime).getTime();
+                                      if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+                                        actualHours += (outTime - inTime) / (1000 * 60 * 60);
+                                      }
+                                    }
+                                  }
+                                });
+                              }
+                            });
+
+                            totalPlannedHours += plannedHours;
+                            totalActualHours += actualHours;
+                          }
+                        });
+
+                        if (totalActualHours > 0 && totalPlannedHours > 0) {
+                          rowEff = Math.round((totalPlannedHours / totalActualHours) * 100);
+                        }
+                      }
+
+                      let rowProd: number | "N/A" = "N/A";
+                      if (typeof rowUtil === "number" && typeof rowEff === "number") {
+                        rowProd = Math.round((rowUtil + rowEff) / 2);
+                      } else if (typeof rowUtil === "number") {
+                        rowProd = rowUtil;
+                      } else if (typeof rowEff === "number") {
+                        rowProd = rowEff;
+                      }
+                      
+                      return (
+                        <div
+                          key={c.name}
+                          onClick={() => setSelectedConsultant(c)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: "10px",
+                            padding: "8px 10px", borderRadius: "8px", cursor: "pointer",
+                            background: selectedConsultant.name === c.name ? "var(--bg-surface-2)" : "transparent",
+                            border: `1px solid ${selectedConsultant.name === c.name ? "var(--border-default)" : "transparent"}`,
+                            transition: "all 0.15s",
+                          }}
+                        >
+                          <div style={{ width: "28px", height: "28px", borderRadius: "50%", background: "linear-gradient(135deg,#2563eb,#1ABC9C)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "10px", fontWeight: 700, color: "white", flexShrink: 0 }}>
+                            {c.name.split(" ").map((n: string) => n[0]).join("")}
                           </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>{c.name}</div>
+                            <div style={{ height: "4px", background: "var(--border-subtle)", borderRadius: "2px", marginTop: "4px" }}>
+                              <div style={{ height: "100%", width: rowProd === "N/A" ? "0%" : `${rowProd}%`, background: "linear-gradient(90deg,#2563eb,#1ABC9C)", borderRadius: "2px", transition: "width 0.4s" }} />
+                            </div>
+                          </div>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: rowProd === "N/A" ? "var(--text-tertiary)" : (rowProd >= 90 ? "#059669" : rowProd >= 80 ? "#d97706" : "#e11d48"), minWidth: "36px", textAlign: "right", flexShrink: 0 }}>{rowProd === "N/A" ? "N/A" : `${rowProd}%`}</span>
                         </div>
-                        <span style={{ fontSize: "12px", fontWeight: 700, color: c.score >= 90 ? "#059669" : c.score >= 80 ? "#d97706" : "#e11d48", minWidth: "36px", textAlign: "right", flexShrink: 0 }}>{c.score}%</span>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
 

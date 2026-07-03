@@ -1367,7 +1367,10 @@ export default function ExpensesPage() {
             {/* Modal Footer */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}>
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedExpense(null)} style={{ padding: "8px 16px", fontSize: "12.5px" }}>{t("Close")}</button>
-              <button className="btn btn-danger btn-sm" onClick={() => setExpenseToDelete(selectedExpense.id)} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
+              <button className="btn btn-danger btn-sm" onClick={() => {
+                setExpenseToDelete(selectedExpense.id);
+                setSelectedExpense(null);
+              }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
                 🗑 {t("Delete Expense")}
               </button>
             </div>
@@ -1557,7 +1560,7 @@ export default function ExpensesPage() {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1200,
+            zIndex: 9999,
           }}
         >
           <div

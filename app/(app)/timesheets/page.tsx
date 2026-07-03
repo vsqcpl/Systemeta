@@ -132,12 +132,20 @@ export default function TimesheetsPage() {
           week: targetWeekKey,
           entries: []
         };
-        const newEntry = {
-          id: resData.session.id,
-          timesheetId: (userTimesheet as any).id,
-          day: new Date(resData.session.date).getDay() === 0 ? 6 : new Date(resData.session.date).getDay() - 1,
-          projectId: resData.session.project,
-          task: resData.session.task,
+          const allTasksList = [
+            ...(storeData.tasks.todo || []),
+            ...(storeData.tasks.inprogress || []),
+            ...(storeData.tasks.review || []),
+            ...(storeData.tasks.done || []),
+          ];
+          const taskObj = allTasksList.find((t: any) => t.title === resData.session.project);
+          
+          const newEntry = {
+            id: resData.session.id,
+            timesheetId: (userTimesheet as any).id,
+            day: new Date(resData.session.date).getDay() === 0 ? 6 : new Date(resData.session.date).getDay() - 1,
+            project: taskObj ? (taskObj.projectId || taskObj.project) : "Internal",
+            task: resData.session.project,
           hours: 0,
           billable: true,
           punchInTime: resData.session.punchIn,
@@ -195,12 +203,20 @@ export default function TimesheetsPage() {
           week: targetWeekKey,
           entries: []
         };
+        const allTasksList = [
+          ...(storeData.tasks.todo || []),
+          ...(storeData.tasks.inprogress || []),
+          ...(storeData.tasks.review || []),
+          ...(storeData.tasks.done || []),
+        ];
+        const taskObj = allTasksList.find((t: any) => t.title === resData.session.project);
+        
         const updatedEntry = {
           id: resData.session.id,
           timesheetId: (userTimesheet as any).id,
           day: new Date(resData.session.date).getDay() === 0 ? 6 : new Date(resData.session.date).getDay() - 1,
-          projectId: resData.session.project,
-          task: resData.session.task,
+          project: taskObj ? (taskObj.projectId || taskObj.project) : "Internal",
+          task: resData.session.project,
           hours: resData.session.punchOut ? parseFloat(((new Date(resData.session.punchOut).getTime() - new Date(resData.session.punchIn).getTime()) / 3600000).toFixed(2)) : 0,
           billable: true,
           punchInTime: resData.session.punchIn,
@@ -256,7 +272,7 @@ export default function TimesheetsPage() {
       ...(data.tasks.done || []),
     ];
     
-    const userTasks = allTasksList.filter((t: any) => t.assigneeId === user.id);
+    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id);
     
     return userTasks.map((t: any, idx: number) => {
       const projectObj = data.projects.find((p: any) => p.id === t.projectId);
@@ -284,7 +300,7 @@ export default function TimesheetsPage() {
       ...(data.tasks.review || []),
       ...(data.tasks.done || []),
     ];
-    const userTasks = allTasksList.filter((t: any) => t.assigneeId === user.id);
+    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id);
     
     data.projects.forEach((proj: any) => {
       const projTasks = userTasks.filter((t: any) => t.projectId === proj.id);
@@ -361,8 +377,9 @@ export default function TimesheetsPage() {
 
   // Weeks definition
   const weekStart = useMemo(() => {
-    const start = new Date("2026-06-09");
-    start.setDate(start.getDate() + weekOffset * 7);
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - 6 + (weekOffset * 7));
     return start;
   }, [weekOffset]);
 
@@ -395,18 +412,27 @@ export default function TimesheetsPage() {
             entries: []
           };
           
-          // Create timesheet entries array mimicking what AI module expects
-          const newEntries = resData.sessions.map((s: any) => ({
-            id: s.id,
-            timesheetId: (userTimesheet as any).id,
-            day: new Date(s.date).getDay() === 0 ? 6 : new Date(s.date).getDay() - 1, // Approximation for Mon-Sun
-            projectId: s.project,
-            task: s.task,
+          const allTasksList = [
+            ...(storeData.tasks.todo || []),
+            ...(storeData.tasks.inprogress || []),
+            ...(storeData.tasks.review || []),
+            ...(storeData.tasks.done || []),
+          ];
+          
+          const newEntries = resData.sessions.map((s: any) => {
+            const taskObj = allTasksList.find((t: any) => t.title === s.project);
+            return {
+              id: s.id,
+              timesheetId: (userTimesheet as any).id,
+              day: new Date(s.date).getDay() === 0 ? 6 : new Date(s.date).getDay() - 1, // Approximation for Mon-Sun
+              project: taskObj ? (taskObj.projectId || taskObj.project) : "Internal",
+              task: s.project,
             hours: s.punchOut ? parseFloat(((new Date(s.punchOut).getTime() - new Date(s.punchIn).getTime()) / 3600000).toFixed(2)) : 0,
             billable: true,
-            punchInTime: s.punchIn,
-            punchOutTime: s.punchOut
-          }));
+              punchInTime: s.punchIn,
+              punchOutTime: s.punchOut
+            };
+          });
           
           const oldMockEntries = (userTimesheet as any).entries.filter((e: any) => !e.punchInTime);
           const updatedTimesheet = { ...userTimesheet, entries: [...oldMockEntries, ...newEntries] };
@@ -485,8 +511,8 @@ export default function TimesheetsPage() {
   const daysLabel = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() + i);
-    const dayNames = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-    return `${t(dayNames[i])} ${d.getDate()}`;
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+    return `${t(dayNames[d.getDay()])} ${d.getDate()}`;
   });
 
   // Retrieve timesheet for current week & user from store
@@ -494,8 +520,19 @@ export default function TimesheetsPage() {
     (t: any) => t.consultant === (user?.id || "TK") && t.week === targetWeekKey
   );
 
-  // Helper to get hours value for cell from persisted sessions
+  // Helper to get hours value for cell from persisted sessions and manual entries
   const getCellHours = (project: string, task: string, day: number, defaultVal: number) => {
+    // 1. Check if the user manually entered/modified hours in the store
+    if (userTimesheet?.entries) {
+      const manualEntry = userTimesheet.entries.find(
+        (e: any) => e.project === project && e.task === task && e.day === day && !e.punchInTime
+      );
+      if (manualEntry && typeof manualEntry.hours === 'number') {
+        return manualEntry.hours;
+      }
+    }
+
+    // 2. Check punch sessions
     const dayDate = new Date(weekStart);
     dayDate.setDate(dayDate.getDate() + day);
     const dayStr = dayDate.toISOString().split("T")[0];
@@ -546,7 +583,7 @@ export default function TimesheetsPage() {
   const handleHourChange = (project: string, task: string, dayIdx: number, val: string, billable: boolean) => {
     const hours = parseFloat(val);
     if (isNaN(hours) || hours < 0 || hours > 24) return;
-    updateTimesheetHours(project, task, dayIdx, hours, billable);
+    updateTimesheetHours(project, task, dayIdx, hours, billable, targetWeekKey);
     setIsSubmitted(false); // Reset submission status on edits
     showToast("Timesheet entry updated", "success");
   };
@@ -900,9 +937,14 @@ export default function TimesheetsPage() {
                             <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
                               {s.project || "Internal Operations"}
                             </span>
-                            <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                              {inDate.toLocaleDateString()} · {inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 6px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "4px", color: "var(--text-primary)" }}>
+                                {user?.name} <span style={{ color: "var(--text-tertiary)", fontWeight: 500 }}>({user?.role})</span>
+                              </span>
+                              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                                {inDate.toLocaleDateString()} · {inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </div>
                           </div>
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
                             <span className="badge badge-success">{formatDurationText(durationMs)}</span>
@@ -934,7 +976,7 @@ export default function TimesheetsPage() {
               <div className="timesheet-grid" style={{ minWidth: "900px" }}>
                 {/* Header row */}
                 <div className="timesheet-header">
-                  <div className="timesheet-header-cell">{t("Project / Task")}</div>
+                  <div className="timesheet-header-cell">{t("Projects")}</div>
                   {daysLabel.map((d) => (
                     <div key={d} className="timesheet-header-cell">
                       {d}
@@ -947,11 +989,8 @@ export default function TimesheetsPage() {
                 {gridRows.map((row, rIdx) => (
                   <div key={rIdx} className="timesheet-row">
                     <div className="timesheet-row-label">
-                      <div className="timesheet-row-project" style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-primary)" }}>
-                        {row.project}
-                      </div>
-                      <div className="timesheet-row-task" style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                        {row.task}
+                      <div className="timesheet-row-project" style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {data.projects?.find((p: any) => p.id === row.project)?.name || row.project}
                       </div>
                     </div>
 
@@ -962,7 +1001,7 @@ export default function TimesheetsPage() {
                           <input
                             type="number"
                             className="timesheet-hours-input"
-                            value={h > 0 ? h : ""}
+                            value={h || ""}
                             onChange={(e) => handleHourChange(row.project, row.task, dayIdx, e.target.value, row.billable)}
                             min="0"
                             max="24"
@@ -1011,116 +1050,7 @@ export default function TimesheetsPage() {
             </div>
           </div>
 
-          {/* Assigned Tasks Card */}
-          <div className="card" style={{ marginTop: "24px" }}>
-            <div className="card-header">
-              <span className="card-title">{t("Assigned Tasks")}</span>
-            </div>
-            <div className="card-body" style={{ padding: "0 0 20px 0" }}>
-              {/* Checklist header */}
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "40px 2fr 1.5fr 1.5fr",
-                  alignItems: "center",
-                  padding: "10px 16px",
-                  background: "var(--bg-surface-2)",
-                  borderBottom: "1px solid var(--border-subtle)",
-                  fontWeight: 600,
-                  fontSize: "11px",
-                  textTransform: "uppercase",
-                  color: "var(--text-tertiary)"
-                }}
-              >
-                <div></div>
-                <div>{t("Task Name")}</div>
-                <div>{t("Project Name")}</div>
-                <div>{t("Assigned By")}</div>
-              </div>
 
-              {/* Checklist rows */}
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                {companyAssignedTasks.map((task) => {
-                  const isChecked = selectedTasks.includes(task.id);
-                  return (
-                    <div
-                      key={task.id}
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "40px 2fr 1.5fr 1.5fr",
-                        alignItems: "center",
-                        padding: "12px 16px",
-                        borderBottom: "1px solid var(--border-subtle)",
-                        background: isChecked ? "rgba(46, 134, 193, 0.04)" : "transparent",
-                        transition: "background 0.15s ease"
-                      }}
-                    >
-                      <div>
-                        <input
-                          type="checkbox"
-                          id={`task-check-${task.id}`}
-                          checked={isChecked}
-                          onChange={() => handleTaskToggle(task.id)}
-                          style={{
-                            width: "16px",
-                            height: "16px",
-                            cursor: "pointer"
-                          }}
-                        />
-                      </div>
-                      <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
-                        {task.name}
-                      </div>
-                      <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                        {task.project}
-                      </div>
-                      <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                        {task.assignedBy}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Hours Spent per Task Section */}
-              {selectedTasks.length > 0 && (
-                <div style={{ marginTop: "24px", padding: "0 20px" }}>
-                  <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "12px" }}>
-                    {t("Hours Spent per Task")}
-                  </h3>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxWidth: "500px" }}>
-                    {companyAssignedTasks.filter((t) => selectedTasks.includes(t.id)).map((task) => (
-                      <div key={task.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px" }}>
-                        <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-                          {task.name} ({task.project})
-                        </div>
-                        <input
-                          type="number"
-                          className="input"
-                          placeholder="Hours spent..."
-                          value={taskHours[task.id] || ""}
-                          onChange={(e) => handleHoursChange(task.id, e.target.value)}
-                          style={{ width: "160px" }}
-                          min="0"
-                          step="0.5"
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Confirm button */}
-              <div style={{ marginTop: "20px", padding: "0 20px" }}>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={handleConfirmTasks}
-                >
-                  {t("Confirm Assigned Tasks")}
-                </button>
-              </div>
-            </div>
-          </div>
       </>
 
       {/* Modals for Punch Workflow */}
@@ -1140,7 +1070,7 @@ export default function TimesheetsPage() {
                 onChange={(e) => setTempProjectClient(e.target.value)}
                 style={{ width: "100%", height: "38px" }}
               >
-                {allTasks.map((task: any) => (
+                {allTasks.filter((t: any) => t.assignee === user?.id).map((task: any) => (
                   <option key={task.id} value={task.title}>
                     {task.title}
                   </option>

@@ -4146,9 +4146,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  updateTimesheetHours: (project, task, day, hours, billable) => {
+  updateTimesheetHours: (project, task, day, hours, billable, weekKey) => {
     const consultantId = useAppStore.getState().user?.id || 'TK';
-    const week = '2026-06-09'; // Default active week
+    const week = weekKey || '2026-06-09'; // Default active week
 
     set((state) => {
       const updatedTimesheets = [...state.data.timesheets];
