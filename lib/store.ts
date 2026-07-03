@@ -346,7 +346,8 @@ interface AppStore {
     task: string,
     day: number,
     hours: number,
-    billable: boolean
+    billable: boolean,
+    weekKey?: string
   ) => void;
   currencyFormat: 'indian' | 'intl';
   setCurrencyFormat: (format: 'indian' | 'intl') => void;
