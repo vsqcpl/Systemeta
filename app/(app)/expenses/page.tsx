@@ -1512,7 +1512,7 @@ export default function ExpensesPage() {
             {/* Modal Footer */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}>
               
-              <ActionGuard permission="Approve Expenses">
+              <ActionGuard action="Approve Expenses">
                 {details.status.toLowerCase() === "pending" && (
                   <>
                     <button className="btn btn-success btn-sm" onClick={() => {

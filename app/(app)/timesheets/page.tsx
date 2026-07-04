@@ -70,11 +70,15 @@ export default function TimesheetsPage() {
   }, [data.tasks]);
 
   useEffect(() => {
-    if (allTasks.length > 0 && (projectClient === "Internal Operations" || !projectClient)) {
-      setProjectClient(allTasks[0].title);
-      setTempProjectClient(allTasks[0].title);
+    const userTasks = allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id);
+    if (userTasks.length > 0 && (projectClient === "Internal Operations" || !projectClient)) {
+      setProjectClient(userTasks[0].title);
+      setTempProjectClient(userTasks[0].title);
+    } else if (allTasks.length > 0 && userTasks.length === 0 && (projectClient === "Internal Operations" || !projectClient)) {
+      setProjectClient("Internal Operations");
+      setTempProjectClient("Internal Operations");
     }
-  }, [allTasks, projectClient]);
+  }, [allTasks, projectClient, user]);
 
 
   // Helper to format duration
@@ -272,7 +276,7 @@ export default function TimesheetsPage() {
       ...(data.tasks.done || []),
     ];
     
-    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id);
+    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id || t.assigneeId === user.id);
     
     return userTasks.map((t: any, idx: number) => {
       const projectObj = data.projects.find((p: any) => p.id === t.projectId);
@@ -300,7 +304,7 @@ export default function TimesheetsPage() {
       ...(data.tasks.review || []),
       ...(data.tasks.done || []),
     ];
-    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id);
+    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id || t.assigneeId === user.id);
     
     data.projects.forEach((proj: any) => {
       const projTasks = userTasks.filter((t: any) => t.projectId === proj.id);
@@ -1070,7 +1074,7 @@ export default function TimesheetsPage() {
                 onChange={(e) => setTempProjectClient(e.target.value)}
                 style={{ width: "100%", height: "38px" }}
               >
-                {allTasks.filter((t: any) => t.assignee === user?.id).map((task: any) => (
+                {allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id).map((task: any) => (
                   <option key={task.id} value={task.title}>
                     {task.title}
                   </option>
