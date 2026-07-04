@@ -143,6 +143,10 @@ export interface Expense {
   date: string;
   status: ExpenseStatus;
   receipt: string | boolean | null;
+  modeOfTransport?: string;
+  fromLocation?: string;
+  toLocation?: string;
+  calculatedDistance?: number | null;
 }
 
 export type InvoiceStatus = 'draft' | 'outstanding' | 'paid' | 'overdue';

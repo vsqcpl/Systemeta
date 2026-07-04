@@ -19,6 +19,7 @@ router.post("/login", async (req, res) => {
     // Call Better Auth to sign in
     const response = await auth.api.signInEmail({
       body: { email, password },
+      headers: fromNodeHeaders(req.headers),
       asResponse: true,
     });
 

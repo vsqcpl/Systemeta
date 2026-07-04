@@ -60,7 +60,7 @@ function CircleScore({ value, label, color }: { value: number | "N/A"; label: st
 }
 
 // ── Card 4: Carbon Footprint Tracker ──────────────────────────────────────────
-function CarbonTrackerCard({ consultants, projects }: { consultants: any[], projects: any[] }) {
+function CarbonTrackerCard({ consultants, projects, rawExpenses }: { consultants: any[], projects: any[], rawExpenses: any[] }) {
   const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
@@ -68,35 +68,12 @@ function CarbonTrackerCard({ consultants, projects }: { consultants: any[], proj
   const [empOpen, setEmpOpen] = useState(false);
 
   const clientsList = useMemo(() => {
-    const list = Array.from(new Set(projects?.map((p: any) => p.client))).filter(Boolean) as string[];
-    // Pad with dummy clients if needed so partial selection is testable
-    if (list.length === 0) list.push("Acme Corp", "Globex Inc", "Soylent Corp");
-    else if (list.length === 1) list.push("Globex Inc", "Soylent Corp");
-    else if (list.length === 2) list.push("Soylent Corp");
-    return list;
+    return Array.from(new Set(projects?.map((p: any) => p.client))).filter(Boolean) as string[];
   }, [projects]);
 
   const employeesList = useMemo(() => {
-    const list = Array.from(new Set(consultants?.map((c: any) => c.name))).filter(Boolean) as string[];
-    // Pad with dummy employees if needed
-    if (list.length === 0) list.push("Alice Smith", "Bob Jones", "Charlie Brown");
-    else if (list.length === 1) list.push("Bob Jones", "Charlie Brown");
-    else if (list.length === 2) list.push("Charlie Brown");
-    return list;
+    return Array.from(new Set(consultants?.map((c: any) => c.name))).filter(Boolean) as string[];
   }, [consultants]);
-
-  // Generate deterministic dummy data keyed by name
-  const dummyData = useMemo(() => {
-    const data: Record<string, { travel: number, office: number, remote: number, digital: number }> = {};
-    clientsList.forEach((c, i) => {
-      // Much larger variance so changes are VERY visible
-      data[`client_${c}`] = { travel: 500 + i * 400, office: 300 + i * 200, remote: 100 + i * 50, digital: 50 + i * 25 };
-    });
-    employeesList.forEach((e, i) => {
-      data[`emp_${e}`] = { travel: 50 + i * 30, office: 30 + i * 15, remote: 40 + i * 20, digital: 15 + i * 5 };
-    });
-    return data;
-  }, [clientsList, employeesList]);
 
   const toggleClient = (client: string) => setSelectedClients(prev => prev.includes(client) ? prev.filter(c => c !== client) : [...prev, client]);
   const toggleEmployee = (emp: string) => setSelectedEmployees(prev => prev.includes(emp) ? prev.filter(e => e !== emp) : [...prev, emp]);
@@ -104,36 +81,106 @@ function CarbonTrackerCard({ consultants, projects }: { consultants: any[], proj
   const isClientFiltered = selectedClients.length > 0;
   const isEmpFiltered = selectedEmployees.length > 0;
 
-  let travel = 0, office = 0, remote = 0, digital = 0;
-  
-  // Additive logic: sum ONLY what is explicitly selected.
-  // If nothing is selected, totals remain 0.
-  if (isClientFiltered) {
-    selectedClients.forEach(c => { const d = dummyData[`client_${c}`]; if (d) { travel += d.travel; office += d.office; remote += d.remote; digital += d.digital; } });
-  }
-  if (isEmpFiltered) {
-    selectedEmployees.forEach(e => { const d = dummyData[`emp_${e}`]; if (d) { travel += d.travel; office += d.office; remote += d.remote; digital += d.digital; } });
-  }
+  // Actual Travel Emissions Calculation
+  const emissionFactors: Record<string, number> = {
+    Flight: 0.25,
+    Train: 0.04,
+    Car: 0.17,
+    Bus: 0.08,
+    Metro: 0.04,
+    Cab: 0.20,
+    Bike: 0.09,
+    Auto: 0.12,
+  };
+
+  const modeIcons: Record<string, string> = {
+    Flight: "✈️",
+    Train: "🚆",
+    Car: "🚗",
+    Bus: "🚌",
+    Metro: "🚇",
+    Cab: "🚕",
+    Bike: "🚲",
+    Auto: "🛺",
+  };
+
+  const travelExpenses = (rawExpenses || []).filter(e => e.category === "Travel" || e.category === "Transport");
+
+  const filteredTravelExpenses = travelExpenses.filter(e => {
+    let keep = true;
+    if (isClientFiltered) {
+      const p = projects.find(proj => proj.id === e.project);
+      if (!p || !selectedClients.includes(p.client)) keep = false;
+    }
+    if (isEmpFiltered) {
+      const c = consultants.find(cons => cons.id === e.consultant);
+      if (!c || !selectedEmployees.includes(c.name)) keep = false;
+    }
+    return keep;
+  });
+
+  const dates = travelExpenses.map(e => new Date(e.date).getTime()).filter(t => !isNaN(t));
+  const referenceDate = dates.length > 0 ? new Date(Math.max(...dates)) : new Date();
+
+  let currentTravelEmissions = 0;
+  let previousTravelEmissions = 0;
+  const emissionsByMode: Record<string, number> = {};
+
+  filteredTravelExpenses.forEach(e => {
+    if (!e.modeOfTransport || !e.calculatedDistance) return;
+    const factor = emissionFactors[e.modeOfTransport] || 0;
+    const emission = e.calculatedDistance * factor;
+
+    const d = new Date(e.date);
+    if (isNaN(d.getTime())) return;
+
+    if (period === "monthly") {
+      if (d.getFullYear() === referenceDate.getFullYear() && d.getMonth() === referenceDate.getMonth()) {
+        currentTravelEmissions += emission;
+        emissionsByMode[e.modeOfTransport] = (emissionsByMode[e.modeOfTransport] || 0) + emission;
+      }
+      const prevMonth = new Date(referenceDate);
+      prevMonth.setMonth(prevMonth.getMonth() - 1);
+      if (d.getFullYear() === prevMonth.getFullYear() && d.getMonth() === prevMonth.getMonth()) {
+        previousTravelEmissions += emission;
+      }
+    } else {
+      if (d.getFullYear() === referenceDate.getFullYear()) {
+        currentTravelEmissions += emission;
+        emissionsByMode[e.modeOfTransport] = (emissionsByMode[e.modeOfTransport] || 0) + emission;
+      }
+      if (d.getFullYear() === referenceDate.getFullYear() - 1) {
+        previousTravelEmissions += emission;
+      }
+    }
+  });
+
+  const totalCo2 = Math.round(currentTravelEmissions);
+  const prevTotalCo2 = Math.round(previousTravelEmissions);
 
   const activeEmpsCount = isEmpFiltered ? selectedEmployees.length : 0;
   const activeClientsCount = isClientFiltered ? selectedClients.length : 0;
-
-  const periodMult = period === "monthly" ? 1 : 12;
-  travel *= periodMult;
-  office *= periodMult;
-  remote *= periodMult;
-  digital *= periodMult;
-
-  const totalCo2 = travel + office + remote + digital;
-  const avgCo2 = Math.round(totalCo2 / (activeEmpsCount || 1));
-  const trend = period === "monthly" ? -2.4 : 5.1;
+  const activeCount = isEmpFiltered ? activeEmpsCount : (isClientFiltered ? consultants.length : consultants.length);
+  const avgCo2 = Math.round(totalCo2 / (activeCount || 1));
   
-  const breakdown = [
-    { name: "Travel emissions", sub: "Flights, cabs", val: travel, target: "under" },
-    { name: "Office energy", sub: "Electricity, HVAC", val: office, target: "under" },
-    { name: "Remote work", sub: "WFH energy use", val: remote, target: "over" },
-    { name: "Digital and cloud usage", sub: "Servers, storage", val: digital, target: "under" },
-  ];
+  const trendRaw = prevTotalCo2 > 0 ? ((totalCo2 - prevTotalCo2) / prevTotalCo2) * 100 : (totalCo2 > 0 ? 100 : 0);
+  const trend = parseFloat(trendRaw.toFixed(1));
+  
+  const breakdown = Object.entries(emissionsByMode)
+    .sort((a, b) => b[1] - a[1])
+    .map(([mode, val]) => ({
+      name: `${mode} Travel`,
+      sub: `${period === "monthly" ? "Monthly" : "Yearly"} usage log`,
+      val: Math.round(val),
+      icon: modeIcons[mode] || "🚗",
+      target: val > 200 ? "over" : "under",
+    }));
+
+  if (breakdown.length === 0) {
+    breakdown.push({ name: "No Travel Logged", sub: "0 distance recorded", val: 0, icon: "✨", target: "under" });
+  }
+
+  const highestMode = breakdown[0]?.val > 0 ? breakdown[0].name.split(" ")[0] : "travel";
 
   return (
     <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "visible", boxSizing: "border-box" }}>
@@ -205,7 +252,7 @@ function CarbonTrackerCard({ consultants, projects }: { consultants: any[], proj
           {[
             { label: "Total CO₂e", val: `${totalCo2.toLocaleString()} kg`, color: "var(--text-primary)" },
             { label: "Avg per employee", val: `${avgCo2.toLocaleString()} kg`, color: "var(--text-primary)" },
-            { label: "Trend vs last period", val: `${trend > 0 ? "+" : ""}${trend}%`, color: trend > 0 ? "#e11d48" : "#059669" },
+            { label: "Trend vs last period", val: `${trend > 0 ? "+" : ""}${trend}%`, color: trend > 0 ? "#e11d48" : (trend < 0 ? "#059669" : "var(--text-tertiary)") },
           ].map((k) => (
             <div key={k.label} style={{ background: "var(--bg-surface-2)", borderRadius: "10px", padding: "12px 6px", textAlign: "center", border: "1px solid var(--border-subtle)", minWidth: 0 }}>
               <div style={{ fontSize: "16px", fontWeight: 800, color: k.color, wordBreak: "break-word", overflowWrap: "anywhere" }}>{k.val}</div>
@@ -222,16 +269,17 @@ function CarbonTrackerCard({ consultants, projects }: { consultants: any[], proj
 
         {/* Emissions Breakdown */}
         <div style={{ marginBottom: "16px", flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Emissions breakdown</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
+          <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Travel Emissions Breakdown by Mode</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {breakdown.map((b) => (
-              <div key={b.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "8px 10px", borderRadius: "8px", background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)" }}>
+              <div key={b.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ fontSize: "18px", marginRight: "4px" }}>{b.icon}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>{b.name}</div>
+                  <div style={{ fontSize: "13.5px", fontWeight: 700, color: "var(--text-primary)" }}>{b.name}</div>
                   <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{b.sub}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>{b.val.toLocaleString()} kg</div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{b.val.toLocaleString()} kg</div>
                   <span style={{ fontSize: "10px", fontWeight: 700, padding: "2px 6px", borderRadius: "999px", background: b.target === "under" ? "rgba(5,150,105,0.1)" : "rgba(225,29,72,0.1)", color: b.target === "under" ? "#059669" : "#e11d48", display: "inline-block", marginTop: "2px" }}>
                     {b.target === "under" ? "Within Target" : "Over Target"}
                   </span>
@@ -248,8 +296,8 @@ function CarbonTrackerCard({ consultants, projects }: { consultants: any[], proj
           </div>
           <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, wordBreak: "break-word", overflowWrap: "break-word" }}>
             {trend > 0
-              ? `Combined footprint ${selectedClients.length > 0 ? `across ${selectedClients.length} selected clients ` : ""}rose ${trend}% this ${period === "monthly" ? "month" : "year"}, driven by remote work.`
-              : `Combined footprint ${selectedClients.length > 0 ? `across ${selectedClients.length} selected clients ` : ""}dropped ${Math.abs(trend)}% this ${period === "monthly" ? "month" : "year"}, well within target.`
+              ? `Travel footprint ${selectedClients.length > 0 ? `across ${selectedClients.length} selected clients ` : ""}rose ${trend}% this ${period === "monthly" ? "month" : "year"}, driven primarily by ${highestMode}.`
+              : `Travel footprint ${selectedClients.length > 0 ? `across ${selectedClients.length} selected clients ` : ""}dropped ${Math.abs(trend)}% this ${period === "monthly" ? "month" : "year"}, well within target.`
             }
           </div>
         </div>
@@ -1045,7 +1093,7 @@ export default function TimesheetAIPage() {
           </div>
         </div>
 
-        {/* ── Card 3: Travel Expense Auto-Push to Billing ─────────────────────── */}
+        {/* ── Card 3: Expense Monitoring Panel ─────────────────────── */}
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
 
@@ -1055,55 +1103,76 @@ export default function TimesheetAIPage() {
                 <IconReceipt size={20} style={{ color: "#D97706" }} />
               </div>
               <div style={{ minWidth: 0 }}>
-                <h3 style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0, wordBreak: "break-word", overflowWrap: "break-word" }}>Travel Expense Auto-Push to Billing</h3>
-                <span style={{ fontSize: "11px", color: "var(--text-tertiary)", wordBreak: "break-word", overflowWrap: "break-word" }}>Classify &amp; Push Reimbursable Expenses</span>
+                <h3 style={{ fontSize: "14.5px", fontWeight: 700, color: "var(--text-primary)", margin: 0, wordBreak: "break-word", overflowWrap: "break-word" }}>Expense Claim Monitor</h3>
+                <span style={{ fontSize: "11px", color: "var(--text-tertiary)", wordBreak: "break-word", overflowWrap: "break-word" }}>Real-time submitted expense processing</span>
               </div>
             </div>
 
-            {expenses.length > 0 ? (
+            {data.expenses && data.expenses.length > 0 ? (
               <>
                 {/* Summary badges */}
                 <div style={{ display: "flex", gap: "8px", marginBottom: "14px", flexWrap: "wrap" }}>
-                  <span className="badge badge-success" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Billable: ₹{expenses.filter(e => e.category === "Billable").reduce((s,e) => s + e.amount, 0).toLocaleString("en-IN")}</span>
-                  <span className="badge badge-brand" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Reimbursable: ₹{expenses.filter(e => e.category === "Reimbursable").reduce((s,e) => s + e.amount, 0).toLocaleString("en-IN")}</span>
-                  <span className="badge badge-gray" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Non-Billable: ₹{expenses.filter(e => e.category === "Non-Billable").reduce((s,e) => s + e.amount, 0).toLocaleString("en-IN")}</span>
+                  <span className="badge badge-brand" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Total: {data.expenses.length}</span>
+                  <span className="badge badge-success" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Approved: {data.expenses.filter((e: any) => e.status === "approved").length}</span>
+                  <span className="badge badge-danger" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Rejected: {data.expenses.filter((e: any) => e.status === "rejected").length}</span>
+                  <span className="badge badge-warning" style={{ wordBreak: "break-word", overflowWrap: "break-word" }}>Pending: {data.expenses.filter((e: any) => e.status === "pending").length}</span>
                 </div>
 
                 {/* Expense table */}
-                <div style={{ flex: 1, marginBottom: "16px", minWidth: 0 }}>
-                  <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Select expenses to push</div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                    {expenses.map((exp) => {
-                      const checked = selectedExpenses.includes(exp.id);
+                <div style={{ flex: 1, marginBottom: "16px", minWidth: 0, overflowY: "auto", paddingRight: "4px" }}>
+                  <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>All Submitted Expenses</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {data.expenses.map((exp: any) => {
+                      const empName = consultants.find((c: any) => c.id === exp.consultant)?.name || exp.consultant;
+                      const projName = data.projects?.find((p: any) => p.id === exp.project)?.client || exp.project;
+                      
+                      const iconMap: Record<string, string> = { Travel: "✈️", Accommodation: "🏨", Transport: "🚗", Meals: "🍽️", Other: "📦" };
+                      const expIcon = iconMap[exp.category] || "📄";
+
                       return (
                         <div
                           key={exp.id}
-                          onClick={() => toggleExpense(exp.id)}
                           style={{
-                            display: "flex", alignItems: "center", gap: "10px",
-                            padding: "9px 12px", borderRadius: "8px", cursor: "pointer",
-                            background: checked ? "rgba(37,99,235,0.05)" : "var(--bg-surface-2)",
-                            border: `1px solid ${checked ? "rgba(37,99,235,0.25)" : "var(--border-subtle)"}`,
-                            transition: "all 0.15s",
+                            display: "flex", alignItems: "flex-start", gap: "10px",
+                            padding: "10px 12px", borderRadius: "8px",
+                            background: "var(--bg-surface-2)",
+                            border: "1px solid var(--border-subtle)",
                           }}
                         >
-                          {/* Checkbox */}
-                          <div style={{
-                            width: "16px", height: "16px", borderRadius: "4px", flexShrink: 0,
-                            border: `2px solid ${checked ? "#2563eb" : "var(--border-default)"}`,
-                            background: checked ? "#2563eb" : "transparent",
-                            display: "flex", alignItems: "center", justifyContent: "center",
-                            transition: "all 0.15s",
-                          }}>
-                            {checked && <svg width="9" height="9" viewBox="0 0 9 9" fill="none"><polyline points="1.5,4.5 3.5,6.5 7.5,2.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/></svg>}
-                          </div>
-                          <span style={{ fontSize: "16px", flexShrink: 0 }}>{exp.icon}</span>
+                          <span style={{ fontSize: "18px", flexShrink: 0, marginTop: "2px" }}>{expIcon}</span>
                           <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>{exp.type}</div>
-                            <span className={`badge ${categoryBadge[exp.category]}`} style={{ fontSize: "9.5px", marginTop: "2px" }}>{exp.category}</span>
-                          </div>
-                          <div style={{ fontSize: "13px", fontWeight: 700, color: categoryColor[exp.category], textAlign: "right", flexShrink: 0 }}>
-                            ₹{exp.amount.toLocaleString("en-IN")}
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "4px" }}>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>
+                                {exp.description}
+                              </div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", flexShrink: 0 }}>
+                                ₹{exp.amount.toLocaleString("en-IN")}
+                              </div>
+                            </div>
+                            
+                            <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginBottom: "6px" }}>
+                              {empName} • {projName} • {new Date(exp.date).toLocaleDateString()}
+                            </div>
+
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", alignItems: "center" }}>
+                              <span className="badge badge-gray" style={{ fontSize: "9px" }}>{exp.category}</span>
+                              {(exp.category === "Travel" || exp.category === "Transport") && exp.modeOfTransport && (
+                                <span className="badge badge-gray" style={{ fontSize: "9px" }}>{exp.modeOfTransport}</span>
+                              )}
+                              {(exp.category === "Travel" || exp.category === "Transport") && exp.calculatedDistance && (
+                                <span className="badge badge-gray" style={{ fontSize: "9px" }}>{exp.calculatedDistance} km</span>
+                              )}
+                              
+                              <span className={`badge ${
+                                exp.status === "approved" ? "badge-success" : 
+                                exp.status === "rejected" ? "badge-danger" : 
+                                "badge-warning"
+                              }`} style={{ fontSize: "9.5px", marginLeft: "auto" }}>
+                                {exp.status === "approved" ? "Approved" : 
+                                 exp.status === "rejected" ? "Rejected" : 
+                                 "Pending Manual Review"}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       );
@@ -1111,53 +1180,36 @@ export default function TimesheetAIPage() {
                   </div>
                 </div>
 
-                {/* Selected total */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "var(--bg-surface-2)", borderRadius: "8px", marginBottom: "14px", border: "1px solid var(--border-subtle)" }}>
-                  <span style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 600 }}>{selectedExpenses.length} expense{selectedExpenses.length !== 1 ? "s" : ""} selected</span>
-                  <span style={{ fontSize: "15px", fontWeight: 800, color: "var(--text-primary)" }}>₹{totalSelected.toLocaleString("en-IN")}</span>
-                </div>
-
-                {/* Success banner */}
-                {pushDone && (
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", background: "rgba(5,150,105,0.08)", border: "1px solid rgba(5,150,105,0.25)", borderRadius: "8px", marginBottom: "12px" }}>
-                    <IconCheckCircle size={16} style={{ color: "#059669", flexShrink: 0 }} />
-                    <span style={{ fontSize: "12px", color: "#059669", fontWeight: 600, flex: 1, wordBreak: "break-word", overflowWrap: "break-word" }}>Selected travel expenses successfully pushed to billing queue.</span>
+                {/* AI Insight Panel */}
+                <div style={{ background: "rgba(26,188,156,0.07)", border: "1px solid rgba(26,188,156,0.2)", borderRadius: "10px", padding: "12px 14px", marginTop: "auto", flexShrink: 0 }}>
+                  <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#1ABC9C", marginBottom: "4px" }}>💡 AI Insight</div>
+                  <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, wordBreak: "break-word", overflowWrap: "break-word" }}>
+                    {(() => {
+                      const approved = data.expenses.filter((e: any) => e.status === "approved").length;
+                      const rejected = data.expenses.filter((e: any) => e.status === "rejected").length;
+                      const pending = data.expenses.filter((e: any) => e.status === "pending").length;
+                      
+                      let insights = [];
+                      if (approved > 0) insights.push(`${approved} expenses have been approved automatically.`);
+                      if (pending > 0) insights.push(`${pending} expenses require manual review due to policy validation.`);
+                      if (rejected > 0) insights.push(`${rejected} expenses have been rejected because they failed validation rules.`);
+                      
+                      if (insights.length === 0) return "No expense activity insights available.";
+                      return insights.join(" ");
+                    })()}
                   </div>
-                )}
-
-                {/* Push button */}
-                <button
-                  className="btn btn-primary"
-                  style={{ width: "100%", justifyContent: "center", gap: "8px", marginTop: "auto", display: "flex", alignItems: "center" }}
-                  onClick={handlePushToBilling}
-                  disabled={isPushing || selectedExpenses.length === 0}
-                >
-                  {isPushing ? (
-                    <>
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}>
-                        <circle cx="12" cy="12" r="10" stroke="rgba(255,255,255,0.3)" strokeWidth="4" />
-                        <path d="M4 12a8 8 0 0 1 8-8" />
-                      </svg>
-                      Pushing to Billing...
-                    </>
-                  ) : (
-                    <>
-                      <IconChart size={14} />
-                      Push to Billing
-                    </>
-                  )}
-                </button>
+                </div>
               </>
             ) : (
               <div style={{ textAlign: "center", padding: "40px 0", color: "var(--text-secondary)", fontSize: "13px", marginTop: "auto", marginBottom: "auto" }}>
-                No travel or expense logs found in the system. Submit expenses in the Expenses page to enable auto-push to billing.
+                No expenses found in the system. Submit expenses in the Expenses page to populate this monitor.
               </div>
             )}
 
           </div>
         </div>
 
-        <CarbonTrackerCard consultants={consultants} projects={data.projects || []} />
+        <CarbonTrackerCard consultants={consultants} projects={data.projects || []} rawExpenses={data.expenses || []} />
 
       </div>
     </div>

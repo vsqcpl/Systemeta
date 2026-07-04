@@ -93,3 +93,48 @@ export async function callGroqService(messages: any[], jsonMode = true): Promise
   const content = data.choices[0].message.content;
   return jsonMode ? JSON.parse(content) : content;
 }
+
+export async function callVisionService(receiptUrl: string): Promise<{ total_amount: number | null }> {
+  try {
+    const groqKey = process.env.GROQ_API_KEY;
+    if (!groqKey || groqKey.includes("placeholder")) {
+      if (receiptUrl && receiptUrl.toLowerCase().includes("mismatch")) {
+        return { total_amount: 50 };
+      }
+      return { total_amount: null };
+    }
+
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${groqKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "llama-3.2-11b-vision-preview",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "Read this receipt carefully. Extract the total final amount printed. Output ONLY a valid JSON object with a single key 'total_amount' containing the numerical value (e.g. 50.00). If you cannot find a total amount, set the value to null." },
+              { type: "image_url", image_url: { url: receiptUrl } }
+            ]
+          }
+        ],
+        temperature: 0,
+        response_format: { type: "json_object" }
+      }),
+    });
+
+    if (res.ok) {
+      const data = await res.json() as any;
+      const content = JSON.parse(data.choices[0].message.content);
+      return { total_amount: typeof content.total_amount === 'number' ? content.total_amount : null };
+    } else {
+      console.warn("Vision API failed:", await res.text());
+    }
+  } catch (error) {
+    console.error("Vision API Error:", error);
+  }
+  return { total_amount: null };
+}

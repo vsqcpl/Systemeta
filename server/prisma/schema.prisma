@@ -224,6 +224,10 @@ model Expense {
   date         String
   status       String   @default("pending") // e.g. pending, approved, rejected
   receipt      String?
+  modeOfTransport    String?
+  fromLocation       String?
+  toLocation         String?
+  calculatedDistance Float?
 }
 
 model Invoice {

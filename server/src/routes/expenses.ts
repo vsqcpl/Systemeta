@@ -2,6 +2,7 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { checkPermission, requirePermission } from "../middlewares/rbac.js";
+import { callVisionService } from "../lib/groq.service.js";
 
 const router = Router();
 
@@ -37,6 +38,10 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       date: e.date,
       status: e.status,
       receipt: e.receipt,
+      modeOfTransport: e.modeOfTransport,
+      fromLocation: e.fromLocation,
+      toLocation: e.toLocation,
+      calculatedDistance: e.calculatedDistance,
     }));
 
     return res.json(formatted);
@@ -46,10 +51,79 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+function evaluateExpensePolicy(expense: any): string {
+  const { category, amount, receiptUrl, modeOfTransport, calculatedDistance } = expense;
+  const isOutsideCity = category === "Travel" || category === "Accommodation"; 
+  const hasBill = !!receiptUrl;
+
+  if (category === "Accommodation") {
+    return amount <= 1500 ? "approved" : "pending";
+  }
+
+  if (category === "Meals") {
+    if (isOutsideCity) {
+      if (hasBill) return amount <= 600 ? "approved" : "rejected";
+      return amount <= 300 ? "approved" : "rejected";
+    } else {
+      if (hasBill) return amount <= 200 ? "approved" : "rejected";
+      return amount <= 100 ? "approved" : "rejected";
+    }
+  }
+
+  if (category === "Travel" || category === "Transport") {
+    if (modeOfTransport === "Flight") return "pending";
+
+    if (modeOfTransport === "Train" || modeOfTransport === "Metro" || modeOfTransport === "Bus") {
+      return hasBill ? "approved" : "rejected";
+    }
+
+    if (modeOfTransport === "Auto") {
+      if (isOutsideCity) {
+        if (amount <= 150) return "approved";
+        if (amount <= 300) return "pending";
+        return "rejected";
+      } else {
+        if (amount <= 100) return "approved";
+        if (amount <= 150) return "pending";
+        return "rejected";
+      }
+    }
+
+    if (modeOfTransport === "Cab") {
+      if (hasBill) {
+        if (amount <= 300) return "approved";
+        return "pending";
+      } else {
+        if (isOutsideCity) {
+          if (amount <= 150) return "approved";
+          if (amount <= 300) return "pending";
+          return "rejected";
+        } else {
+          if (amount <= 100) return "approved";
+          if (amount <= 150) return "pending";
+          return "rejected";
+        }
+      }
+    }
+
+    if (modeOfTransport === "Bike") {
+      if (!calculatedDistance) return "rejected";
+      return amount <= (calculatedDistance * 4) ? "approved" : "rejected";
+    }
+
+    if (modeOfTransport === "Car") {
+      if (!calculatedDistance) return "rejected";
+      return amount <= (calculatedDistance * 8) ? "approved" : "rejected";
+    }
+  }
+
+  return "pending";
+}
+
 // POST /api/expenses - Submit expense
 router.post("/", async (req: AuthenticatedRequest, res) => {
   try {
-    const { project, category, description, amount, currency, date, receiptUrl } = req.body;
+    const { project, category, description, amount, currency, date, receiptUrl, modeOfTransport, fromLocation, toLocation, calculatedDistance } = req.body;
 
     if (!project || !category || !description || !amount || !currency || !date) {
       return res.status(400).json({ message: "All fields are required" });
@@ -59,8 +133,26 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
     const lastNum = lastExpense ? parseInt(lastExpense.id.replace("E", "") || "0", 10) : 0;
     const nextId = "E" + String(lastNum + 1).padStart(3, "0");
 
-    // Store the real Supabase URL if provided, otherwise mark as missing
     const receiptValue = receiptUrl ? receiptUrl : null;
+    const parsedAmount = parseFloat(amount);
+    const parsedDist = calculatedDistance ? parseFloat(calculatedDistance) : null;
+    let finalDescription = description;
+    
+    let autoStatus = evaluateExpensePolicy({
+      category,
+      amount: parsedAmount,
+      receiptUrl: receiptValue,
+      modeOfTransport,
+      calculatedDistance: parsedDist
+    });
+
+    if (receiptValue) {
+      const visionResult = await callVisionService(receiptValue);
+      if (visionResult.total_amount !== null && visionResult.total_amount !== parsedAmount) {
+        autoStatus = "rejected";
+        finalDescription = `[OCR DISCREPANCY: Claimed ₹${parsedAmount}, Receipt reads ₹${visionResult.total_amount}] ` + description;
+      }
+    }
 
     const expense = await prisma.expense.create({
       data: {
@@ -68,12 +160,16 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
         consultantId: req.user.id,
         projectId: project,
         category,
-        description,
-        amount: parseFloat(amount),
+        description: finalDescription,
+        amount: parsedAmount,
         currency,
         date,
-        status: "pending",
+        status: autoStatus,
         receipt: receiptValue,
+        modeOfTransport: modeOfTransport || null,
+        fromLocation: fromLocation || null,
+        toLocation: toLocation || null,
+        calculatedDistance: parsedDist,
       },
     });
 
@@ -88,6 +184,10 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       date: expense.date,
       status: expense.status,
       receipt: expense.receipt,
+      modeOfTransport: expense.modeOfTransport,
+      fromLocation: expense.fromLocation,
+      toLocation: expense.toLocation,
+      calculatedDistance: expense.calculatedDistance,
     });
   } catch (error) {
     console.error("POST /expenses error:", error);
@@ -144,6 +244,10 @@ router.patch("/:id", requirePermission("Approve Expenses"), async (req: Authenti
       date: updated.date,
       status: updated.status,
       receipt: updated.receipt,
+      modeOfTransport: updated.modeOfTransport,
+      fromLocation: updated.fromLocation,
+      toLocation: updated.toLocation,
+      calculatedDistance: updated.calculatedDistance,
     });
   } catch (error) {
     console.error("PATCH /expenses/:id error:", error);

@@ -168,7 +168,94 @@ export default function ExpensesPage() {
     project: "",
     category: "Travel",
     date: new Date().toISOString().split("T")[0],
+    modeOfTransport: "",
+    fromLocation: "",
+    toLocation: "",
+    calculatedDistance: null as number | null,
   });
+
+  const [fromQuery, setFromQuery] = useState("");
+  const [toQuery, setToQuery] = useState("");
+  const [fromResults, setFromResults] = useState<any[]>([]);
+  const [toResults, setToResults] = useState<any[]>([]);
+  const [fromCoords, setFromCoords] = useState<{ lat: string; lon: string } | null>(null);
+  const [toCoords, setToCoords] = useState<{ lat: string; lon: string } | null>(null);
+  const [showFromResults, setShowFromResults] = useState(false);
+  const [showToResults, setShowToResults] = useState(false);
+
+  const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
+
+  const handleCalculateDistance = () => {
+    if (!fromCoords || !toCoords || !newExpense.modeOfTransport) return;
+    setIsCalculatingDistance(true);
+
+    if (newExpense.modeOfTransport === "Flight" || newExpense.modeOfTransport === "Train") {
+      // Straight line distance for Flight / Train
+      const lat1 = parseFloat(fromCoords.lat);
+      const lon1 = parseFloat(fromCoords.lon);
+      const lat2 = parseFloat(toCoords.lat);
+      const lon2 = parseFloat(toCoords.lon);
+      const R = 6371; 
+      const dLat = (lat2 - lat1) * (Math.PI / 180);
+      const dLon = (lon2 - lon1) * (Math.PI / 180);
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const distKm = R * c;
+      
+      setTimeout(() => {
+        setNewExpense((prev) => ({ ...prev, calculatedDistance: parseFloat(distKm.toFixed(1)) }));
+        setIsCalculatingDistance(false);
+      }, 500); // Simulate network delay
+      return;
+    }
+
+    const profile = newExpense.modeOfTransport === "Bike" ? "cycling" : "driving";
+
+    fetch(`https://router.project-osrm.org/route/v1/${profile}/${fromCoords.lon},${fromCoords.lat};${toCoords.lon},${toCoords.lat}?overview=false`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.routes && data.routes.length > 0) {
+          const distKm = data.routes[0].distance / 1000;
+          setNewExpense((prev) => ({ ...prev, calculatedDistance: parseFloat(distKm.toFixed(1)) }));
+        }
+      })
+      .catch((err) => console.error("OSRM Error:", err))
+      .finally(() => setIsCalculatingDistance(false));
+  };
+
+  const nominatimTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const searchNominatim = (query: string, setter: React.Dispatch<React.SetStateAction<any[]>>) => {
+    if (nominatimTimeoutRef.current) {
+      clearTimeout(nominatimTimeoutRef.current);
+    }
+
+    if (query.length < 3) {
+      setter([]);
+      return;
+    }
+
+    nominatimTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/nominatim?q=${encodeURIComponent(query)}`);
+        if (!res.ok) {
+          if (res.status === 429) {
+            console.warn("Nominatim rate limit hit (429). Please wait a moment.");
+          } else {
+            console.warn(`Nominatim search failed: ${res.status}`);
+          }
+          setter([]);
+          return;
+        }
+        const data = await res.json();
+        setter(data);
+      } catch (err) {
+        console.error("Nominatim Error:", err);
+      }
+    }, 1200);
+  };
 
   // One-time init: populate form defaults on first render only.
   // We intentionally use an empty dep array — we only want to seed the form once.
@@ -251,6 +338,27 @@ export default function ExpensesPage() {
     }
   };
 
+  const resetExpenseForm = () => {
+    setNewExpense({
+      description: "",
+      amount: "",
+      consultant: user?.id ?? data.consultants?.[0]?.id ?? "",
+      project: data.projects?.[0]?.id ?? "",
+      category: "Travel",
+      date: new Date().toISOString().split("T")[0],
+      modeOfTransport: "",
+      fromLocation: "",
+      toLocation: "",
+      calculatedDistance: null,
+    });
+    setFromQuery("");
+    setToQuery("");
+    setFromCoords(null);
+    setToCoords(null);
+    setReceipt(null);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSubmitExpense = () => {
     if (!newExpense.description || !newExpense.amount) {
       showToast("Please fill in description and amount.", "warning");
@@ -266,18 +374,14 @@ export default function ExpensesPage() {
       date: newExpense.date,
       currency: "INR",
       receiptUrl: receipt?.supabaseUrl,
+      modeOfTransport: newExpense.modeOfTransport || undefined,
+      fromLocation: newExpense.fromLocation || undefined,
+      toLocation: newExpense.toLocation || undefined,
+      calculatedDistance: newExpense.calculatedDistance ?? undefined,
     });
 
     // Reset Form
-    setNewExpense({
-      description: "",
-      amount: "",
-      consultant: data.consultants?.[0]?.id ?? "",
-      project: data.projects?.[0]?.id ?? "",
-      category: "Travel",
-      date: new Date().toISOString().split("T")[0],
-    });
-    setReceipt(null);
+    resetExpenseForm();
     setShowForm(false);
     showToast("Expense submitted successfully.", "success");
   };
@@ -647,7 +751,7 @@ export default function ExpensesPage() {
                   <option value="All Projects">{t("All Projects")}</option>
                   {visibleProjects.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.id}
+                      {p.name || p.id}
                     </option>
                   ))}
                 </select>
@@ -1169,6 +1273,12 @@ export default function ExpensesPage() {
                     <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{details.projectCode}</div>
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Client")}</div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>
+                      {t(data.projects?.find((p: any) => p.id === details.projectCode)?.client || "Unknown")}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Expense Date")}</div>
                     <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{details.date}</div>
                   </div>
@@ -1196,6 +1306,41 @@ export default function ExpensesPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Travel Details */}
+              {(selectedExpense.category === "Travel" || selectedExpense.category === "Transport") && selectedExpense.modeOfTransport && (
+                <div>
+                  <div style={{ borderBottom: "1px solid var(--border-subtle)", paddingBottom: "8px", marginBottom: "16px" }}>
+                    <h3 style={{ fontSize: "12px", fontWeight: 700, margin: 0, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Travel Details")}
+                    </h3>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px 24px" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Mode of Transport")}</div>
+                      <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{t(selectedExpense.modeOfTransport)}</div>
+                    </div>
+                    {selectedExpense.fromLocation && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("From Location")}</div>
+                        <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{selectedExpense.fromLocation}</div>
+                      </div>
+                    )}
+                    {selectedExpense.toLocation && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("To Location")}</div>
+                        <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{selectedExpense.toLocation}</div>
+                      </div>
+                    )}
+                    {selectedExpense.calculatedDistance !== null && selectedExpense.calculatedDistance !== undefined && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>{t("Calculated Distance")}</div>
+                        <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>{selectedExpense.calculatedDistance} km</div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Receipt Information */}
               <div>
@@ -1366,6 +1511,26 @@ export default function ExpensesPage() {
 
             {/* Modal Footer */}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}>
+              
+              <ActionGuard permission="Approve Expenses">
+                {details.status.toLowerCase() === "pending" && (
+                  <>
+                    <button className="btn btn-success btn-sm" onClick={() => {
+                      approveExpense(selectedExpense.id);
+                      setSelectedExpense(null);
+                    }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-teal)", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <IconCheckCircle size={16} /> {t("Approve")}
+                    </button>
+                    <button className="btn btn-danger btn-sm" onClick={() => {
+                      rejectExpense(selectedExpense.id);
+                      setSelectedExpense(null);
+                    }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <IconClose size={16} /> {t("Reject")}
+                    </button>
+                  </>
+                )}
+              </ActionGuard>
+
               <button className="btn btn-secondary btn-sm" onClick={() => setSelectedExpense(null)} style={{ padding: "8px 16px", fontSize: "12.5px" }}>{t("Close")}</button>
               <button className="btn btn-danger btn-sm" onClick={() => {
                 setExpenseToDelete(selectedExpense.id);
@@ -1455,7 +1620,7 @@ export default function ExpensesPage() {
                 >
                   {visibleProjects.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.id}
+                      {p.name || p.id}
                     </option>
                   ))}
                 </select>
@@ -1483,6 +1648,146 @@ export default function ExpensesPage() {
                   style={{ padding: "10px", borderRadius: "6px" }}
                 />
               </div>
+
+              {/* Travel Details Section */}
+              {(newExpense.category === "Travel" || newExpense.category === "Transport") && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px", padding: "16px", background: "var(--bg-surface-2)", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{t("Travel Details")}</div>
+                  
+                  {/* Mode of Transport */}
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>{t("Mode of Transport")}</div>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                    {["Flight", "Train", "Car", "Bike", "Auto"].map((mode) => (
+                      <button
+                        key={mode}
+                        onClick={() => {
+                          handleFormChange("modeOfTransport", mode);
+                          setNewExpense(prev => ({ ...prev, calculatedDistance: null }));
+                        }}
+                        style={{
+                          padding: "6px 12px",
+                          borderRadius: "16px",
+                          border: newExpense.modeOfTransport === mode ? "1px solid var(--brand-500)" : "1px solid var(--border-default)",
+                          background: newExpense.modeOfTransport === mode ? "rgba(var(--brand-500-rgb), 0.1)" : "transparent",
+                          color: newExpense.modeOfTransport === mode ? "var(--brand-500)" : "var(--text-secondary)",
+                          fontSize: "12px",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          transition: "all 0.2s ease"
+                        }}
+                      >
+                        {t(mode)}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Route */}
+                  <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginTop: "8px" }}>{t("Route")}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", position: "relative" }}>
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="text"
+                        placeholder={t("From Location")}
+                        value={fromQuery}
+                        onChange={(e) => {
+                          setFromQuery(e.target.value);
+                          handleFormChange("fromLocation", e.target.value);
+                          if (e.target.value.trim() === "") setFromCoords(null);
+                          setNewExpense(prev => ({ ...prev, calculatedDistance: null }));
+                          searchNominatim(e.target.value, setFromResults);
+                          setShowFromResults(true);
+                        }}
+                        onBlur={() => setTimeout(() => setShowFromResults(false), 200)}
+                        className="input"
+                        style={{ padding: "10px", borderRadius: "6px", width: "100%" }}
+                      />
+                      {showFromResults && fromResults.length > 0 && (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "6px", zIndex: 10, marginTop: "4px", maxHeight: "200px", overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                          {fromResults.map((r, i) => (
+                            <div
+                              key={`${r.place_id}-${i}`}
+                              style={{ padding: "8px 12px", fontSize: "12px", cursor: "pointer", borderBottom: "1px solid var(--border-subtle)", color: "var(--text-primary)" }}
+                              onClick={() => {
+                                setFromQuery(r.display_name);
+                                handleFormChange("fromLocation", r.display_name);
+                                setFromCoords({ lat: r.lat, lon: r.lon });
+                                setShowFromResults(false);
+                              }}
+                            >
+                              {r.display_name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div style={{ position: "relative" }}>
+                      <input
+                        type="text"
+                        placeholder={t("To Location")}
+                        value={toQuery}
+                        onChange={(e) => {
+                          setToQuery(e.target.value);
+                          handleFormChange("toLocation", e.target.value);
+                          if (e.target.value.trim() === "") setToCoords(null);
+                          setNewExpense(prev => ({ ...prev, calculatedDistance: null }));
+                          searchNominatim(e.target.value, setToResults);
+                          setShowToResults(true);
+                        }}
+                        onBlur={() => setTimeout(() => setShowToResults(false), 200)}
+                        className="input"
+                        style={{ padding: "10px", borderRadius: "6px", width: "100%" }}
+                      />
+                      {showToResults && toResults.length > 0 && (
+                        <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "6px", zIndex: 10, marginTop: "4px", maxHeight: "200px", overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.1)" }}>
+                          {toResults.map((r, i) => (
+                            <div
+                              key={`${r.place_id}-${i}`}
+                              style={{ padding: "8px 12px", fontSize: "12px", cursor: "pointer", borderBottom: "1px solid var(--border-subtle)", color: "var(--text-primary)" }}
+                              onClick={() => {
+                                setToQuery(r.display_name);
+                                handleFormChange("toLocation", r.display_name);
+                                setToCoords({ lat: r.lat, lon: r.lon });
+                                setShowToResults(false);
+                              }}
+                            >
+                              {r.display_name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Calculate Distance Button & Result */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginTop: "4px" }}>
+                    <button
+                      type="button"
+                      onClick={handleCalculateDistance}
+                      disabled={!fromCoords || !toCoords || !newExpense.modeOfTransport || isCalculatingDistance}
+                      style={{
+                        padding: "6px 12px",
+                        fontSize: "12px",
+                        fontWeight: 600,
+                        borderRadius: "6px",
+                        background: "var(--bg-surface)",
+                        border: "1px solid var(--border-default)",
+                        color: "var(--text-primary)",
+                        cursor: (!fromCoords || !toCoords || !newExpense.modeOfTransport || isCalculatingDistance) ? "not-allowed" : "pointer",
+                        opacity: (!fromCoords || !toCoords || !newExpense.modeOfTransport || isCalculatingDistance) ? 0.6 : 1,
+                        transition: "all 0.2s ease"
+                      }}
+                    >
+                      {isCalculatingDistance ? t("Calculating...") : t("Calculate Distance")}
+                    </button>
+                    {newExpense.calculatedDistance !== null && (
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 500 }}>
+                        Distance: <span style={{ color: "var(--text-primary)", fontWeight: 700 }}>{newExpense.calculatedDistance} km</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Receipt Upload Box */}
               <div
@@ -1541,7 +1846,7 @@ export default function ExpensesPage() {
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px" }}>
-              <button className="btn btn-secondary" onClick={() => setShowForm(false)}>{t("Cancel")}</button>
+              <button className="btn btn-secondary" onClick={() => { resetExpenseForm(); setShowForm(false); }}>{t("Cancel")}</button>
               <button className="btn btn-primary" onClick={handleSubmitExpense}>{t("Submit Claim")}</button>
             </div>
 
