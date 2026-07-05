@@ -12,14 +12,13 @@ interface Message {
 }
 
 export default function AIAssistant() {
-  return null;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
       id: "welcome",
       sender: "ai",
-      text: "Hello! I'm the VSQC AI Assistant.\n\nI can help with attendance, timesheets, leave requests, billing information, utilization reports, and project-related queries.",
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: "Hello! I'm the VSQC AI Assistant.\n\nI can help with attendance, timesheets, leave requests, projects, and any other operational queries.",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
   const [inputValue, setInputValue] = useState("");
@@ -43,60 +42,77 @@ export default function AIAssistant() {
       id: `msg-${Date.now()}`,
       sender: "user",
       text: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
     setMessages((prev) => [...prev, userMsg]);
     setInputValue("");
     setIsLoading(true);
 
-    // Simulate AI response delay
-    setTimeout(() => {
-      let aiResponseText = "";
-      const lower = textToSend.toLowerCase();
+    try {
+      // Build context from real store data
+      const contextLines: string[] = [];
+      contextLines.push(`Attendance: ${punchedIn ? "Punched In" : "Punched Out"}`);
+      contextLines.push(`Hours Today: ${punchHoursToday.toFixed(2)}h`);
+      contextLines.push(`Hours This Week: ${punchHoursWeek.toFixed(2)}h`);
+      contextLines.push(`Active Projects: ${data.projects.length}`);
+      const atRisk = data.projects.filter((p) => p.health === "at-risk").length;
+      const delayed = data.projects.filter((p) => p.health === "delayed").length;
+      if (atRisk > 0) contextLines.push(`At-Risk Projects: ${atRisk}`);
+      if (delayed > 0) contextLines.push(`Delayed Projects: ${delayed}`);
+      const pendingLeaves = data.leaveRequests.filter((lr) => lr.status === "pending").length;
+      contextLines.push(`Pending Leave Requests: ${pendingLeaves}`);
+      const totalTimesheetHours = data.timesheets.reduce(
+        (sum, t) => sum + t.entries.reduce((s, e) => s + e.hours, 0),
+        0
+      );
+      contextLines.push(`Total Logged Timesheet Hours: ${totalTimesheetHours}h`);
 
-      // Mock response selector based on store data
-      if (lower.includes("attendance") || lower.includes("show my attendance")) {
-        aiResponseText = `Your current attendance status:\n- **Status**: ${
-          punchedIn ? "Punched In 🟢" : "Punched Out 🔴"
-        }\n- **Hours Today**: ${punchHoursToday.toFixed(2)}h\n- **Hours this Week**: ${punchHoursWeek.toFixed(
-          2
-        )}h\n\nUse the header clock button or timesheets module to toggle punch status.`;
-      } else if (lower.includes("timesheet") || lower.includes("timesheet summary")) {
-        const totalTimesheetHours = data.timesheets.reduce(
-          (sum, t) => sum + t.entries.reduce((s, e) => s + e.hours, 0),
-          0
-        );
-        aiResponseText = `Here is your current timesheet summary:\n- **Logged Hours (Week)**: ${totalTimesheetHours} hours\n- **Consultant Profile**: Tom Keller (Director)\n- **Active Module**: Projects Operations\n- **Status**: All entries submitted for approval.`;
-      } else if (lower.includes("leave") || lower.includes("leave balance")) {
-        const pendingCount = data.leaveRequests.filter((lr) => lr.status === "pending").length;
-        aiResponseText = `Your leave summary:\n- **Annual Leave**: 12 days remaining (of 20)\n- **Sick Leave**: 5 days remaining (of 7)\n- **Casual Leave**: 3 days remaining (of 5)\n- **Pending Requests**: ${pendingCount} request(s) awaiting review.`;
-      } else if (lower.includes("billing") || lower.includes("billing report")) {
-        aiResponseText = `Financial & Billing Report (June 2026):\n- **Total Invoiced**: INR 12.80L\n- **Collected to Date**: INR 9.20L\n- **Outstanding Balance**: INR 5.12L\n- **Forecasted Q3 Revenue**: INR 6.50L`;
-      } else if (lower.includes("utilization") || lower.includes("resource utilization")) {
-        aiResponseText = `Resource & Consultant Utilization metrics:\n- **Average billable utilization**: 78.4%\n- **Target performance metric**: 80.0%\n- **Top Billable Resource**: Sarah Brown (QA Lead)\n- **Open Resource Roles**: 2 positions.`;
-      } else if (lower.includes("project")) {
-        aiResponseText = `Portfolio summary:\n- **Total Projects**: ${data.projects.length} active\n- **At Risk**: ${
-          data.projects.filter((p) => p.health === "at-risk").length
-        } project(s)\n- **Delayed**: ${
-          data.projects.filter((p) => p.health === "delayed").length
-        } project(s)\n- **On Track**: ${
-          data.projects.filter((p) => p.health === "on-track").length
-        } project(s).`;
-      } else {
-        aiResponseText = `I processed your request, but I couldn't find specific details for "${textToSend}".\n\nI can help you review attendance, timesheet summaries, leave balances, billing reports, or project metrics. Click one of the suggestions below!`;
-      }
+      const systemContext = `You are the VSQC AI Assistant for an enterprise operations platform. Answer concisely and helpfully. 
+Current platform data:
+${contextLines.join("\n")}
+Only reference figures that appear in this context. If data is unavailable, say so.`;
+
+      const res = await fetch("/api/ai/groq", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            { role: "system", content: systemContext },
+            ...messages.slice(-6).map((m) => ({
+              role: m.sender === "user" ? "user" : "assistant",
+              content: m.text,
+            })),
+            { role: "user", content: textToSend },
+          ],
+        }),
+      });
+
+      const json = await res.json();
+      const aiResponseText =
+        json?.choices?.[0]?.message?.content ||
+        json?.response ||
+        "I couldn't process that request. Please try again.";
 
       const aiMsg: Message = {
         id: `msg-ai-${Date.now()}`,
         sender: "ai",
         text: aiResponseText,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
       setMessages((prev) => [...prev, aiMsg]);
+    } catch {
+      const errMsg: Message = {
+        id: `msg-err-${Date.now()}`,
+        sender: "ai",
+        text: "Sorry, I encountered an error. Please check your connection and try again.",
+        timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setMessages((prev) => [...prev, errMsg]);
+    } finally {
       setIsLoading(false);
-    }, 1200);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -107,11 +123,10 @@ export default function AIAssistant() {
   };
 
   const suggestedPrompts = [
-    { label: "Show my attendance", query: "Show my attendance" },
-    { label: "My timesheet summary", query: "My timesheet summary" },
-    { label: "Leave balance", query: "Leave balance" },
-    { label: "Billing report", query: "Billing report" },
-    { label: "Resource utilization", query: "Resource utilization" },
+    { label: "My attendance today", query: "Show my attendance status today" },
+    { label: "Timesheet summary", query: "My timesheet summary" },
+    { label: "Leave balance", query: "What is my leave balance?" },
+    { label: "Active projects", query: "Show active projects status" },
   ];
 
   return (
@@ -355,7 +370,7 @@ export default function AIAssistant() {
                   }
                 }}
                 onKeyDown={handleKeyDown}
-                placeholder="Ask about attendance, timesheets, billing, leave, or projects..."
+                placeholder="Ask about attendance, timesheets, leave, or projects..."
                 style={{
                   flex: 1,
                   background: "var(--ob-bg-elevated, #16304A)",

@@ -25,7 +25,11 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAddMilestone, setShowAddMilestone] = useState(false);
+  const [milestoneForm, setMilestoneForm] = useState({ title: "", date: "", amount: "", status: "upcoming" });
+  const [isSavingMilestone, setIsSavingMilestone] = useState(false);
   const deleteProject = useAppStore((state) => state.deleteProject);
+  const fetchInitialData = useAppStore((state) => state.fetchInitialData);
   const pageRef = useRef<HTMLDivElement>(null);
   const currencyFormat = useAppStore((state) => state.currencyFormat);
 
@@ -207,8 +211,34 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     }
   };
 
-  const projectMilestones = data.milestones.filter((m) => m.project === p.id);
-  const paidMilestonesCount = projectMilestones.filter((m) => m.status === "upcoming").length; // Simulated status-to-paid mapping
+  const projectMilestones = data.milestones.filter((m) => m.project === p.id || m.projectId === p.id);
+  const paidMilestonesCount = projectMilestones.filter((m) => m.status === "upcoming").length;
+
+  const handleAddMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!milestoneForm.title || !milestoneForm.date || !milestoneForm.amount) return;
+    setIsSavingMilestone(true);
+    try {
+      const res = await fetch(`/api/projects/${p.id}/milestones`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(milestoneForm)
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || "Failed to create milestone");
+      }
+      showToast("Milestone created successfully", "success");
+      setMilestoneForm({ title: "", date: "", amount: "", status: "upcoming" });
+      setShowAddMilestone(false);
+      await fetchInitialData();
+    } catch (err: any) {
+      showToast(err.message || "Failed to save milestone", "danger");
+    } finally {
+      setIsSavingMilestone(false);
+    }
+  };
 
   return (
     <div ref={pageRef} style={{ animation: "fadeIn 0.5s ease-out" }}>
@@ -397,63 +427,81 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
           <div className="card mb-4">
             <div className="card-header" style={{ marginBottom: 0 }}>
               <span className="card-title">Billing Milestones</span>
-              <span className="badge badge-success">{paidMilestonesCount} Upcoming</span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span className="badge badge-success">{paidMilestonesCount} Upcoming</span>
+                <ActionGuard action="create_edit_task">
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => setShowAddMilestone(true)}
+                    style={{ fontSize: "12px", padding: "5px 10px" }}
+                  >
+                    + Add Milestone
+                  </button>
+                </ActionGuard>
+              </div>
             </div>
             <div className="card-body">
-              <div style={{ display: "flex", gap: 0, overflowX: "auto", paddingBottom: "4px" }}>
-                {projectMilestones.map((m, i) => {
-                  const statusColor =
-                    m.status === "delayed" ? "#ef4444" : m.status === "at-risk" ? "#f59e0b" : "var(--brand-600)";
-                  return (
-                    <div
-                      key={m.id}
-                      style={{
-                        flex: 1,
-                        minWidth: "140px",
-                        textAlign: "center",
-                        padding: "12px",
-                        position: "relative",
-                      }}
-                    >
-                      {i < projectMilestones.length - 1 && (
+              <div style={{ display: "flex", gap: 0, overflowX: "auto", paddingBottom: "4px", minHeight: "80px" }}>
+                {projectMilestones.length === 0 ? (
+                  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", color: "var(--text-tertiary)", fontSize: "13px", padding: "20px" }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ opacity: 0.4 }}><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+                    No milestones yet — click <strong style={{ color: "var(--brand-600)", margin: "0 4px" }}>+ Add Milestone</strong> to create one
+                  </div>
+                ) : (
+                  projectMilestones.map((m, i) => {
+                    const statusColor =
+                      m.status === "delayed" ? "#ef4444" : m.status === "at-risk" ? "#f59e0b" : "var(--brand-600)";
+                    return (
+                      <div
+                        key={m.id}
+                        style={{
+                          flex: 1,
+                          minWidth: "140px",
+                          textAlign: "center",
+                          padding: "12px",
+                          position: "relative",
+                        }}
+                      >
+                        {i < projectMilestones.length - 1 && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "20px",
+                              left: "50%",
+                              right: "-50%",
+                              height: "2px",
+                              background: statusColor,
+                              opacity: 0.3,
+                              zIndex: 0,
+                            }}
+                          />
+                        )}
                         <div
                           style={{
-                            position: "absolute",
-                            top: "20px",
-                            left: "50%",
-                            right: "-50%",
-                            height: "2px",
+                            width: "20px",
+                            height: "20px",
+                            borderRadius: "50%",
                             background: statusColor,
-                            opacity: 0.3,
-                            zIndex: 0,
+                            margin: "0 auto 8px",
+                            position: "relative",
+                            zIndex: 1,
+                            border: "3px solid var(--bg-surface)",
+                            boxShadow: `0 0 0 2px ${statusColor}`,
                           }}
                         />
-                      )}
-                      <div
-                        style={{
-                          width: "20px",
-                          height: "20px",
-                          borderRadius: "50%",
-                          background: statusColor,
-                          margin: "0 auto 8px",
-                          position: "relative",
-                          zIndex: 1,
-                          border: "3px solid var(--bg-surface)",
-                          boxShadow: `0 0 0 2px ${statusColor}`,
-                        }}
-                      />
-                      <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>
-                        {m.title.length > 18 ? `${m.title.substring(0, 18)}...` : m.title}
-                      </div>
-                      <div style={{ fontSize: "10px", color: "var(--text-tertiary)", margin: "2px 0" }}>{m.date}</div>
-                       {!isClientContact && (
-                        <div style={{ fontSize: "12px", fontWeight: 700, color: statusColor }}>
-                          {formatCurrency(m.amount)}
+                        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>
+                          {m.title.length > 18 ? `${m.title.substring(0, 18)}...` : m.title}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
+                        <div style={{ fontSize: "10px", color: "var(--text-tertiary)", margin: "2px 0" }}>{m.date}</div>
+                        {!isClientContact && (
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: statusColor }}>
+                            {formatCurrency(m.amount)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -566,6 +614,76 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
         </div>
       </div>
       <QuickAddModal open={showAddTask} onClose={() => setShowAddTask(false)} />
+
+      {/* Add Milestone Modal */}
+      {showAddMilestone && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 3000, display: "flex", alignItems: "center", justifyContent: "center", animation: "fadeIn 0.2s ease" }}
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAddMilestone(false); }}
+        >
+          <div className="card" style={{ width: "100%", maxWidth: "440px", margin: "24px", padding: "24px", animation: "cardEntrance 0.3s cubic-bezier(0.175,0.885,0.32,1.275)" }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "18px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="3 11 22 2 13 21 11 13 3 11"/></svg>
+              Add Billing Milestone
+            </h3>
+            <form onSubmit={handleAddMilestone} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Milestone Title *</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Phase 1 Delivery Sign-off"
+                  value={milestoneForm.title}
+                  onChange={(e) => setMilestoneForm(f => ({ ...f, title: e.target.value }))}
+                  required
+                />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Target Date *</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={milestoneForm.date}
+                    onChange={(e) => setMilestoneForm(f => ({ ...f, date: e.target.value }))}
+                    required
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Billing Amount (₹) *</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="input"
+                    placeholder="e.g. 250000"
+                    value={milestoneForm.amount}
+                    onChange={(e) => setMilestoneForm(f => ({ ...f, amount: e.target.value }))}
+                    required
+                  />
+                </div>
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Status</label>
+                <select
+                  className="select"
+                  value={milestoneForm.status}
+                  onChange={(e) => setMilestoneForm(f => ({ ...f, status: e.target.value }))}
+                >
+                  <option value="upcoming">Upcoming</option>
+                  <option value="at-risk">At Risk</option>
+                  <option value="delayed">Delayed</option>
+                  <option value="completed">Completed</option>
+                </select>
+              </div>
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "4px" }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAddMilestone(false)} disabled={isSavingMilestone}>Cancel</button>
+                <button type="submit" className="btn btn-primary btn-sm" disabled={isSavingMilestone}>
+                  {isSavingMilestone ? "Saving..." : "Save Milestone"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       {showDeleteConfirm && (
         <div
           style={{

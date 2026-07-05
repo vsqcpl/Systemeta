@@ -9,7 +9,6 @@ import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
 import SearchOverlay from "@/components/layout/SearchOverlay";
 import ToastContainer from "@/components/layout/ToastContainer";
-import AIAssistant from "@/components/layout/AIAssistant";
 import { getScreenKey } from "@/lib/permissionHelpers";
 
 export default function AppLayout({
@@ -178,9 +177,8 @@ export default function AppLayout({
         </div>
       </div>
 
-      {/* Overlays, AI Assistant, and Toasts */}
+      {/* Overlays and Toasts */}
       <SearchOverlay />
-      <AIAssistant />
       <ToastContainer />
     </div>
   );

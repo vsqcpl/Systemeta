@@ -309,6 +309,7 @@ interface AppStore {
   addTask: (task: Omit<Task, "id" | "comments"> & { col?: "todo" | "inprogress" | "review" | "done" }) => void;
   addExpense: (expense: Omit<Expense, "id" | "status" | "receipt"> & { receiptUrl?: string }) => void;
   moveTask: (taskId: string, targetCol: "todo" | "inprogress" | "review" | "done", actualCompletionDate?: string) => void;
+  updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   addTaskComment: (taskId: string, text: string) => void;
   deleteTaskComments: (taskId: string, commentIds: string[]) => void;
   addSubtaskToTask: (taskId: string, subtask: { title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string }) => void;
@@ -3195,6 +3196,35 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error moving task: " + err.message, "danger");
+      });
+  },
+
+  updateTask: (taskId, updates) => {
+    return fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(updates),
+    })
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to update task");
+        return res.json();
+      })
+      .then((task) => {
+        useAppStore.getState().showToast(`Task updated successfully.`, "success");
+        return fetch("/api/tasks")
+          .then((r) => r.json())
+          .then((tasks) => {
+            set((state) => ({
+              data: {
+                ...state.data,
+                tasks,
+              },
+            }));
+          });
+      })
+      .catch((err) => {
+        useAppStore.getState().showToast("Error updating task: " + err.message, "danger");
+        throw err;
       });
   },
 

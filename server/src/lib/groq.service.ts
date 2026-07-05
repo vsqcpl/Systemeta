@@ -1,18 +1,22 @@
 import dotenv from "dotenv";
 dotenv.config();
 
-export async function callGroqService(messages: any[], jsonMode = true): Promise<any> {
+export async function callGroqService(messages: any[], jsonMode = true, bypassWrapper = false): Promise<any> {
   const nvidiaKey = process.env.NVIDIA_API_KEY;
   const groqKey = process.env.GROQ_API_KEY;
 
-  // Strict anti-hallucination system prompt wrapper
-  const systemPromptObj = messages.find(m => m.role === "system");
-  const baseSystemPrompt = 'You are a strict project management analyst. Use ONLY the provided context. If context is insufficient, output {"error": "Insufficient data"}. Output MUST be valid JSON.';
-  
-  if (systemPromptObj) {
-    systemPromptObj.content = `${baseSystemPrompt}\n${systemPromptObj.content}`;
-  } else {
-    messages.unshift({ role: "system", content: baseSystemPrompt });
+  if (!bypassWrapper) {
+    // Strict anti-hallucination system prompt wrapper
+    const systemPromptObj = messages.find(m => m.role === "system");
+    const baseSystemPrompt = jsonMode
+      ? 'You are a strict project management analyst. Use ONLY the provided context. If context is insufficient, output {"error": "Insufficient data"}. Output MUST be valid JSON.'
+      : 'You are a strict project management analyst. Use ONLY the provided context. If context is insufficient, output a clear warning explanation.';
+    
+    if (systemPromptObj) {
+      systemPromptObj.content = `${baseSystemPrompt}\n${systemPromptObj.content}`;
+    } else {
+      messages.unshift({ role: "system", content: baseSystemPrompt });
+    }
   }
 
   // Use NVIDIA if available and groq is placeholder or absent
@@ -28,7 +32,7 @@ export async function callGroqService(messages: any[], jsonMode = true): Promise
           model: "nvidia/llama-3.1-nemotron-70b-instruct",
           messages,
           temperature: 0,
-          max_tokens: 500,
+          max_tokens: 2048,
         }),
       });
 
@@ -65,10 +69,10 @@ export async function callGroqService(messages: any[], jsonMode = true): Promise
   }
   
   const body: any = {
-    model: "llama3-8b-8192",
+    model: "llama-3.1-8b-instant",
     messages,
     temperature: 0,
-    max_tokens: 500,
+    max_tokens: 2048,
   };
   
   if (jsonMode) {

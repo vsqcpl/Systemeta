@@ -279,8 +279,8 @@ export default function TimesheetsPage() {
     const userTasks = allTasksList.filter((t: any) => t.assignee === user.id || t.assigneeId === user.id);
     
     return userTasks.map((t: any, idx: number) => {
-      const projectObj = data.projects.find((p: any) => p.id === t.projectId);
-      const projectName = projectObj ? projectObj.name : t.projectId;
+      const projectObj = data.projects.find((p: any) => p.id === (t.project || t.projectId));
+      const projectName = projectObj ? projectObj.name : (t.project || t.projectId);
       
       return {
         id: idx + 1,
@@ -307,7 +307,7 @@ export default function TimesheetsPage() {
     const userTasks = allTasksList.filter((t: any) => t.assignee === user.id || t.assigneeId === user.id);
     
     data.projects.forEach((proj: any) => {
-      const projTasks = userTasks.filter((t: any) => t.projectId === proj.id);
+      const projTasks = userTasks.filter((t: any) => (t.project || t.projectId) === proj.id);
       if (projTasks.length > 0) {
         projTasks.forEach((t: any) => {
           rows.push({

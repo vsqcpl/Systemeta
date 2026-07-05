@@ -226,4 +226,65 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// GET /api/projects/:id/milestones
+router.get("/:id/milestones", async (req: AuthenticatedRequest, res) => {
+  try {
+    const milestones = await prisma.milestone.findMany({
+      where: { projectId: req.params.id },
+      orderBy: { date: "asc" }
+    });
+    return res.json(milestones);
+  } catch (error) {
+    console.error("GET milestones error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// POST /api/projects/:id/milestones
+router.post("/:id/milestones", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id: projectId } = req.params;
+    const { title, date, amount, status } = req.body;
+
+    if (!title || !date || !amount) {
+      return res.status(400).json({ message: "Title, date, and amount are required." });
+    }
+
+    // Auto-generate a project-scoped ID
+    const existing = await prisma.milestone.findMany({ where: { projectId } });
+    const nextNum = existing.length + 1;
+    const milestoneId = `${projectId}_M${String(nextNum).padStart(3, "0")}`;
+
+    const milestone = await prisma.milestone.create({
+      data: {
+        id: milestoneId,
+        projectId,
+        title,
+        date,
+        amount: parseFloat(String(amount)),
+        status: status || "upcoming"
+      }
+    });
+
+    return res.status(201).json(milestone);
+  } catch (error) {
+    console.error("POST milestone error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// DELETE /api/projects/:id/milestones/:milestoneId
+router.delete("/:id/milestones/:milestoneId", async (req: AuthenticatedRequest, res) => {
+  try {
+    if (req.user.role !== "super_admin" && req.user.role !== "project_manager") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+    await prisma.milestone.delete({ where: { id: req.params.milestoneId } });
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("DELETE milestone error:", error);
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
 export default router;
