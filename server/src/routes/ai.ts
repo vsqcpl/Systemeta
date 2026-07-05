@@ -1536,7 +1536,9 @@ function getConsultantProfile(user: any) {
 }
 
 // Persist override history file
-const HISTORY_FILE_PATH = path.resolve("server/src/data/assignmentHistory.json");
+const HISTORY_FILE_PATH = process.cwd().endsWith("server")
+  ? path.resolve("src/data/assignmentHistory.json")
+  : path.resolve("server/src/data/assignmentHistory.json");
 
 function getAssignmentHistory() {
   try {

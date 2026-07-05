@@ -80,7 +80,8 @@ export type MilestoneStatus = 'upcoming' | 'at-risk' | 'delayed' | 'completed';
 
 export interface Milestone {
   id: string;
-  project: string; // Project ID
+  project: string; // Project ID (frontend/store field)
+  projectId?: string; // Project ID (API/backend field — alias of project)
   title: string;
   date: string;
   status: MilestoneStatus;
