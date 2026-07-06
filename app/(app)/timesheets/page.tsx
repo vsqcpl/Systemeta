@@ -234,7 +234,7 @@ export default function TimesheetsPage() {
         let newTasks = storeData.tasks;
         if (tempTaskCompleted && taskObj) {
           newTasks = { ...storeData.tasks };
-          for (const key of Object.keys(newTasks)) {
+          for (const key of Object.keys(newTasks) as Array<keyof typeof newTasks>) {
             newTasks[key] = newTasks[key]?.filter((t: any) => t.id !== taskObj.id) || [];
           }
           newTasks.done = [...(newTasks.done || []), { ...taskObj, status: "done", progress: 100 }];
