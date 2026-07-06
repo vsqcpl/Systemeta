@@ -496,7 +496,7 @@ router.post("/punch-in", async (req: AuthenticatedRequest, res) => {
 // POST /api/timesheets/punch-out
 router.post("/punch-out", async (req: AuthenticatedRequest, res) => {
   try {
-    const { workNotes } = req.body;
+    const { workNotes, isTaskCompleted } = req.body;
     
     const activeSession = await prisma.punchSession.findFirst({
       where: { consultantId: req.user.id, punchOut: null },
@@ -514,6 +514,20 @@ router.post("/punch-out", async (req: AuthenticatedRequest, res) => {
         ...(workNotes ? { workNotes } : {})
       }
     });
+
+    if (isTaskCompleted && activeSession.project) {
+      await prisma.task.updateMany({
+        where: {
+          title: activeSession.project,
+          assigneeId: req.user.id
+        },
+        data: {
+          status: "done",
+          progress: 100,
+          actualCompletionDate: new Date().toISOString()
+        }
+      });
+    }
 
     return res.json({ success: true, session: updated });
   } catch (error) {

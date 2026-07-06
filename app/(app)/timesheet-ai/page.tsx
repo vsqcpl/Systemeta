@@ -572,8 +572,8 @@ export default function TimesheetAIPage() {
                     onChange={(e) => setSelectedTaskName(e.target.value)}
                     style={{ width: "100%", fontSize: "12.5px" }}
                   >
-                    {efficiencyTasks.map((t) => (
-                      <option key={t.task} value={t.task}>{t.task} ({t.project})</option>
+                    {efficiencyTasks.map((t, i) => (
+                      <option key={`${t.task}-${t.project}-${i}`} value={t.task}>{t.task} ({t.project})</option>
                     ))}
                   </select>
                 </div>
@@ -586,9 +586,9 @@ export default function TimesheetAIPage() {
                     <span style={{ color: "#e11d48" }}>● Over Budget</span>
                     <span style={{ color: "#059669" }}>● Under Budget</span>
                   </div>
-                  {efficiencyTasks.map((t) => (
+                  {efficiencyTasks.map((t, i) => (
                     <div
-                      key={t.task}
+                      key={`${t.task}-${t.project}-${i}`}
                       onClick={() => setSelectedTaskName(t.task)}
                       style={{
                         display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px",
@@ -655,7 +655,7 @@ export default function TimesheetAIPage() {
               <>
                 {/* Utilization Metric Calculation - Scoped exclusively to the Performance Metrics Dashboard card */}
                 {(() => {
-                  const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === selectedConsultant.name) : [];
+                  const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === selectedConsultant.id) : [];
                   
                   // Step 1 - Aggregate Logged Hours
                   let totalHours = 0;
@@ -883,8 +883,8 @@ export default function TimesheetAIPage() {
                           isAssigned = true;
                         }
                         return isAssigned;
-                      }).map((t: any) => (
-                        <option key={t.id} value={t.title}>{t.title} ({t.project})</option>
+                      }).map((t: any, i: number) => (
+                        <option key={`${t.id}-${i}`} value={t.title}>{t.title} ({t.project})</option>
                       ));
                     })()}
                   </select>
@@ -928,7 +928,7 @@ export default function TimesheetAIPage() {
                   <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Team Comparison</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
                     {consultants.map((c) => {
-                      const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === c.name) : [];
+                      const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === c.id) : [];
                       let totalHours = 0;
                       userTimesheets.forEach((ts: any) => {
                         if (ts.entries && Array.isArray(ts.entries)) {

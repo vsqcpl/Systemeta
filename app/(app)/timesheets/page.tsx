@@ -42,6 +42,7 @@ export default function TimesheetsPage() {
   const [tempProjectClient, setTempProjectClient] = useState("Internal Operations");
   const [tempCurrentLocation, setTempCurrentLocation] = useState("");
   const [tempWorkNotes, setTempWorkNotes] = useState("");
+  const [tempTaskCompleted, setTempTaskCompleted] = useState(false);
   const [punchSessions, setPunchSessions] = useState<any[]>([]);
 
   const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
@@ -57,6 +58,7 @@ export default function TimesheetsPage() {
   });
   
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
+  const [expandedLogs, setExpandedLogs] = useState<Record<number, boolean>>({});
 
   const allTasks = useMemo(() => {
     const tasksObj = data.tasks as any;
@@ -184,7 +186,7 @@ export default function TimesheetsPage() {
       const res = await fetch('/api/timesheets/punch-out', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ workNotes: tempWorkNotes })
+        body: JSON.stringify({ workNotes: tempWorkNotes, isTaskCompleted: tempTaskCompleted })
       });
       const resData = await res.json();
       
@@ -228,7 +230,17 @@ export default function TimesheetsPage() {
         };
         const updatedTimesheet = { ...userTimesheet, entries: [...(userTimesheet as any).entries.filter((e: any) => e.id !== resData.session.id), updatedEntry] };
         const newTimesheetsArray = storeData.timesheets.filter((t: any) => t.id !== (userTimesheet as any).id).concat(updatedTimesheet as any);
-        useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
+        
+        let newTasks = storeData.tasks;
+        if (tempTaskCompleted && taskObj) {
+          newTasks = { ...storeData.tasks };
+          for (const key of Object.keys(newTasks)) {
+            newTasks[key] = newTasks[key]?.filter((t: any) => t.id !== taskObj.id) || [];
+          }
+          newTasks.done = [...(newTasks.done || []), { ...taskObj, status: "done", progress: 100 }];
+        }
+
+        useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray, tasks: newTasks } });
         
         setWorkNotes(tempWorkNotes);
         setSessionRecord(prev => ({
@@ -929,31 +941,62 @@ export default function TimesheetsPage() {
                       const inDate = new Date(s.punchIn);
                       const outDate = new Date(s.punchOut);
                       const durationMs = outDate.getTime() - inDate.getTime();
+                      const isExpanded = expandedLogs[i] || false;
                       return (
                         <div key={i} style={{ 
                           padding: "12px 16px", 
                           borderBottom: i < punchSessions.length - 1 ? "1px solid var(--border-subtle)" : "none",
                           display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center"
+                          flexDirection: "column",
+                          gap: "8px"
                         }}>
-                          <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                            <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
-                              {s.project || "Internal Operations"}
-                            </span>
-                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                              <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 6px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "4px", color: "var(--text-primary)" }}>
-                                {user?.name} <span style={{ color: "var(--text-tertiary)", fontWeight: 500 }}>({user?.role})</span>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                              <span style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
+                                {s.project || "Internal Operations"}
                               </span>
-                              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                                {inDate.toLocaleDateString()} · {inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 6px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "4px", color: "var(--text-primary)" }}>
+                                  {user?.name} <span style={{ color: "var(--text-tertiary)", fontWeight: 500 }}>({user?.role})</span>
+                                </span>
+                                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                                  {inDate.toLocaleDateString()} · {inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                </span>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
+                              <span className="badge badge-success">{formatDurationText(durationMs)}</span>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                {s.location && <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{s.location}</span>}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setExpandedLogs({ ...expandedLogs, [i]: !isExpanded });
+                                  }}
+                                  style={{ background: "none", border: "none", color: "#2E86C1", fontSize: "12px", fontWeight: 600, cursor: "pointer", padding: "0" }}
+                                >
+                                  {isExpanded ? t("Hide Details") : t("Details")}
+                                </button>
+                              </div>
                             </div>
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "4px" }}>
-                            <span className="badge badge-success">{formatDurationText(durationMs)}</span>
-                            {s.location && <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{s.location}</span>}
-                          </div>
+                          {isExpanded && (
+                            <div style={{ padding: "12px", background: "var(--bg-surface)", borderRadius: "6px", border: "1px solid var(--border-subtle)", fontSize: "12px", color: "var(--text-secondary)", display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" }}>
+                              <div>
+                                <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{t("Work Notes")}:</span>
+                                <div style={{ whiteSpace: "pre-wrap", marginTop: "4px" }}>{s.workNotes || t("No notes provided.")}</div>
+                              </div>
+                              {s.location && (
+                                <div>
+                                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{t("Location")}:</span> {s.location}
+                                </div>
+                              )}
+                              <div>
+                                <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{t("Session Duration")}:</span> {s.punchIn && new Date(s.punchIn).toLocaleString()} - {s.punchOut && new Date(s.punchOut).toLocaleString()}
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}
@@ -1121,6 +1164,30 @@ export default function TimesheetsPage() {
                 onChange={(e) => setTempWorkNotes(e.target.value)}
                 style={{ width: "100%", resize: "vertical" }}
               />
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
+              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Is this task completed?")}</label>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                  <input 
+                    type="radio" 
+                    name="taskCompleted" 
+                    checked={tempTaskCompleted === true} 
+                    onChange={() => setTempTaskCompleted(true)} 
+                  />
+                  Yes, move to Done
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
+                  <input 
+                    type="radio" 
+                    name="taskCompleted" 
+                    checked={tempTaskCompleted === false} 
+                    onChange={() => setTempTaskCompleted(false)} 
+                  />
+                  No, keep in progress
+                </label>
+              </div>
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
