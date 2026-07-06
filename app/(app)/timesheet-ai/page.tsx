@@ -686,55 +686,57 @@ export default function TimesheetAIPage() {
 
                   // --- Attendance Metric Calculation - Scoped exclusively to the Performance Metrics Dashboard card ---
                   let calculatedAttendance: number | "N/A" = "N/A";
-                  if (userTimesheets.length > 0) {
-                    const dailyHours: Record<string, number> = {};
-                    let earliestDate: Date | null = null;
-                    let latestDate: Date | null = null;
-
-                    userTimesheets.forEach((ts: any) => {
-                      if (ts.entries && Array.isArray(ts.entries)) {
-                        ts.entries.forEach((entry: any) => {
-                          if (selectedDashboardTask !== "All Tasks" && entry.task !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
-                          if (entry.punchInTime && entry.punchOutTime) {
-                            const inTime = new Date(entry.punchInTime);
-                            const outTime = new Date(entry.punchOutTime);
-                            
-                            if (!isNaN(inTime.getTime()) && !isNaN(outTime.getTime()) && outTime >= inTime) {
-                              const hours = (outTime.getTime() - inTime.getTime()) / (1000 * 60 * 60);
-                              
-                              const year = inTime.getFullYear();
-                              const month = String(inTime.getMonth() + 1).padStart(2, '0');
-                              const day = String(inTime.getDate()).padStart(2, '0');
-                              const dateKey = `${year}-${month}-${day}`;
-                              
-                              dailyHours[dateKey] = (dailyHours[dateKey] || 0) + hours;
-
-                              const dateOnly = new Date(year, inTime.getMonth(), inTime.getDate());
-                              
-                              if (!earliestDate || dateOnly < earliestDate) earliestDate = dateOnly;
-                              if (!latestDate || dateOnly > latestDate) latestDate = dateOnly;
+                  
+                  const today = new Date();
+                  const year = today.getFullYear();
+                  const month = today.getMonth();
+                  const currentDateInt = today.getDate();
+                  
+                  let totalWorkingDays = 0;
+                  let presentDays = 0;
+                  
+                  for (let d = 1; d <= currentDateInt; d++) {
+                    const date = new Date(year, month, d);
+                    const dayOfWeek = date.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    
+                    if (!isWeekend) {
+                      totalWorkingDays++;
+                      
+                      const targetDateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+                      let totalHours = 0;
+                      
+                      userTimesheets.forEach((ts: any) => {
+                        ts.entries?.forEach((e: any) => {
+                          if (e.punchInTime) {
+                            const pDate = new Date(e.punchInTime);
+                            const pStr = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}-${String(pDate.getDate()).padStart(2, '0')}`;
+                            if (pStr === targetDateStr) {
+                              totalHours += (e.hours || 0);
+                            }
+                          } else {
+                            // Manual entry
+                            const weekStart = new Date(ts.week);
+                            weekStart.setDate(weekStart.getDate() + (e.day || 0));
+                            const wStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+                            if (wStr === targetDateStr) {
+                              totalHours += (e.hours || 0);
                             }
                           }
                         });
-                      }
-                    });
-
-                    if (earliestDate && latestDate) {
-                      const msPerDay = 1000 * 60 * 60 * 24;
-                      const totalDays = Math.round(((latestDate as Date).getTime() - (earliestDate as Date).getTime()) / msPerDay) + 1;
-                      
-                      let presentDays = 0;
-                      Object.values(dailyHours).forEach(hours => {
-                        if (hours >= 8) {
-                          presentDays++;
-                        }
                       });
-
-                      if (totalDays > 0) {
-                        const attPct = (presentDays / totalDays) * 100;
-                        calculatedAttendance = Math.min(100, Math.round(attPct));
+                      
+                      if (totalHours >= 8) {
+                        presentDays++;
                       }
                     }
+                  }
+
+                  if (totalWorkingDays > 0) {
+                    const attPct = (presentDays / totalWorkingDays) * 100;
+                    calculatedAttendance = Math.min(100, Math.round(attPct));
+                  } else {
+                    calculatedAttendance = 0;
                   }
                   // ----------------------------------------------------------------------------------------------------
 

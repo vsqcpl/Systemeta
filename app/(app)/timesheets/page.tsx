@@ -60,6 +60,61 @@ export default function TimesheetsPage() {
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState<Record<number, boolean>>({});
 
+  const [selectedCalendarUser, setSelectedCalendarUser] = useState<string>("");
+
+  useEffect(() => {
+    if (user && !selectedCalendarUser) {
+      setSelectedCalendarUser(user.id);
+    }
+  }, [user, selectedCalendarUser]);
+
+  const calendarDays = useMemo(() => {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days = [];
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    return days;
+  }, []);
+
+  const getHoursForDate = (date: Date, consultantId: string) => {
+    if (!data.timesheets) return 0;
+    
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const targetDateStr = `${yyyy}-${mm}-${dd}`;
+    
+    let totalHours = 0;
+    
+    data.timesheets.forEach((ts: any) => {
+      if (ts.consultant !== consultantId) return;
+      
+      ts.entries?.forEach((e: any) => {
+        if (e.punchInTime) {
+          const pDate = new Date(e.punchInTime);
+          const pStr = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}-${String(pDate.getDate()).padStart(2, '0')}`;
+          if (pStr === targetDateStr) {
+            totalHours += (e.hours || 0);
+          }
+        } else {
+          // Manual entry
+          const weekStart = new Date(ts.week);
+          weekStart.setDate(weekStart.getDate() + (e.day || 0));
+          const wStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+          if (wStr === targetDateStr) {
+            totalHours += (e.hours || 0);
+          }
+        }
+      });
+    });
+    
+    return totalHours;
+  };
+
   const allTasks = useMemo(() => {
     const tasksObj = data.tasks as any;
     if (!tasksObj) return [];
@@ -823,45 +878,70 @@ export default function TimesheetsPage() {
               </div>
             </div>
 
-            {/* Weekly Summary Card */}
+            {/* Attendance Calendar Card */}
             <div className="card">
-              <div className="card-header">
-                <span className="card-title">{t("Week Summary")}</span>
+              <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span className="card-title">{t("Attendance Calendar")}</span>
+                <select 
+                  className="select premium-select" 
+                  value={selectedCalendarUser}
+                  onChange={(e) => setSelectedCalendarUser(e.target.value)}
+                  style={{ width: "200px", height: "32px", fontSize: "12px", padding: "0 8px" }}
+                >
+                  {data.consultants?.map((c: any) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
               </div>
               <div className="card-body">
-                {[
-                  { label: t("Total Hours"), val: `${grandTotal.toFixed(1)}h` },
-                  { label: t("Billable Hours"), val: `${totalBillable.toFixed(1)}h` },
-                  { label: t("Non-Billable Hours"), val: `${totalNonBillable.toFixed(1)}h` },
-                  { label: t("Target Hours"), val: "40.0h" },
-                ].map(({ label, val }) => (
-                  <div
-                    key={label}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      padding: "10px 0",
-                      borderBottom: "1px solid var(--border-subtle)",
-                      fontSize: "13px",
-                    }}
-                  >
-                    <span style={{ color: "var(--text-secondary)" }}>{label}</span>
-                    <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{val}</span>
-                  </div>
-                ))}
-                <div style={{ marginTop: "16px" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
-                    <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("Billable Ratio")}</span>
-                    <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--success-600)" }}>
-                      {billableRatio.toFixed(1)}%
-                    </span>
-                  </div>
-                  <div className="progress-bar" style={{ height: "8px" }}>
-                    <div
-                      className="progress-fill success"
-                      style={{ width: `${billableRatio}%`, background: "var(--success-500)" }}
-                    />
-                  </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", textAlign: "center" }}>
+                  {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map(d => (
+                    <div key={d} style={{ fontSize: "12px", fontWeight: "bold", color: "var(--text-secondary)", paddingBottom: "8px" }}>{d}</div>
+                  ))}
+                  {Array.from({ length: (new Date(new Date().getFullYear(), new Date().getMonth(), 1).getDay() + 6) % 7 }).map((_, i) => (
+                    <div key={`empty-${i}`} />
+                  ))}
+                  {calendarDays.map((date, idx) => {
+                    const dayOfWeek = date.getDay();
+                    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
+                    const isFuture = date > new Date();
+                    
+                    let bgColor = "var(--bg-surface-2)";
+                    let color = "var(--text-primary)";
+                    let hours = 0;
+                    
+                    if (!isFuture) {
+                      hours = getHoursForDate(date, selectedCalendarUser);
+                    }
+
+                    if (isWeekend) {
+                      bgColor = "#FFF9C4"; // Yellow
+                      color = "#F5B041";
+                    } else if (!isFuture) {
+                      if (hours >= 8) {
+                        bgColor = "#E8F8F5"; // Green
+                        color = "#27AE60";
+                      } else {
+                        bgColor = "#FDEDEC"; // Red
+                        color = "#E74C3C";
+                      }
+                    }
+                    
+                    return (
+                      <div key={idx} style={{
+                        background: bgColor,
+                        borderRadius: "4px",
+                        padding: "8px 4px",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        border: "1px solid var(--border-subtle)"
+                      }}>
+                        <span style={{ fontSize: "12px", fontWeight: "bold", color }}>{date.getDate()}</span>
+                        {!isFuture && <span style={{ fontSize: "10px", color: "var(--text-secondary)" }}>{hours.toFixed(1)}h</span>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
