@@ -81,8 +81,6 @@ export default function TimesheetsPage() {
   }, []);
 
   const getHoursForDate = (date: Date, consultantId: string) => {
-    if (!data.timesheets) return 0;
-    
     const yyyy = date.getFullYear();
     const mm = String(date.getMonth() + 1).padStart(2, '0');
     const dd = String(date.getDate()).padStart(2, '0');
@@ -90,26 +88,30 @@ export default function TimesheetsPage() {
     
     let totalHours = 0;
     
-    data.timesheets.forEach((ts: any) => {
-      if (ts.consultant !== consultantId) return;
-      
-      ts.entries?.forEach((e: any) => {
-        if (e.punchInTime) {
-          const pDate = new Date(e.punchInTime);
-          const pStr = `${pDate.getFullYear()}-${String(pDate.getMonth() + 1).padStart(2, '0')}-${String(pDate.getDate()).padStart(2, '0')}`;
-          if (pStr === targetDateStr) {
-            totalHours += (e.hours || 0);
+    if (data.timesheets) {
+      data.timesheets.forEach((ts: any) => {
+        if (ts.consultant !== consultantId) return;
+        
+        ts.entries?.forEach((e: any) => {
+          if (!e.punchInTime) {
+            // Manual entry
+            const weekStart = new Date(ts.week);
+            weekStart.setDate(weekStart.getDate() + (e.day || 0));
+            const wStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
+            if (wStr === targetDateStr) {
+              totalHours += (e.hours || 0);
+            }
           }
-        } else {
-          // Manual entry
-          const weekStart = new Date(ts.week);
-          weekStart.setDate(weekStart.getDate() + (e.day || 0));
-          const wStr = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
-          if (wStr === targetDateStr) {
-            totalHours += (e.hours || 0);
-          }
-        }
+        });
       });
+    }
+
+    punchSessions.forEach((s: any) => {
+      // Only include if it's for the currently selected user (API only returns logged-in user's sessions anyway)
+      if (user?.id === consultantId && s.date === targetDateStr && s.punchOut) {
+        const diffMs = new Date(s.punchOut).getTime() - new Date(s.punchIn).getTime();
+        totalHours += parseFloat((diffMs / 3600000).toFixed(2));
+      }
     });
     
     return totalHours;
@@ -459,12 +461,6 @@ export default function TimesheetsPage() {
   // Fetch persisted punch sessions
   useEffect(() => {
     if (!user) return;
-    const start = new Date(weekStart);
-    const end = new Date(weekStart);
-    end.setDate(end.getDate() + 6);
-    
-    const startStr = start.toISOString().split('T')[0];
-    const endStr = end.toISOString().split('T')[0];
     
     fetch(`/api/timesheets/punch-sessions`)
       .then(res => res.json())
@@ -608,7 +604,8 @@ export default function TimesheetsPage() {
     dayDate.setDate(dayDate.getDate() + day);
     const dayStr = dayDate.toISOString().split("T")[0];
 
-    const daySessions = punchSessions.filter(s => s.date === dayStr && s.project === project);
+    // s.project stores the task name (from tempProjectClient during punch in)
+    const daySessions = punchSessions.filter(s => s.date === dayStr && (s.project === task || (s.project === "Internal Operations" && task === "Team Meeting / Training")));
 
     if (daySessions.length > 0) {
       const totalMs = daySessions.reduce((sum, s) => {
