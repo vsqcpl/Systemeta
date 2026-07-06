@@ -237,7 +237,7 @@ export default function TimesheetsPage() {
           for (const key of Object.keys(newTasks) as Array<keyof typeof newTasks>) {
             newTasks[key] = newTasks[key]?.filter((t: any) => t.id !== taskObj.id) || [];
           }
-          newTasks.done = [...(newTasks.done || []), { ...taskObj, status: "done", progress: 100 }];
+          newTasks.done = [...(newTasks.done || []), { ...taskObj, progress: 100 }];
         }
 
         useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray, tasks: newTasks } });
