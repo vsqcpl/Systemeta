@@ -720,31 +720,72 @@ export default function TasksPage() {
   const [aiEstNumber, setAiEstNumber] = useState<number | null>(null);
   const [isAiEstimating, setIsAiEstimating] = useState(false);
 
-  const handleGenerateAiEstimate = () => {
+  const [aiEstMeta, setAiEstMeta] = useState<{
+    difficulty: string;
+    riskLevel: string;
+    confidence: number;
+    reasoning: string;
+    isFallback?: boolean;
+  } | null>(null);
+
+  const handleGenerateAiEstimate = async () => {
     if (!aiEstHeading.trim() || !aiEstDesc.trim()) {
       setAiEstNumber(null);
-      setAiEstResult("Please enter the details to find the estimate");
+      setAiEstMeta(null);
+      setAiEstResult("Please enter the task name and description to generate an estimate.");
       return;
     }
 
     setIsAiEstimating(true);
-    setTimeout(() => {
-      let base = 8;
-      const textLen = aiEstHeading.length + aiEstDesc.length;
-      if (textLen > 50) base += 4;
-      if (textLen > 150) base += 8;
-      if (textLen > 300) base += 16;
-      
+    setAiEstResult(null);
+    setAiEstMeta(null);
+
+    try {
+      const res = await fetch("/api/ai/estimate-time", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          taskName: `${aiEstHeading}: ${aiEstDesc}`,
+          priority: aiEstPriority,
+          teamSize: parseInt(aiEstPeople) || 1,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Server error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      const hrs = data.estimatedHours ?? data.hours ?? 8;
+
+      setAiEstNumber(hrs);
+      setAiEstResult(`Suggested Estimate → ${hrs} Hours`);
+      setAiEstMeta({
+        difficulty: data.difficulty || "Medium",
+        riskLevel: data.riskLevel || "Low",
+        confidence: data.confidenceScore || 75,
+        reasoning: data.reasoning || "Estimated using historical task context.",
+        isFallback: data.confidenceScore !== undefined && data.confidenceScore <= 75 && !data.historicalTasks?.length,
+      });
+    } catch (err: any) {
+      // Local heuristic fallback if server call fails
       const people = parseInt(aiEstPeople) || 1;
       const multipliers: Record<string, number> = { low: 0.8, medium: 1, high: 1.5, critical: 2 };
-      const priorityMult = multipliers[aiEstPriority] || 1;
-      
-      const finalEstimate = Math.round((base * priorityMult) / Math.max(1, people * 0.8));
-      
+      const base = 8 + Math.min(16, Math.floor((aiEstHeading.length + aiEstDesc.length) / 20) * 4);
+      const finalEstimate = Math.round((base * (multipliers[aiEstPriority] || 1)) / Math.max(1, people * 0.8));
       setAiEstNumber(finalEstimate);
       setAiEstResult(`Suggested Estimate → ${finalEstimate} Hours`);
+      setAiEstMeta({
+        difficulty: "Medium",
+        riskLevel: "Medium",
+        confidence: 60,
+        reasoning: "Local heuristic used — AI service unavailable.",
+        isFallback: true,
+      });
+    } finally {
       setIsAiEstimating(false);
-    }, 1500);
+    }
   };
 
   // Completion Modal State
@@ -1254,23 +1295,47 @@ export default function TasksPage() {
                   </div>
                   
                   {aiEstResult && (
-                    <div style={{ marginTop: "8px", padding: "16px", background: "rgba(37, 99, 235, 0.05)", border: "1px solid rgba(37, 99, 235, 0.2)", borderRadius: "8px", textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
-                      <div>
-                        <div style={{ fontSize: "14px", fontWeight: 700, color: "#2563eb", marginBottom: "4px" }}>{aiEstResult}</div>
+                    <div style={{ marginTop: "8px", padding: "16px", background: aiEstMeta?.isFallback ? "rgba(245, 158, 11, 0.06)" : "rgba(37, 99, 235, 0.05)", border: `1px solid ${aiEstMeta?.isFallback ? "rgba(245, 158, 11, 0.3)" : "rgba(37, 99, 235, 0.2)"}`, borderRadius: "10px", display: "flex", flexDirection: "column", gap: "12px" }}>
+                      {aiEstMeta?.isFallback && (
+                        <div style={{ fontSize: "11px", color: "#b45309", background: "rgba(245, 158, 11, 0.1)", padding: "6px 10px", borderRadius: "6px", fontWeight: 600, display: "flex", alignItems: "center", gap: "6px" }}>
+                          ⚠ AI service unavailable — local estimate used
+                        </div>
+                      )}
+                      <div style={{ textAlign: "center" }}>
+                        <div style={{ fontSize: "18px", fontWeight: 800, color: aiEstMeta?.isFallback ? "#b45309" : "#2563eb", marginBottom: "4px" }}>{aiEstResult}</div>
                         {aiEstNumber !== null && (
-                          <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Review the suggested estimate and enter it in the form.</div>
+                          <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>≈ {Math.ceil((aiEstNumber ?? 0) / 8)} working days</div>
                         )}
                       </div>
+                      {aiEstMeta && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                          {[
+                            { label: "Difficulty", value: aiEstMeta.difficulty },
+                            { label: "Risk", value: aiEstMeta.riskLevel },
+                            { label: "Confidence", value: `${aiEstMeta.confidence}%` },
+                          ].map(({ label, value }) => (
+                            <div key={label} style={{ textAlign: "center", padding: "8px", background: "var(--bg-surface-2)", borderRadius: "8px" }}>
+                              <div style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "3px" }}>{label}</div>
+                              <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)" }}>{value}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {aiEstMeta?.reasoning && (
+                        <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", lineHeight: 1.5, fontStyle: "italic", borderTop: "1px solid var(--border-subtle)", paddingTop: "10px" }}>
+                          {aiEstMeta.reasoning}
+                        </div>
+                      )}
                       {aiEstNumber !== null && (
-                        <button 
-                          type="button" 
+                        <button
+                          type="button"
                           onClick={() => {
                             if (aiEstNumber !== null) {
                               setNtEstimate(aiEstNumber.toString());
                               setShowAiEstimate(false);
                             }
                           }}
-                          style={{ padding: "6px 14px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "6px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}
+                          style={{ padding: "8px 14px", background: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px", justifyContent: "center" }}
                         >
                           <Sparkles size={12} /> Use This Estimate
                         </button>

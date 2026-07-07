@@ -128,6 +128,9 @@ model Task {
   actualCompletionDate String?
   comments             TaskComment[]
   subtasks             Subtask[]
+
+  @@index([projectId])
+  @@index([assigneeId])
 }
 
 model Subtask {
@@ -139,6 +142,8 @@ model Subtask {
   description String?
   isMilestone Boolean  @default(false)
   status      String   @default("Not Started") // e.g. Not Started, In Progress, Completed
+
+  @@index([taskId])
 }
 
 model TaskComment {
@@ -151,6 +156,8 @@ model TaskComment {
   role      String
   text      String
   createdAt DateTime @default(now())
+
+  @@index([taskId])
 }
 
 model Milestone {
@@ -161,6 +168,8 @@ model Milestone {
   date      String
   status    String    // e.g. upcoming, at-risk, delayed, completed
   amount    Float
+
+  @@index([projectId])
 }
 
 model Timesheet {

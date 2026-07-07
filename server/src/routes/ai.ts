@@ -2,8 +2,10 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { callGroqService } from "../lib/groq.service.js";
+import { requireRoles } from "../middlewares/rbac.js";
 import fs from "fs";
 import path from "path";
+import crypto from "crypto";
 
 const assignmentCache = new Map<string, any>();
 
@@ -190,7 +192,7 @@ router.post("/insights/generate", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/ai/estimate-time - Task-Time Estimation (GenAI + RAG)
-router.post("/estimate-time", async (req: AuthenticatedRequest, res) => {
+router.post("/estimate-time", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { 
       taskName, 
@@ -291,46 +293,11 @@ Return ONLY a valid JSON object matching this schema.`;
           }
         });
       }
-    } catch (error) {
-      console.warn("Groq time estimation failed, falling back to rule-based heuristic:", error);
+      return res.status(400).json({ message: "Insufficient historical task database context or Groq service error. Cannot generate time estimation." });
+    } catch (error: any) {
+      console.warn("Groq time estimation failed:", error);
+      return res.status(400).json({ message: "Task estimation failed: " + (error.message || error) });
     }
-
-    // Fallback: Rule-based heuristic
-    let baseHours = 80;
-    const resolvedPriority = overridePriority || priority || "Medium";
-    if (resolvedPriority.toLowerCase() === "critical") baseHours = 160;
-    else if (resolvedPriority.toLowerCase() === "high") baseHours = 120;
-    else if (resolvedPriority.toLowerCase() === "medium") baseHours = 80;
-    else baseHours = 40;
-
-    const estHours = Math.max(8, Math.round(baseHours / Math.sqrt(size)));
-    const estimatedDays = Math.ceil(estHours / 8);
-    const suggestedDate = new Date();
-    suggestedDate.setDate(suggestedDate.getDate() + estimatedDays);
-    const formattedDate = suggestedDate.toISOString().split("T")[0];
-
-    return res.json({
-      estimatedHours: estHours,
-      estimatedDays,
-      suggestedCompletionDate: formattedDate,
-      confidenceScore: 75,
-      difficulty: "Medium",
-      riskLevel: "Medium",
-      reasoning: "Rule-based baseline estimate based on priority and team sizing overrides.",
-      historicalTasks: matchedTasks.map(t => t.title).slice(0, 3),
-      keyFactors: ["Fallback calculation rule", `Priority tier: ${resolvedPriority}`],
-      recommendations: [
-        { action: "Increase team size", reason: "Adding another resource will reduce duration proportionally." }
-      ],
-      projectImpact: {
-        milestoneDelay: "Possible 1-2 day delay",
-        scheduleImpact: "+2 days scheduling buffer",
-        resourceUtilization: "Moderate utilization risk",
-        deadlineChange: `Shift deadline to ${formattedDate}`,
-        projectHealth: "Remains On-Track",
-        criticalPathImpact: "Low impact on critical path"
-      }
-    });
   } catch (error) {
     console.error("Estimate time error:", error);
     return res.status(500).json({ message: "Internal server error estimating task time" });
@@ -338,7 +305,7 @@ Return ONLY a valid JSON object matching this schema.`;
 });
 
 // POST /api/ai/predict-deadline - Delay Detection & Root-Cause (Hybrid: Rules + GenAI)
-router.post("/predict-deadline", async (req: AuthenticatedRequest, res) => {
+router.post("/predict-deadline", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { 
       taskName, 
@@ -422,21 +389,11 @@ Return ONLY a valid JSON object matching this schema.`;
           reasoning: result.reasoning || "Deadline computed using date rules. Assignee calendar appears clear."
         });
       }
-    } catch (error) {
+      return res.status(400).json({ message: "Insufficient task database context or Groq service error. Cannot predict deadline." });
+    } catch (error: any) {
       console.warn("Groq root-cause explanation failed:", error);
+      return res.status(400).json({ message: "Deadline prediction failed: " + (error.message || error) });
     }
-
-    return res.json({
-      predictedCompletionDate: formattedDeadline,
-      confidenceScore: 75,
-      riskLevel,
-      expectedDelay: adjustedDays > 14 ? "3 days" : "No delay",
-      criticalPathImpact: "Low impact on critical path",
-      suggestedBuffer: "2 days buffer",
-      recommendedDeadline: formattedDeadline,
-      alternativeDeadline: formattedDeadline,
-      reasoning: "Heuristic rule calculation. Assignee has no active leaves overlapping this sprint."
-    });
   } catch (error) {
     console.error("Predict deadline error:", error);
     return res.status(500).json({ message: "Internal server error predicting deadline" });
@@ -444,7 +401,7 @@ Return ONLY a valid JSON object matching this schema.`;
 });
 
 // GET /api/ai/weekly-summary - Weekly Summary (GenAI)
-router.get("/weekly-summary", async (req: AuthenticatedRequest, res) => {
+router.get("/weekly-summary", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const todayStr = new Date().toISOString().split("T")[0];
 
@@ -525,7 +482,7 @@ Return ONLY valid JSON with keys "subject", "body", "healthScore", and "forecast
 });
 
 // POST /api/ai/daily-delay-alerts - Daily Delay Alerts (Rule-Based - NO AI)
-router.post("/daily-delay-alerts", async (req: AuthenticatedRequest, res) => {
+router.post("/daily-delay-alerts", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const todayStr = new Date().toISOString().split("T")[0];
     
@@ -577,7 +534,7 @@ router.post("/daily-delay-alerts", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/ai/schedule-clashes - Schedule Clash Detection (Deterministic Rules Engine)
-router.post("/schedule-clashes", async (req: AuthenticatedRequest, res) => {
+router.post("/schedule-clashes", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   const startTime = Date.now();
   try {
     const { projectId } = req.body as { projectId?: string };
@@ -606,19 +563,14 @@ router.post("/schedule-clashes", async (req: AuthenticatedRequest, res) => {
 
     const targetProjectIds = targetProjects.map(p => p.id);
 
-    // Load active tasks, users, leaves, milestones
-    const allTasks = await prisma.task.findMany({
-      include: { comments: true }
-    });
+    // Load active tasks, users, leaves, milestones in parallel
+    const [allTasks, milestones, users, leaveRequests] = await Promise.all([
+      prisma.task.findMany({ include: { comments: true } }),
+      prisma.milestone.findMany({ where: { projectId: { in: targetProjectIds } } }),
+      prisma.user.findMany({ where: { role: { not: "client_contact" } } }),
+      prisma.leaveRequest.findMany()
+    ]);
     const activeTasks = allTasks.filter(t => t.status !== "done");
-
-    const milestones = await prisma.milestone.findMany({
-      where: { projectId: { in: targetProjectIds } }
-    });
-    const users = await prisma.user.findMany({
-      where: { role: { not: "client_contact" } }
-    });
-    const leaveRequests = await prisma.leaveRequest.findMany();
 
     const parseDate = (str: string): Date => {
       const d = new Date(str);
@@ -1476,48 +1428,76 @@ function resolveTaskDetails(task: any) {
   };
 }
 
-function getConsultantProfile(user: any) {
+async function getConsultantProfile(user: any) {
   const name = user.name;
   const role = user.role === "senior_consultant" ? "Senior Consultant" : user.role === "project_manager" ? "Project Manager" : "Consultant";
   const dept = user.role === "senior_consultant" ? "Finance & Tax Advisory" : user.role === "project_manager" ? "Project Delivery Group" : "Digital Transformation Group";
   const location = user.id === "U002" || user.id === "U005" ? "Mumbai, IN" : "Bangalore, IN";
   
+  // Load task history of the user from database
+  const completedTasks = await prisma.task.findMany({
+    where: { assigneeId: user.id, status: "done" }
+  });
+
+  const allActiveTasks = await prisma.task.findMany({
+    where: { assigneeId: user.id, status: { not: "done" } }
+  });
+
+  const totalTasks = completedTasks.length + allActiveTasks.length;
+
   let technicalSkills: string[] = [];
   let domainSkills: string[] = [];
   let certifications: string[] = [];
-  let performanceRating = 4.2;
-  let successRate = 88;
-  let yearsExp = 3;
-  let avgCompletionTime = "4.5 Days";
-  let qualityScore = 90;
+  let performanceRating: number | null = null;
+  let successRate: number | null = null;
+  let yearsExp: number | null = null;
+  let avgCompletionTime: string | null = null;
+  let qualityScore: number | null = null;
 
-  if (user.id === "U002") {
-    technicalSkills = ["Financial Auditing", "Tax Compliance", "Process Mapping", "SAP Integration", "Excel Modeling"];
-    domainSkills = ["Corporate Tax", "FMCG Banking", "Indirect GST Law", "Regulatory Compliance"];
-    certifications = ["Chartered Accountant (CA)", "SAP Certified Professional"];
-    performanceRating = 4.8;
-    successRate = 96;
-    yearsExp = 8;
-    avgCompletionTime = "3.8 Days";
-    qualityScore = 98;
-  } else if (user.id === "U004") {
-    technicalSkills = ["Project Management", "Process Mapping", "Prince2 Governance", "Agile Methodologies"];
-    domainSkills = ["ERP Delivery", "Automotive Sector", "Supply Chain Finance"];
-    certifications = ["PMP Certified Associate", "Prince2 Practitioner"];
-    performanceRating = 4.6;
-    successRate = 92;
-    yearsExp = 10;
-    avgCompletionTime = "4.2 Days";
-    qualityScore = 94;
-  } else {
-    technicalSkills = ["Tax Prep", "GST Filing", "System Configuration", "Data Migration", "Documentation"];
-    domainSkills = ["Regulatory Filings", "Compliance Auditing", "Client Relations"];
-    certifications = ["Chartered Accountant (CA)", "Certified Internal Auditor (CIA)"];
-    performanceRating = 4.4;
-    successRate = 90;
-    yearsExp = 4;
-    avgCompletionTime = "4.0 Days";
-    qualityScore = 91;
+  if (totalTasks > 0) {
+    // Dynamically infer skills from tags of assigned tasks
+    const tags = Array.from(new Set(
+      [...completedTasks, ...allActiveTasks]
+        .flatMap(t => (t.tags || "").split(","))
+        .map(s => s.trim())
+        .filter(s => s && !s.startsWith("m:") && !s.toLowerCase().startsWith("sprint:"))
+    ));
+    technicalSkills = tags;
+
+    // Dynamically infer domain skills from projects
+    const projectIds = Array.from(new Set([...completedTasks, ...allActiveTasks].map(t => t.projectId)));
+    const assignedProjects = await prisma.project.findMany({
+      where: { id: { in: projectIds } }
+    });
+    domainSkills = Array.from(new Set(assignedProjects.map(p => p.type)));
+
+    // Certifications based on inferred skills
+    if (technicalSkills.some(s => s.toLowerCase().includes("audit") || s.toLowerCase().includes("tax") || s.toLowerCase().includes("compliance"))) {
+      certifications.push("Chartered Accountant (CA)");
+    }
+    if (technicalSkills.some(s => s.toLowerCase().includes("sap") || s.toLowerCase().includes("integration") || s.toLowerCase().includes("configuration"))) {
+      certifications.push("SAP Certified Professional");
+    }
+    if (user.role === "project_manager") {
+      certifications.push("PMP Certified Associate");
+    }
+
+    // Success rate computation
+    if (completedTasks.length > 0) {
+      const onTimeTasks = completedTasks.filter(t => {
+        if (!t.actualCompletionDate) return true;
+        return t.actualCompletionDate <= t.dueDate;
+      });
+      successRate = Math.round((onTimeTasks.length / completedTasks.length) * 100);
+      performanceRating = Math.round((4.0 + (successRate / 100)) * 10) / 10;
+      qualityScore = successRate;
+      avgCompletionTime = `${(completedTasks.reduce((sum, t) => sum + (t.estimate || 24), 0) / completedTasks.length / 8).toFixed(1)} Days`;
+    }
+  }
+
+  // Calculate experience from user creation date
+  if (user.createdAt) {
+    yearsExp = Math.max(1, Math.round((Date.now() - new Date(user.createdAt).getTime()) / (1000 * 3600 * 24 * 365.25) * 10) / 10);
   }
 
   return {
@@ -1568,7 +1548,7 @@ function saveAssignmentHistory(entry: any) {
 }
 
 // GET /api/ai/assignment-history - Retrieve recommendation log history
-router.get("/assignment-history", async (req: AuthenticatedRequest, res) => {
+router.get("/assignment-history", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const list = getAssignmentHistory();
     return res.json(list);
@@ -1579,7 +1559,7 @@ router.get("/assignment-history", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/ai/save-assignment - Commit task assignee in DB and record decision
-router.post("/save-assignment", async (req: AuthenticatedRequest, res) => {
+router.post("/save-assignment", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { taskId, projectId, recommendedId, selectedId, overrideReason } = req.body;
     if (!taskId || !projectId || !selectedId) {
@@ -1649,7 +1629,7 @@ router.post("/save-assignment", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/ai/auto-assign - Automated Task Assignment (GenAI + RAG + Cached)
-router.post("/auto-assign", async (req: AuthenticatedRequest, res) => {
+router.post("/auto-assign", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId, taskId } = req.body;
     if (!projectId || !taskId) {
@@ -1661,17 +1641,18 @@ router.post("/auto-assign", async (req: AuthenticatedRequest, res) => {
       return res.json(assignmentCache.get(taskId));
     }
 
-    // Load project & task from DB
-    const project = await prisma.project.findUnique({ where: { id: projectId } });
+    // Load project & task from DB in parallel
+    const [project, task] = await Promise.all([
+      prisma.project.findUnique({ where: { id: projectId } }),
+      prisma.task.findUnique({
+        where: { id: taskId },
+        include: { comments: true }
+      })
+    ]);
     if (!project) return res.status(404).json({ message: "Project not found" });
     if (project.status === "completed" || project.status === "archived") {
       return res.status(400).json({ message: "Project is archived/completed — assignments locked." });
     }
-
-    const task = await prisma.task.findUnique({
-      where: { id: taskId },
-      include: { comments: true }
-    });
     if (!task) return res.status(404).json({ message: "Task not found" });
     if (task.status === "done") {
       return res.status(400).json({ message: "Task is already completed — assignment locked." });
@@ -1703,14 +1684,14 @@ router.post("/auto-assign", async (req: AuthenticatedRequest, res) => {
     const taskEndDateStr = taskEndDate.toISOString().split("T")[0];
 
     // Compute deterministic workload and availability profile
-    const candidates = consultantsList.map(c => {
+    const candidates = await Promise.all(consultantsList.map(async c => {
       const activeTasks = c.tasks;
       const totalActiveEstimate = activeTasks.reduce((sum, t) => sum + (t.estimate || 0), 0);
       const utilization = Math.round(Math.min(100, (totalActiveEstimate / 160) * 100));
       const remainingCapacity = 100 - utilization;
       const freeHours = Math.max(0, 160 - totalActiveEstimate);
       
-      const profile = getConsultantProfile(c);
+      const profile = await getConsultantProfile(c);
 
       // Check leaves conflicts
       const leaveConflict = c.leaveRequests.some(l => {
@@ -1741,7 +1722,7 @@ router.post("/auto-assign", async (req: AuthenticatedRequest, res) => {
         avgCompletionTime: profile.avgCompletionTime,
         qualityScore: profile.qualityScore
       };
-    });
+    }));
 
     const systemPrompt = "You are an expert resource allocation and project management analyst. You must return ONLY a valid JSON object matching the requested schema.";
     const userPrompt = `Allocate the best resources from the candidates pool below for this task.
@@ -1884,80 +1865,11 @@ Return ONLY valid JSON matching the schema.`;
 
         return res.json(payload);
       }
-    } catch (e) {
-      console.warn("Groq assignment calculation failed, using deterministic heuristics:", e);
+      return res.status(400).json({ message: "Insufficient task/resource context or Groq service error. Cannot generate automated task assignment recommendation." });
+    } catch (e: any) {
+      console.warn("Groq assignment calculation failed:", e);
+      return res.status(400).json({ message: "Automated assignment failed: " + (e.message || e) });
     }
-
-    // Heuristics Fallback ranking
-    const sortedCandidates = [...candidates].sort((a, b) => {
-      if (a.hasLeaveConflict && !b.hasLeaveConflict) return 1;
-      if (!a.hasLeaveConflict && b.hasLeaveConflict) return -1;
-      return a.utilization - b.utilization; // prefer lower load
-    });
-
-    const fallbackRankings = sortedCandidates.slice(0, 5).map(c => {
-      const matchScore = c.hasLeaveConflict ? 45 : Math.max(50, 95 - c.utilization / 3);
-      return {
-        id: c.id,
-        name: c.name,
-        role: c.role,
-        dept: c.dept,
-        matchScore,
-        rationale: `Allocated deterministically due to availability status (${c.utilization}% load) and location (${c.location}).`,
-        riskIndicator: c.hasLeaveConflict ? "High" : c.utilization > 80 ? "Medium" : "Low",
-        riskReason: c.hasLeaveConflict ? "Leave conflict detected" : c.utilization > 80 ? "High utilization" : "Available",
-        utilization: c.utilization,
-        remainingCapacity: c.remainingCapacity,
-        skills: c.skills,
-        certifications: c.certifications,
-        performanceRating: c.rating
-      };
-    });
-
-    const fallbackPayload = {
-      task: {
-        id: task.id,
-        title: task.title,
-        priority: task.priority,
-        estimateHours: taskDetails.estimateHours,
-        estimateDays: taskDetails.estimateDays,
-        skills: taskDetails.skills,
-        certifications: taskDetails.requiredCertifications,
-        complexity: taskDetails.complexity,
-        riskLevel: taskDetails.riskLevel,
-        sprint: taskDetails.sprint,
-        phase: taskDetails.phase,
-        domain: taskDetails.domain,
-        description: taskDetails.description
-      },
-      rankings: fallbackRankings,
-      alternatives: sortedCandidates.slice(1, 3).map(c => ({
-        id: c.id,
-        name: c.name,
-        matchDifference: 10,
-        tradeOff: `Heuristic backup candidate with ${c.utilization}% load.`,
-        estimatedImpact: "Stable execution"
-      })),
-      teamAssignment: {
-        leadName: fallbackRankings[0]?.name || "Unassigned",
-        supportingNames: [],
-        combinedSkills: taskDetails.skills,
-        combinedCapacity: fallbackRankings[0]?.remainingCapacity || 100,
-        deliveryImprovement: "Executes on schedule.",
-        reason: "Standard task allocation"
-      },
-      assignmentImpact: {
-        scheduleImpact: "On track",
-        deliveryConfidence: "High",
-        riskScore: fallbackRankings[0]?.riskIndicator === "High" ? 50 : 20,
-        expectedCompletionDate: taskEndDateStr,
-        criticalPathImpact: "Neutral"
-      },
-      candidates
-    };
-
-    assignmentCache.set(taskId, fallbackPayload);
-    return res.json(fallbackPayload);
 
   } catch (error) {
     console.error("Auto assign error:", error);
@@ -1966,7 +1878,7 @@ Return ONLY valid JSON matching the schema.`;
 });
 
 // POST /api/ai/review-wbs - Grammar & Sequence Review (GenAI)
-router.post("/review-wbs", async (req: AuthenticatedRequest, res) => {
+router.post("/review-wbs", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId } = req.body;
     if (!projectId) {
@@ -2012,7 +1924,7 @@ Return ONLY a valid JSON object matching the keys and format.`;
 const billingCache = new Map<string, { timestamp: number; data: any }>();
 
 // POST /api/ai/billing-insights - Overhauled Billing Milestone Insights (Hybrid: Math + GenAI)
-router.post("/billing-insights", async (req: AuthenticatedRequest, res) => {
+router.post("/billing-insights", requireRoles(["super_admin", "project_manager", "accounts"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId, milestoneId, forceRefresh } = req.body;
     if (!projectId) {
@@ -2039,9 +1951,13 @@ router.post("/billing-insights", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "Completed projects cannot be analyzed." });
     }
 
-    const milestones = await prisma.milestone.findMany({
-      where: { projectId }
-    });
+    // Load project metadata, milestones, tasks, invoices, and leaves in parallel
+    const [milestones, tasks, invoices, leaves] = await Promise.all([
+      prisma.milestone.findMany({ where: { projectId } }),
+      prisma.task.findMany({ where: { projectId }, include: { comments: true } }),
+      prisma.invoice.findMany({ where: { projectId } }),
+      prisma.leaveRequest.findMany({ where: { status: "approved" } })
+    ]);
 
     if (milestones.length === 0) {
       return res.json({
@@ -2082,19 +1998,6 @@ router.post("/billing-insights", async (req: AuthenticatedRequest, res) => {
         empty: true
       });
     }
-
-    const tasks = await prisma.task.findMany({
-      where: { projectId },
-      include: { comments: true }
-    });
-
-    const invoices = await prisma.invoice.findMany({
-      where: { projectId }
-    });
-
-    const leaves = await prisma.leaveRequest.findMany({
-      where: { status: "approved" }
-    });
 
     const today = new Date();
     today.setHours(0,0,0,0);
@@ -2452,25 +2355,9 @@ router.post("/billing-insights", async (req: AuthenticatedRequest, res) => {
             confidenceScore: result.confidenceScore || 90
           };
         }
-      } catch (err) {
-        console.error("AI reasoning for billing milestones failed, using fallback:", err);
-        payload.aiReport = {
-          milestoneId,
-          summary: `Milestone "${selectedMilestone.title}" has progress of ${selectedMilestone.completion}%.`,
-          whyReadyOrBlocked: `Calculated readiness is at ${selectedMilestone.readinessScore}%. Target date is ${selectedMilestone.targetDate}.`,
-          blockersExplanation: selectedMilestone.readinessScore < 90 ? "Some linked tasks or dependencies are incomplete." : "Ready for billing validation.",
-          recommendations: [
-            {
-              action: "Complete Remaining Tasks",
-              priority: "High",
-              businessImpact: `Unlocks ₹${(selectedMilestone.budget/100000).toFixed(2)}L billing revenue`,
-              estimatedTime: "5 days",
-              reason: "Tasks must reach 100% progress for final client sign-off.",
-              confidence: 95
-            }
-          ],
-          confidenceScore: 80
-        };
+      } catch (err: any) {
+        console.error("AI reasoning for billing milestones failed:", err);
+        return res.status(400).json({ message: "Billing AI insights analysis failed: " + (err.message || err) });
       }
     }
 
@@ -2484,7 +2371,7 @@ router.post("/billing-insights", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/ai/email-summary - Simulate emailing summary
-router.post("/email-summary", async (req: AuthenticatedRequest, res) => {
+router.post("/email-summary", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { recipients } = req.body;
     if (!recipients) {
@@ -2600,7 +2487,7 @@ const parseDate = (str: string): Date => {
 };
 
 // POST /api/ai/delay-analysis - Rule-based deterministic project risk scanning
-router.post("/delay-analysis", async (req: AuthenticatedRequest, res) => {
+router.post("/delay-analysis", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId, configUpdateDays = 7 } = req.body;
     if (!projectId) {
@@ -2629,36 +2516,33 @@ router.post("/delay-analysis", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "Project is already completed. Completed projects cannot be scanned." });
     }
 
-    // Fetch tasks, milestones, team leave requests
-    const tasks = await prisma.task.findMany({
-      where: { projectId },
-      include: {
-        comments: { orderBy: { createdAt: "desc" } }
-      }
-    });
-
-    const milestones = await prisma.milestone.findMany({
-      where: { projectId }
-    });
-
-    const users = await prisma.user.findMany({
-      where: { role: { not: "client_contact" } }
-    });
+    // Fetch tasks, milestones, and users in parallel (Query Block 1)
+    const [tasks, milestones, users] = await Promise.all([
+      prisma.task.findMany({
+        where: { projectId },
+        include: { comments: { orderBy: { createdAt: "desc" } } }
+      }),
+      prisma.milestone.findMany({ where: { projectId } }),
+      prisma.user.findMany({ where: { role: { not: "client_contact" } } })
+    ]);
 
     const assigneeIds = Array.from(new Set(tasks.map(t => t.assigneeId).filter(Boolean)));
-    const leaveRequests = await prisma.leaveRequest.findMany({
-      where: {
-        consultantId: { in: assigneeIds },
-        status: "approved"
-      }
-    });
 
-    const allActiveTasksForUsers = await prisma.task.findMany({
-      where: {
-        assigneeId: { in: assigneeIds },
-        status: { not: "done" }
-      }
-    });
+    // Fetch leave requests and workloads in parallel (Query Block 2)
+    const [leaveRequests, allActiveTasksForUsers] = await Promise.all([
+      prisma.leaveRequest.findMany({
+        where: {
+          consultantId: { in: assigneeIds },
+          status: "approved"
+        }
+      }),
+      prisma.task.findMany({
+        where: {
+          assigneeId: { in: assigneeIds },
+          status: { not: "done" }
+        }
+      })
+    ]);
 
     const getDeptByRole = (role: string): string => {
       const r = role.toLowerCase();
@@ -2972,7 +2856,7 @@ router.post("/delay-analysis", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/ai/analyze-delay-root-cause - AI-based delay root cause narrative
-router.post("/analyze-delay-root-cause", async (req: AuthenticatedRequest, res) => {
+router.post("/analyze-delay-root-cause", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId, taskId } = req.body;
     if (!projectId || !taskId) {
@@ -3062,7 +2946,7 @@ Output ONLY the JSON object. Do not include markdown wraps or styling characters
 });
 
 // POST /api/ai/generate-wbs - AI WBS Generator
-router.post("/generate-wbs", async (req: AuthenticatedRequest, res) => {
+router.post("/generate-wbs", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { name, type, client, department, objective, scope, deliverables, timeline, teamSize, technologies, constraints, risks, notes } = req.body;
     
@@ -3113,7 +2997,7 @@ Ensure that acceptance criteria, documentation tasks, testing tasks, reviews, an
 });
 
 // POST /api/ai/optimize-wbs - Hybrid validation & optimizer
-router.post("/optimize-wbs", async (req: AuthenticatedRequest, res) => {
+router.post("/optimize-wbs", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId } = req.body;
     if (!projectId) {
@@ -3282,13 +3166,6 @@ Provide analysis recommendations. Return a JSON object with:
   - "status": "Ready to Execute" | "Minor Improvements Required" | "Major Corrections Required" | "Not Ready"
   - "explanation": string`;
 
-    let aiResults: any = {
-      grammarIssues: [],
-      completenessSuggestions: [],
-      scores: { grammar: 90, readability: 85, structure: 80, dependencies: 90, completeness: 75, planning: 85, consistency: 90 },
-      readiness: { status: "Minor Improvements Required", explanation: "Calculations suggest minor grammatical issues and task documentation buffers can be refined." }
-    };
-
     try {
       const result = await callGroqService([
         { role: "system", content: systemPrompt },
@@ -3296,19 +3173,19 @@ Provide analysis recommendations. Return a JSON object with:
       ], true);
 
       if (result) {
-        aiResults = result;
+        return res.json({
+          deterministicIssues,
+          grammarIssues: result.grammarIssues || [],
+          completenessSuggestions: result.completenessSuggestions || [],
+          scores: result.scores || {},
+          readiness: result.readiness || {}
+        });
       }
-    } catch (e) {
-      console.warn("AI optimization audit failed, using rule-based metrics:", e);
+      return res.status(400).json({ message: "WBS optimizer analysis failed to return a valid response." });
+    } catch (e: any) {
+      console.error("AI WBS optimization audit failed:", e);
+      return res.status(400).json({ message: "WBS optimization audit failed: " + (e.message || e) });
     }
-
-    return res.json({
-      deterministicIssues,
-      grammarIssues: aiResults.grammarIssues || [],
-      completenessSuggestions: aiResults.completenessSuggestions || [],
-      scores: aiResults.scores || {},
-      readiness: aiResults.readiness || {}
-    });
 
   } catch (error: any) {
     console.error("WBS optimization analysis error:", error);
@@ -3317,7 +3194,7 @@ Provide analysis recommendations. Return a JSON object with:
 });
 
 // POST /api/ai/save-wbs - Save WBS Plan to Database
-router.post("/save-wbs", async (req: AuthenticatedRequest, res) => {
+router.post("/save-wbs", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { projectId, isNewProject, projectName, clientName, projectType, tasks } = req.body;
     
@@ -3327,13 +3204,22 @@ router.post("/save-wbs", async (req: AuthenticatedRequest, res) => {
 
     let pId = projectId;
     if (isNewProject || !pId) {
-      pId = `P${String(Math.floor(100 + Math.random() * 900))}_${Date.now().toString(36).slice(-4)}`;
+      const allProjs = await prisma.project.findMany({ select: { id: true } });
+      let maxNum = 0;
+      allProjs.forEach(p => {
+        const m = p.id.match(/^P(\d+)$/);
+        if (m) {
+          const num = parseInt(m[1], 10);
+          if (num > maxNum) maxNum = num;
+        }
+      });
+      pId = `P${String(maxNum + 1).padStart(3, "0")}`;
       await prisma.project.create({
         data: {
           id: pId,
           name: projectName || "New AI Project",
           client: clientName || "Client",
-          status: "planning",
+          status: "active",
           health: "on-track",
           progress: 0,
           budget: 120000,
@@ -3343,27 +3229,58 @@ router.post("/save-wbs", async (req: AuthenticatedRequest, res) => {
           type: projectType || "Transformation"
         }
       });
+
+      // Assign the creator (Project Manager) to the project assignment list so they can see/access it
+      await prisma.projectAssignment.create({
+        data: {
+          userId: req.user.id,
+          projectId: pId
+        }
+      });
     }
 
-    // Wipe existing WBS tasks for clean overwrite
-    await prisma.task.deleteMany({
-      where: { projectId: pId }
+    // Ensure the project status is set to active (so active filter rules in front-end do not hide it)
+    await prisma.project.update({
+      where: { id: pId },
+      data: { status: "active" }
     });
+
+    // Wipe existing WBS tasks and milestones for clean overwrite in parallel
+    await Promise.all([
+      prisma.task.deleteMany({ where: { projectId: pId } }),
+      prisma.milestone.deleteMany({ where: { projectId: pId } }),
+      prisma.projectAssignment.deleteMany({ where: { projectId: pId } })
+    ]);
+
+    const milestoneTasks = tasks.filter(t => t.isMilestone);
+    const milestonesCount = milestoneTasks.length || 1;
+    const projectBudget = 120000;
+    const milestoneAmount = Math.round(projectBudget / milestonesCount);
+    let milestoneIndex = 1;
 
     const defaultUser = await prisma.user.findFirst({
       where: { role: { not: "client_contact" } }
     });
     const assigneeId = defaultUser ? defaultUser.id : req.user.id;
 
-    // Create the tasks and subtasks — IDs are project-scoped to avoid global collisions
+    const tasksToCreate: any[] = [];
+    const subtasksToCreate: any[] = [];
+    const milestonesToCreate: any[] = [];
+    const assignmentsToCreate = new Map<string, any>();
+
+    // Make sure the project manager who created it is assigned
+    assignmentsToCreate.set(req.user.id, { userId: req.user.id, projectId: pId });
+
     for (let i = 0; i < tasks.length; i++) {
       const t = tasks[i];
       const tId = `${pId}_T${String(i + 1).padStart(3, "0")}`;
+      const assId = t.assigneeId || assigneeId;
 
       const taskData = {
+        id: tId,
         title: t.title,
         projectId: pId,
-        assigneeId: t.assigneeId || assigneeId,
+        assigneeId: assId,
         priority: t.priority || "medium",
         dueDate: t.dueDate || new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().split("T")[0],
         estimate: Number(t.estimate) || 24,
@@ -3372,27 +3289,56 @@ router.post("/save-wbs", async (req: AuthenticatedRequest, res) => {
         tags: t.tags || "",
         isMilestone: !!t.isMilestone
       };
+      tasksToCreate.push(taskData);
 
-      const createdTask = await prisma.task.upsert({
-        where: { id: tId },
-        update: taskData,
-        create: { id: tId, ...taskData }
-      });
+      // Track project assignment
+      assignmentsToCreate.set(assId, { userId: assId, projectId: pId });
+
+      if (t.isMilestone) {
+        const mId = `${pId}_M${String(milestoneIndex++).padStart(3, "0")}`;
+        milestonesToCreate.push({
+          id: mId,
+          projectId: pId,
+          title: t.title,
+          date: taskData.dueDate,
+          status: "upcoming",
+          amount: milestoneAmount
+        });
+      }
 
       if (t.subtasks && Array.isArray(t.subtasks)) {
         for (const sub of t.subtasks) {
-          await prisma.subtask.create({
-            data: {
-              taskId: createdTask.id,
-              title: sub.title || sub,
-              dueDate: createdTask.dueDate,
-              description: sub.description || "",
-              isMilestone: false
-            }
+          subtasksToCreate.push({
+            id: crypto.randomUUID(),
+            taskId: tId,
+            title: sub.title || sub,
+            dueDate: taskData.dueDate,
+            description: sub.description || "",
+            isMilestone: false,
+            status: "Not Started"
           });
         }
       }
     }
+
+    // Batch create project assignments, tasks, milestones, and subtasks
+    await prisma.projectAssignment.createMany({
+      data: Array.from(assignmentsToCreate.values()),
+      skipDuplicates: true
+    });
+
+    await prisma.task.createMany({
+      data: tasksToCreate
+    });
+
+    await Promise.all([
+      milestonesToCreate.length > 0 
+        ? prisma.milestone.createMany({ data: milestonesToCreate })
+        : Promise.resolve(),
+      subtasksToCreate.length > 0 
+        ? prisma.subtask.createMany({ data: subtasksToCreate })
+        : Promise.resolve()
+    ]);
 
     return res.json({ message: "WBS successfully committed to database", projectId: pId });
   } catch (error: any) {

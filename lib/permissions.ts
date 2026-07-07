@@ -49,11 +49,15 @@ export const SCREEN_ACCESS: Record<string, Record<UserRole, AccessLevel>> = {
   // ── AI Insights ──────────────────────────────────────────────────────────
   ai_task_estimation:       { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_delay_analysis:        { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
+  ai_delay_prediction:      { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_weekly_summary:        { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_assignment_suggest:    { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
+  ai_resource_optimization: { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_efficiency_metrics:    { [SA]:"full",[CM]:null,   [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_co2_report:            { [SA]:"full",[CM]:"full", [PM]:null,  [SC]:null,  [CON]:null,  [ACC]:"full",[CC]:null     },
   ai_milestone_insights:    { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:null,  [CON]:null,  [ACC]:"view",[CC]:null     },
+  ai_schedule_clashes:      { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
+  ai_wbs_generation:        { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
 
   // ── Client Portal ─────────────────────────────────────────────────────────
   client_project_status:    { [SA]:"full",[CM]:null,   [PM]:null,  [SC]:null,  [CON]:null,  [ACC]:null,  [CC]:"limited"},

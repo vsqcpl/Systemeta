@@ -1,16 +1,17 @@
 "use client";
 
-import React, { use, useState, useRef, useEffect } from "react";
+import React, { use, useState, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { GanttChart } from "@/components/charts/GanttChart";
-import { Bot } from "lucide-react";
+import { Bot, RefreshCw } from "lucide-react";
 import QuickAddModal from "@/components/QuickAddModal";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { filterProjects } from "@/lib/dataFilters";
 import { ROLES } from "@/lib/roles";
 import ActionGuard from "@/components/guards/ActionGuard";
+import { canUseAiFeature } from "@/lib/featureFlags";
 
 export default function ProjectDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -32,6 +33,28 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const fetchInitialData = useAppStore((state) => state.fetchInitialData);
   const pageRef = useRef<HTMLDivElement>(null);
   const currencyFormat = useAppStore((state) => state.currencyFormat);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+
+  const refreshAiInsights = useCallback(async () => {
+    setIsLoadingInsights(true);
+    try {
+      const res = await fetch("/api/ai/insights/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+      });
+      if (res.ok) {
+        const insights = await res.json();
+        useAppStore.setState((state) => ({
+          data: { ...state.data, aiInsights: insights },
+        }));
+      }
+    } catch (err) {
+      console.warn("[AI Insights] Auto-refresh failed:", err);
+    } finally {
+      setIsLoadingInsights(false);
+    }
+  }, []);
 
   const visibleProjects = user ? filterProjects(data.projects, user) : [];
   const isClientContact = user?.role === ROLES.CLIENT_CONTACT;
@@ -40,6 +63,17 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   useEffect(() => {
     if (id) setActiveProjectId(id);
   }, [id, setActiveProjectId]);
+
+  // Auto-fetch AI insights on mount if the store has none
+  useEffect(() => {
+    const state = useAppStore.getState();
+    if (
+      state.data.aiInsights.length === 0 &&
+      (user?.role === ROLES.SUPER_ADMIN || user?.role === ROLES.PROJECT_MANAGER)
+    ) {
+      refreshAiInsights();
+    }
+  }, [user, refreshAiInsights]);
 
   useEffect(() => {
     // Only redirect to 403 if the user has visible projects AND the requested project
@@ -563,18 +597,33 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
           )}
 
           {/* AI Insights Card */}
-          {(user?.role === ROLES.SUPER_ADMIN || user?.role === ROLES.PROJECT_MANAGER) && (
+          {(user?.role === ROLES.SUPER_ADMIN || user?.role === ROLES.PROJECT_MANAGER) &&
+            canUseAiFeature("milestone_insights", user.role as any) && (
             <div className="card" style={{ background: "linear-gradient(135deg, #0f172a, #1e293b)", border: "none" }}>
               <div className="card-body">
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px" }}>
-                  <span style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--brand-300)" }}>
-                    <Bot size={20} />
-                  </span>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "white" }}>AI Recommendations</span>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--brand-300)" }}>
+                      <Bot size={20} />
+                    </span>
+                    <span style={{ fontSize: "13px", fontWeight: 700, color: "white" }}>AI Recommendations</span>
+                  </div>
+                  <button
+                    title="Refresh AI insights"
+                    onClick={refreshAiInsights}
+                    disabled={isLoadingInsights}
+                    style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "6px", cursor: "pointer", padding: "4px 6px", display: "flex", alignItems: "center" }}
+                  >
+                    <RefreshCw size={13} color="rgba(255,255,255,0.7)" style={{ animation: isLoadingInsights ? "spin 1s linear infinite" : "none" }} />
+                  </button>
                 </div>
-                {data.aiInsights.length === 0 ? (
+                {isLoadingInsights ? (
+                  <div style={{ padding: "16px", textAlign: "center", color: "rgba(255, 255, 255, 0.5)", fontSize: "11px" }}>
+                    Generating insights...
+                  </div>
+                ) : data.aiInsights.length === 0 ? (
                   <div style={{ padding: "12px", textAlign: "center", color: "rgba(255, 255, 255, 0.5)", fontSize: "11px" }}>
-                    No data available to compute
+                    No insights yet. Click ↻ to generate.
                   </div>
                 ) : (
                   data.aiInsights.slice(0, 2).map((i, idx) => (
@@ -587,25 +636,25 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                         marginBottom: "8px",
                       }}
                     >
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: "white", marginBottom: "4px" }}>
-                      {i.title}
+                      <div style={{ fontSize: "12px", fontWeight: 600, color: "white", marginBottom: "4px" }}>
+                        {i.title}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.6)", lineHeight: 1.5 }}>
+                        {i.description}
+                      </div>
+                      <button
+                        className="btn btn-sm"
+                        style={{
+                          background: "rgba(255, 255, 255, 0.15)",
+                          color: "white",
+                          marginTop: "8px",
+                          fontSize: "11px",
+                        }}
+                        onClick={() => showToast(`Action: ${i.action}`, "success")}
+                      >
+                        {i.action} →
+                      </button>
                     </div>
-                    <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.6)", lineHeight: 1.5 }}>
-                      {i.description}
-                    </div>
-                    <button
-                      className="btn btn-sm"
-                      style={{
-                        background: "rgba(255, 255, 255, 0.15)",
-                        color: "white",
-                        marginTop: "8px",
-                        fontSize: "11px",
-                      }}
-                      onClick={() => showToast(`Triggered AI Recommendation action: ${i.action}`, "success")}
-                    >
-                      {i.action} →
-                    </button>
-                  </div>
                   ))
                 )}
               </div>

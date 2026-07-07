@@ -3,6 +3,7 @@
 import React, { useState, useCallback, useRef } from "react";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { formatCurrency } from "@/lib/utils";
+import { canUseAiFeature } from "@/lib/featureFlags";
 import {
   IconCpu,
   IconCrystalBall,
@@ -154,8 +155,16 @@ function RadialProgress({ score, color, size = 44 }: { score: number; color: str
 export default function AIPage() {
   const showToast = useAppStore((state) => state.showToast);
   const data = useAppStore((state) => state.data);
+  const user = useAppStore((state) => state.user);
   const { t } = useTranslation();
   const updateTask = useAppStore((state) => state.updateTask);
+
+  // Feature gate helper — true if the current user can use this AI feature
+  const aiGate = useCallback(
+    (key: Parameters<typeof canUseAiFeature>[0]) =>
+      canUseAiFeature(key, (user?.role ?? "") as any),
+    [user?.role]
+  );
 
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [alertSensitivity, setAlertSensitivity] = useState("Medium");
@@ -5421,6 +5430,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
       <div className="grid-2" style={{ gap: "16px", marginTop: "10px" }}>
 
         {/* Card 1: Task-Time Estimation */}
+        {aiGate("task_estimation") && (
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
             <div>
@@ -5442,8 +5452,10 @@ Output ONLY the JSON array. Do not include markdown formats.`;
             </div>
           </div>
         </div>
+        )}
 
         {/* Card 2: Delay Detection */}
+        {aiGate("delay_prediction") && (
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
             <div>
@@ -5465,8 +5477,10 @@ Output ONLY the JSON array. Do not include markdown formats.`;
             </div>
           </div>
         </div>
+        )}
 
-        {/* Card 3: Billing Milestone Insights (NEW) */}
+        {/* Card 3: Billing Milestone Insights */}
+        {aiGate("milestone_insights") && (
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%", border: "1px solid rgba(20, 184, 166, 0.25)" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
             <div>
@@ -5488,8 +5502,10 @@ Output ONLY the JSON array. Do not include markdown formats.`;
             </div>
           </div>
         </div>
+        )}
 
-        {/* Card 4: Automated Task Assignment (NEW) */}
+        {/* Card 4: Automated Task Assignment */}
+        {aiGate("resource_optimization") && (
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%", border: "1px solid rgba(99, 102, 241, 0.25)" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
             <div>
@@ -5511,8 +5527,10 @@ Output ONLY the JSON array. Do not include markdown formats.`;
             </div>
           </div>
         </div>
+        )}
 
         {/* Card 5: Schedule Clash Detection */}
+        {aiGate("schedule_clashes") && (
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
             <div>
@@ -5533,8 +5551,10 @@ Output ONLY the JSON array. Do not include markdown formats.`;
             </div>
           </div>
         </div>
+        )}
 
         {/* Card 6: AI WBS Builder & Optimization Center */}
+        {aiGate("wbs_generation") && (
         <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", height: "100%", border: "1px solid rgba(245, 158, 11, 0.25)" }}>
           <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", height: "100%", justifyContent: "space-between" }}>
             <div>
@@ -5556,7 +5576,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
             </div>
           </div>
         </div>
-
+        )}
       </div>
 
 
