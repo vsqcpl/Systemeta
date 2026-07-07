@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { TrendScatterChart } from "@/components/charts/ChartComponents";
 import { Chart, registerables } from "chart.js";
@@ -280,6 +281,17 @@ export default function AnalyticsPage() {
   const { t }     = useTranslation();
   const showToast = useAppStore((state) => state.showToast);
   const { user }  = useAuth();
+  const router    = useRouter();
+
+  useEffect(() => {
+    if (user && (user.role === "accounts" || user.role === "client_contact")) {
+      router.replace("/dashboard");
+    }
+  }, [user, router]);
+
+  if (user && (user.role === "accounts" || user.role === "client_contact")) {
+    return null;
+  }
 
   const [selectedConsultantId, setSelectedConsultantId] = useState("all");
   const [expandedConsultantId, setExpandedConsultantId] = useState<string | null>(null);

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import {
   IconCpu,
@@ -312,6 +313,18 @@ export default function TimesheetAIPage() {
   const showToast = useAppStore((state) => state.showToast);
   const data = useAppStore((state) => state.data);
   const { t } = useTranslation();
+  const user = useAppStore((state) => state.user);
+  const router = useRouter();
+
+  useEffect(() => {
+    if (user && (user.role === "accounts" || user.role === "client_contact")) {
+      router.replace("/dashboard");
+    }
+  }, [user, router]);
+
+  if (user && (user.role === "accounts" || user.role === "client_contact")) {
+    return null;
+  }
 
   // 1. Dynamic Consultants mapping
   const consultants = useMemo(() => {

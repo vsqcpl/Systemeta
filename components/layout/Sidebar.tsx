@@ -84,59 +84,59 @@ export default function Sidebar() {
     {
       id: "overview",
       items: [
-        { id: "dashboard",  label: t("Executive Dashboard"),  icon: <IconGrid />,         route: "/dashboard" },
-        { id: "projects",   label: t("Project Portfolio"),    icon: <IconFolder />,       route: "/projects" },
+        { id: "dashboard", label: t("Executive Dashboard"), icon: <IconGrid />, route: "/dashboard" },
+        { id: "projects", label: t("Project Portfolio"), icon: <IconFolder />, route: "/projects" },
       ],
     },
     {
       id: "delivery",
       items: [
-        { id: "project",    label: t("Project Dashboard"),    icon: <IconTarget />,       route: projectLinkId ? `/projects/${projectLinkId}` : "/projects" },
-        { id: "tasks",      label: t("Task Management"),      icon: <IconCheck />,        route: "/tasks" },
+        { id: "project", label: t("Project Dashboard"), icon: <IconTarget />, route: projectLinkId ? `/projects/${projectLinkId}` : "/projects" },
+        { id: "tasks", label: t("Task Management"), icon: <IconCheck />, route: "/tasks" },
       ],
     },
     {
       id: "people",
       items: [
-        { id: "resources",  label: t("Resource Planning"),    icon: <IconUsers />,        route: "/resources" },
-        { id: "timesheets", label: t("Timesheets"),           icon: <IconClock />,        route: "/timesheets" },
-        { id: "leave",      label: t("Leave Management"),     icon: <IconUmbrella />,     route: "/leave" },
+        { id: "resources", label: t("Resource Planning"), icon: <IconUsers />, route: "/resources" },
+        { id: "timesheets", label: t("Timesheets"), icon: <IconClock />, route: "/timesheets" },
+        { id: "leave", label: t("Leave Management"), icon: <IconUmbrella />, route: "/leave" },
       ],
     },
     {
       id: "finance",
       items: [
-        { id: "expenses",   label: t("Travel & Expenses"),    icon: <IconReceipt />,      route: "/expenses" },
-        { id: "billing",    label: t("Billing & Finance"),    icon: <IconReportMoney />,  route: "/billing" },
+        { id: "expenses", label: t("Travel & Expenses"), icon: <IconReceipt />, route: "/expenses" },
+        { id: "billing", label: t("Billing & Finance"), icon: <IconReportMoney />, route: "/billing" },
       ],
     },
     {
       id: "intelligence",
       items: [
-        { id: "analytics",     label: t("Consultant Analytics"), icon: <IconChart />,    route: "/analytics" },
-        { id: "ai",            label: t("AI Insights Center"),   icon: <IconCpu />,      route: "/ai" },
-        { id: "timesheet-ai",  label: t("AI Center"),            icon: <IconCpu />,      route: "/timesheet-ai" },
+        { id: "analytics", label: t("Consultant Analytics"), icon: <IconChart />, route: "/analytics" },
+        { id: "ai", label: t("AI Insights Center"), icon: <IconCpu />, route: "/ai" },
+        { id: "timesheet-ai", label: t("AI Center"), icon: <IconCpu />, route: "/timesheet-ai" },
       ],
     },
     {
       id: "system",
       items: [
-        { id: "admin",     label: t("Admin Panel"), icon: <IconSettings />, route: "/admin" },
+        { id: "admin", label: t("Admin Panel"), icon: <IconSettings />, route: "/admin" },
       ],
     },
     {
       id: "crm",
       items: [
-        { id: "crm_dashboard",     label: "CRM Dashboard",   icon: <IconGrid />,         route: "/cm-dashboard" },
-        { id: "crm_clients",       label: "Clients",         icon: <IconUsers />,        route: "/clients" },
-        { id: "crm_contacts",      label: "Contacts",        icon: <IconUsers />,        route: "/contacts" },
-        { id: "crm_calls",         label: "Calls",           icon: <IconTarget />,       route: "/calls" },
-        { id: "crm_meetings",      label: "Meetings",        icon: <IconClock />,        route: "/meetings" },
-        { id: "crm_follow_ups",    label: "Follow Ups",      icon: <IconCheck />,        route: "/follow-ups" },
-        { id: "crm_requirements",   label: "Requirements",    icon: <IconFolder />,       route: "/requirements" },
-        { id: "crm_opportunities",  label: "Opportunities",   icon: <IconChart />,        route: "/opportunities" },
-        { id: "crm_escalations",    label: "Escalations",     icon: <IconTarget />,       route: "/escalations" },
-        { id: "crm_reports",       label: "CRM Reports",     icon: <IconReportMoney />,  route: "/reports/cm" },
+        { id: "crm_dashboard", label: "CRM Dashboard", icon: <IconGrid />, route: "/cm-dashboard" },
+        { id: "crm_clients", label: "Clients", icon: <IconUsers />, route: "/clients" },
+        { id: "crm_contacts", label: "Contacts", icon: <IconUsers />, route: "/contacts" },
+        { id: "crm_calls", label: "Calls", icon: <IconTarget />, route: "/calls" },
+        { id: "crm_meetings", label: "Meetings", icon: <IconClock />, route: "/meetings" },
+        { id: "crm_follow_ups", label: "Follow Ups", icon: <IconCheck />, route: "/follow-ups" },
+        { id: "crm_requirements", label: "Requirements", icon: <IconFolder />, route: "/requirements" },
+        { id: "crm_opportunities", label: "Opportunities", icon: <IconChart />, route: "/opportunities" },
+        { id: "crm_escalations", label: "Escalations", icon: <IconTarget />, route: "/escalations" },
+        { id: "crm_reports", label: "CRM Reports", icon: <IconReportMoney />, route: "/reports/cm" },
       ],
     },
   ];
@@ -146,9 +146,13 @@ export default function Sidebar() {
     // 1. Check if allowed in the active module list
     if (!allowed.includes(itemId)) return false;
 
-    // 2. Check AI gating
-    if ((itemId === "ai" || itemId === "timesheet-ai") && role) {
-      if (!hasAnyAiAccess(role as UserRole)) return false;
+    // 2. Check AI and Analytics gating — "ai" (PM AI Centre) is only for super_admin and project_manager
+    if (itemId === "ai" && role) {
+      if (!["super_admin", "project_manager"].includes(role)) return false;
+    }
+    if ((itemId === "timesheet-ai" || itemId === "analytics") && role) {
+      if (role === "accounts" || role === "client_contact") return false;
+      if (itemId !== "analytics" && !hasAnyAiAccess(role as UserRole)) return false;
     }
 
     // 3. Check role-based permission

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useCallback, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { formatCurrency } from "@/lib/utils";
 import { canUseAiFeature } from "@/lib/featureFlags";
@@ -158,6 +159,23 @@ export default function AIPage() {
   const user = useAppStore((state) => state.user);
   const { t } = useTranslation();
   const updateTask = useAppStore((state) => state.updateTask);
+  const router = useRouter();
+  // PM AI Centre: only super_admin and project_manager have access.
+  // All other roles are fully blocked — no read-only view, no placeholders.
+  const canAccessPMAI = !user || ["super_admin", "project_manager"].includes(user.role);
+  // isReadOnlyRole is always false here: roles that were previously read-only
+  // (senior_consultant, consultant) are now fully blocked and never reach this page.
+  const isReadOnlyRole = false;
+
+  React.useEffect(() => {
+    if (user && !canAccessPMAI) {
+      router.replace("/dashboard");
+    }
+  }, [user, canAccessPMAI, router]);
+
+  if (user && !canAccessPMAI) {
+    return null;
+  }
 
   // Feature gate helper — true if the current user can use this AI feature
   const aiGate = useCallback(
@@ -776,8 +794,8 @@ Billing Milestones Summary:
   const assignmentTasks = React.useMemo(() => {
     if (!assignmentProjectId) return [];
     const flat = getFlatTasks(data?.tasks);
-    return flat.filter((t: any) => t.project === assignmentProjectId && t.status !== "done");
-  }, [data?.tasks, assignmentProjectId]);
+    return flat.filter((t: any) => t.project === assignmentProjectId && t.status !== "done" && (user?.role === "consultant" ? (t.assignee === user.id || t.assigneeId === user.id) : true));
+  }, [data?.tasks, assignmentProjectId, user]);
 
   const selectedAssignmentTaskObj = React.useMemo(() => {
     const flat = getFlatTasks(data?.tasks);
@@ -1051,14 +1069,16 @@ Billing Milestones Summary:
                 ))}
               </select>
 
-              <button
-                className="btn btn-primary"
-                disabled={scanLoading || !selectedProjectId}
-                onClick={() => handleScanProjectDelays(selectedProjectId)}
-                style={{ height: "42px", padding: "0 24px" }}
-              >
-                {scanLoading ? "Scanning..." : "Scan Delays"}
-              </button>
+              {!isReadOnlyRole && (
+                <button
+                  className="btn btn-primary"
+                  disabled={scanLoading || !selectedProjectId}
+                  onClick={() => handleScanProjectDelays(selectedProjectId)}
+                  style={{ height: "42px", padding: "0 24px" }}
+                >
+                  {scanLoading ? "Scanning..." : "Scan Delays"}
+                </button>
+              )}
             </div>
 
             {selectedProjectObj && (
@@ -1473,7 +1493,7 @@ Billing Milestones Summary:
                     <strong style={{ fontSize: "13px", color: "var(--text-primary)", display: "block", marginBottom: "12px" }}>Delay Timeline & Slack Analysis:</strong>
                     
                     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-                      {delayScanData.tasks.map((t: any) => {
+                      {delayScanData.tasks.filter((t: any) => user?.role !== "consultant" || t.assignee === user.id || t.assigneeId === user.id).map((t: any) => {
                         const isTaskDelayed = t.isDelayed;
                         const isTaskAtRisk = t.isAtRisk;
                         return (
@@ -1517,7 +1537,11 @@ Billing Milestones Summary:
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "12px", borderTop: "1px solid var(--border-subtle)", paddingTop: "12px" }}>
-                    {delayScanData.dependencyChains.map((c: any) => {
+                    {delayScanData.dependencyChains.filter((c: any) => {
+                      if (user?.role !== "consultant") return true;
+                      const taskObj = delayScanData.tasks.find((t: any) => t.id === c.taskId);
+                      return taskObj && (taskObj.assignee === user.id || taskObj.assigneeId === user.id);
+                    }).map((c: any) => {
                       const isTaskDelayed = delayScanData.tasks.find((t: any) => t.id === c.taskId)?.isDelayed;
                       const isTaskAtRisk = delayScanData.tasks.find((t: any) => t.id === c.taskId)?.isAtRisk;
                       if (!isTaskDelayed && !isTaskAtRisk) return null;
@@ -2429,6 +2453,11 @@ ${billingScanData.blockers.length > 0 ? billingScanData.blockers.map((b: any, i:
       if (clashProjectFilter !== "all" && c.project.id !== clashProjectFilter) return false;
       if (clashConsultantFilter !== "all" && c.consultant?.id !== clashConsultantFilter) return false;
 
+      if (user?.role === "consultant") {
+        const isUserConflict = c.consultant?.id === user.id || c.task.assigneeId === user.id || c.task.assignee === user.id;
+        if (!isUserConflict) return false;
+      }
+
       return true;
     });
 
@@ -2506,13 +2535,15 @@ ${billingScanData.blockers.length > 0 ? billingScanData.blockers.map((b: any, i:
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </select>
-            <button
-              className="btn btn-primary btn-sm"
-              disabled={clashScanLoading}
-              onClick={() => handleRunScheduleClashScan(clashProjectId)}
-            >
-              {clashScanLoading ? "Scanning..." : "Rescan Clashes"}
-            </button>
+            {!isReadOnlyRole && (
+              <button
+                className="btn btn-primary btn-sm"
+                disabled={clashScanLoading}
+                onClick={() => handleRunScheduleClashScan(clashProjectId)}
+              >
+                {clashScanLoading ? "Scanning..." : "Rescan Clashes"}
+              </button>
+            )}
           </div>
         </div>
 
@@ -3847,11 +3878,13 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                   </div>
                 )}
 
-                <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <button className="btn btn-primary" disabled={wbsLoading} onClick={handleRunWbsBuild} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 22px" }}>
-                    {wbsLoading ? "Generating…" : "✨ Generate WBS Draft"}
-                  </button>
-                </div>
+                {!isReadOnlyRole && (
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button className="btn btn-primary" disabled={wbsLoading} onClick={handleRunWbsBuild} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 22px" }}>
+                      {wbsLoading ? "Generating…" : "✨ Generate WBS Draft"}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -3866,12 +3899,14 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                       <h3 style={{ margin: 0, fontSize: "14.5px", fontWeight: 800 }}>Interactive WBS Planner</h3>
                       <p style={{ margin: "3px 0 0", fontSize: "11.5px", color: "var(--text-tertiary)" }}>Edit phases, tasks and subtasks inline. Click check for milestones.</p>
                     </div>
-                    <div style={{ display: "flex", gap: "8px" }}>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setWbsDraft(null)}>Reset</button>
-                      <button className="btn btn-primary btn-sm" disabled={wbsSaving} onClick={handleWbsSaveToDb} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                        {wbsSaving ? "Saving…" : "💾 Save Plan"}
-                      </button>
-                    </div>
+                    {!isReadOnlyRole && (
+                      <div style={{ display: "flex", gap: "8px" }}>
+                        <button className="btn btn-secondary btn-sm" onClick={() => setWbsDraft(null)}>Reset</button>
+                        <button className="btn btn-primary btn-sm" disabled={wbsSaving} onClick={handleWbsSaveToDb} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          {wbsSaving ? "Saving…" : "💾 Save Plan"}
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "14px", maxHeight: "600px", overflowY: "auto", paddingRight: "4px" }}>
@@ -3879,7 +3914,9 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                       <div key={phase} style={{ borderRadius: "10px", border: "1px solid var(--border-default)", overflow: "hidden", background: "var(--bg-surface-2)" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 14px", background: "var(--bg-surface-2)", borderBottom: "1px solid var(--border-default)" }}>
                           <span style={{ fontSize: "13px", fontWeight: 800, color: "var(--brand-600)" }}>{phase}</span>
-                          <button onClick={() => handleAddCustomTask(phase)} style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", cursor: "pointer", color: "var(--text-secondary)", fontWeight: 600 }}>+ Add Task</button>
+                          {!isReadOnlyRole && (
+                            <button onClick={() => handleAddCustomTask(phase)} style={{ background: "none", border: "1px solid var(--border-default)", borderRadius: "6px", padding: "3px 10px", fontSize: "11px", cursor: "pointer", color: "var(--text-secondary)", fontWeight: 600 }}>+ Add Task</button>
+                          )}
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "1px", background: "var(--border-subtle)" }}>
                           {tasks.map((t: any) => {
@@ -3906,11 +3943,12 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                   <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-tertiary)", minWidth: "32px", fontFamily: "monospace" }}>{t.id}</span>
                                   
                                   <input type="text" className="input" value={t.title} onChange={e => handleUpdateTaskField(t.id, "title", e.target.value)}
+                                    disabled={isReadOnlyRole}
                                     style={{ flex: 1, padding: "5px 8px", fontSize: "12.5px", background: "transparent", border: "1px solid transparent", borderRadius: "5px", transition: "border 0.15s" }}
                                     onFocus={e => (e.currentTarget.style.border = "1px solid var(--brand-600)")}
                                     onBlur={e => (e.currentTarget.style.border = "1px solid transparent")} />
 
-                                  <select className="select" value={t.priority} onChange={e => handleUpdateTaskField(t.id, "priority", e.target.value)} style={{ padding: "4px 8px", fontSize: "11px", width: "80px", flexShrink: 0, borderRadius: "6px" }}>
+                                  <select className="select" value={t.priority} onChange={e => handleUpdateTaskField(t.id, "priority", e.target.value)} disabled={isReadOnlyRole} style={{ padding: "4px 8px", fontSize: "11px", width: "80px", flexShrink: 0, borderRadius: "6px" }}>
                                     <option value="critical">Critical</option>
                                     <option value="high">High</option>
                                     <option value="medium">Medium</option>
@@ -3919,31 +3957,36 @@ Output ONLY the JSON array. Do not include markdown formats.`;
 
                                   <div style={{ display: "flex", alignItems: "center", gap: "3px", flexShrink: 0 }}>
                                     <input type="number" className="input" value={t.estimate} onChange={e => handleUpdateTaskField(t.id, "estimate", parseInt(e.target.value) || 8)}
+                                      disabled={isReadOnlyRole}
                                       style={{ width: "46px", padding: "4px 5px", fontSize: "11.5px", textAlign: "center" }} />
                                     <span style={{ fontSize: "10.5px", color: "var(--text-tertiary)" }}>h</span>
                                   </div>
 
                                   <label title="Milestone" style={{ display: "flex", alignItems: "center", gap: "3px", cursor: "pointer", flexShrink: 0 }}>
-                                    <input type="checkbox" checked={!!t.isMilestone} onChange={e => handleUpdateTaskField(t.id, "isMilestone", e.target.checked)} style={{ cursor: "pointer" }} />
+                                    <input type="checkbox" checked={!!t.isMilestone} onChange={e => handleUpdateTaskField(t.id, "isMilestone", e.target.checked)} disabled={isReadOnlyRole} style={{ cursor: "pointer" }} />
                                     <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>🏁</span>
                                   </label>
 
-                                  <button
-                                    onClick={() => {
-                                      handleAddSubtask(t.id);
-                                      setExpandedTasks(prev => ({ ...prev, [t.id]: true }));
-                                    }}
-                                    style={{ background: "none", border: "none", color: "var(--brand-600)", cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", fontSize: "11px", fontWeight: 600 }}
-                                    title="Add Subtask"
-                                  >
-                                    <Plus size={12} /> Sub
-                                  </button>
+                                  {!isReadOnlyRole && (
+                                    <button
+                                      onClick={() => {
+                                        handleAddSubtask(t.id);
+                                        setExpandedTasks(prev => ({ ...prev, [t.id]: true }));
+                                      }}
+                                      style={{ background: "none", border: "none", color: "var(--brand-600)", cursor: "pointer", display: "flex", alignItems: "center", gap: "2px", fontSize: "11px", fontWeight: 600 }}
+                                      title="Add Subtask"
+                                    >
+                                      <Plus size={12} /> Sub
+                                    </button>
+                                  )}
 
-                                  <button onClick={() => handleDeleteTask(t.id)}
-                                    style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: "2px 4px", fontSize: "15px", lineHeight: 1, borderRadius: "4px", flexShrink: 0, transition: "color 0.15s" }}
-                                    onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                                    onMouseLeave={e => (e.currentTarget.style.color = "var(--text-tertiary)")}
-                                    title="Remove">×</button>
+                                  {!isReadOnlyRole && (
+                                    <button onClick={() => handleDeleteTask(t.id)}
+                                      style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", padding: "2px 4px", fontSize: "15px", lineHeight: 1, borderRadius: "4px", flexShrink: 0, transition: "color 0.15s" }}
+                                      onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                                      onMouseLeave={e => (e.currentTarget.style.color = "var(--text-tertiary)")}
+                                      title="Remove">×</button>
+                                  )}
                                 </div>
 
                                 {isExpanded && (
@@ -3968,6 +4011,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                             className="input" 
                                             value={sub.title || ""} 
                                             onChange={e => handleUpdateSubtask(t.id, subIdx, "title", e.target.value)}
+                                            disabled={isReadOnlyRole}
                                             style={{ flex: 1, padding: "4px 8px", fontSize: "12px", background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}
                                           />
                                           <input 
@@ -3976,17 +4020,20 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                             className="input" 
                                             value={sub.description || ""} 
                                             onChange={e => handleUpdateSubtask(t.id, subIdx, "description", e.target.value)}
+                                            disabled={isReadOnlyRole}
                                             style={{ flex: 1.5, padding: "4px 8px", fontSize: "12px", background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}
                                           />
-                                          <button 
-                                            onClick={() => handleDeleteSubtask(t.id, subIdx)}
-                                            style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", fontSize: "13px", padding: "0 4px" }}
-                                            onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                                            onMouseLeave={e => (e.currentTarget.style.color = "var(--text-tertiary)")}
-                                            title="Delete Subtask"
-                                          >
-                                            <Trash2 size={12} />
-                                          </button>
+                                          {!isReadOnlyRole && (
+                                            <button 
+                                              onClick={() => handleDeleteSubtask(t.id, subIdx)}
+                                              style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", fontSize: "13px", padding: "0 4px" }}
+                                              onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                                              onMouseLeave={e => (e.currentTarget.style.color = "var(--text-tertiary)")}
+                                              title="Delete Subtask"
+                                            >
+                                              <Trash2 size={12} />
+                                            </button>
+                                          )}
                                         </div>
                                       ))
                                     )}
@@ -4173,15 +4220,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                     </div>
 
                                     {isExpanded && (
-                                      <div style={{ 
-                                        borderLeft: "2px dashed var(--border-default)", 
-                                        marginLeft: "24px", 
-                                        paddingLeft: "12px", 
-                                        paddingBottom: "6px",
-                                        display: "flex", 
-                                        flexDirection: "column", 
-                                        gap: "4px" 
-                                      }}>
+                                      <div style={{ padding: "8px 12px 12px 32px", display: "flex", flexDirection: "column", gap: "6px", background: "var(--bg-surface-2)" }}>
                                         {subtasks.length === 0 ? (
                                           <span style={{ fontSize: "10.5px", color: "var(--text-tertiary)", fontStyle: "italic" }}>No subtasks.</span>
                                         ) : (
@@ -4194,6 +4233,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                                 className="input" 
                                                 value={sub.title || ""} 
                                                 onChange={e => handleUpdateSubtask(t.id, subIdx, "title", e.target.value)}
+                                                disabled={isReadOnlyRole}
                                                 style={{ flex: 1, padding: "3px 6px", fontSize: "11.5px", background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}
                                               />
                                               <input 
@@ -4202,16 +4242,19 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                                 className="input" 
                                                 value={sub.description || ""} 
                                                 onChange={e => handleUpdateSubtask(t.id, subIdx, "description", e.target.value)}
+                                                disabled={isReadOnlyRole}
                                                 style={{ flex: 1.5, padding: "3px 6px", fontSize: "11.5px", background: "var(--bg-surface-2)", border: "1px solid var(--border-subtle)", borderRadius: "4px" }}
                                               />
-                                              <button 
-                                                onClick={() => handleDeleteSubtask(t.id, subIdx)}
-                                                style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", fontSize: "11px" }}
-                                                onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
-                                                onMouseLeave={e => (e.currentTarget.style.color = "var(--text-tertiary)")}
-                                              >
-                                                <Trash2 size={11} />
-                                              </button>
+                                              {!isReadOnlyRole && (
+                                                <button 
+                                                  onClick={() => handleDeleteSubtask(t.id, subIdx)}
+                                                  style={{ background: "none", border: "none", color: "var(--text-tertiary)", cursor: "pointer", fontSize: "11px" }}
+                                                  onMouseEnter={e => (e.currentTarget.style.color = "#ef4444")}
+                                                  onMouseLeave={e => (e.currentTarget.style.color = "var(--text-tertiary)")}
+                                                >
+                                                  <Trash2 size={11} />
+                                                </button>
+                                              )}
                                             </div>
                                           ))
                                         )}
@@ -4478,14 +4521,16 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                 ))}
               </select>
 
-              <button
-                className="btn btn-primary"
-                disabled={assignmentLoading || !assignmentProjectId || !assignmentTaskId}
-                onClick={() => handleFetchAssignmentRecommendations(assignmentProjectId, assignmentTaskId)}
-                style={{ height: "42px", padding: "0 24px" }}
-              >
-                {assignmentLoading ? "Calculating..." : "Suggest Resource Matches"}
-              </button>
+              {!isReadOnlyRole && (
+                <button
+                  className="btn btn-primary"
+                  disabled={assignmentLoading || !assignmentProjectId || !assignmentTaskId}
+                  onClick={() => handleFetchAssignmentRecommendations(assignmentProjectId, assignmentTaskId)}
+                  style={{ height: "42px", padding: "0 24px" }}
+                >
+                  {assignmentLoading ? "Calculating..." : "Suggest Resource Matches"}
+                </button>
+              )}
             </div>
 
             {/* Project metadata */}
@@ -4728,13 +4773,15 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                                   >
                                     View Workload
                                   </button>
-                                  <button
-                                    className="btn btn-primary btn-sm"
-                                    style={{ flex: 1, padding: "4px 0", fontSize: "11px", justifyContent: "center" }}
-                                    onClick={() => { setSelectedCandidateForImpact(c); setOverrideConsultantId(c.id); setAssignmentImpactModalOpen(true); }}
-                                  >
-                                    Assign
-                                  </button>
+                                  {!isReadOnlyRole && (
+                                    <button
+                                      className="btn btn-primary btn-sm"
+                                      style={{ flex: 1, padding: "4px 0", fontSize: "11px", justifyContent: "center" }}
+                                      onClick={() => { setSelectedCandidateForImpact(c); setOverrideConsultantId(c.id); setAssignmentImpactModalOpen(true); }}
+                                    >
+                                      Assign
+                                    </button>
+                                  )}
                                 </div>
                               </div>
 
@@ -5748,7 +5795,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                     <label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>Select Uncompleted Task</label>
                     {(() => {
                       const projectTasks = getFlatTasks(data?.tasks).filter(
-                        (t: any) => t.project === estProjectId && t.status !== "done"
+                        (t: any) => t.project === estProjectId && t.status !== "done" && (user?.role !== "consultant" || t.assignee === user.id || t.assigneeId === user.id)
                       );
                       if (projectTasks.length === 0) {
                         return (
@@ -5838,9 +5885,11 @@ Output ONLY the JSON array. Do not include markdown formats.`;
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveModal(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={estLoading || !estTaskId}>
-                    {estLoading ? "Analyzing Project Context..." : "Run AI Estimate"}
-                  </button>
+                  {!isReadOnlyRole && (
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={estLoading || !estTaskId}>
+                      {estLoading ? "Analyzing Project Context..." : "Run AI Estimate"}
+                    </button>
+                  )}
                 </div>
               </form>
             ) : (
@@ -6005,7 +6054,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                     <label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>Select Task</label>
                     {(() => {
                       const projectTasks = getFlatTasks(data?.tasks).filter(
-                        (t: any) => t.project === predProjectId && t.status !== "done"
+                        (t: any) => t.project === predProjectId && t.status !== "done" && (user?.role !== "consultant" || t.assignee === user.id || t.assigneeId === user.id)
                       );
                       if (projectTasks.length === 0) {
                         return (
@@ -6084,9 +6133,11 @@ Output ONLY the JSON array. Do not include markdown formats.`;
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveModal(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={predLoading || !predTaskId}>
-                    {predLoading ? "Running Date Calculations..." : "Predict Completion Date"}
-                  </button>
+                  {!isReadOnlyRole && (
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={predLoading || !predTaskId}>
+                      {predLoading ? "Running Date Calculations..." : "Predict Completion Date"}
+                    </button>
+                  )}
                 </div>
               </form>
             ) : (
@@ -6179,7 +6230,9 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}><label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>Milestone Budget (₹)</label><input type="number" min="0" className="input" value={billingBudget} onChange={(e) => setBillingBudget(e.target.value)} placeholder="e.g. 500000" /></div>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setActiveModal(null)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary btn-sm" disabled={billingLoading}>{billingLoading ? "Analyzing..." : "Generate Insight"}</button>
+                  {!isReadOnlyRole && (
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={billingLoading}>{billingLoading ? "Analyzing..." : "Generate Insight"}</button>
+                  )}
                 </div>
               </form>
             ) : (
