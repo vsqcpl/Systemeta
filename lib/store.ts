@@ -3122,8 +3122,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newExpense),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to submit expense");
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || "Failed to submit expense");
+        }
         return res.json();
       })
       .then((expense) => {

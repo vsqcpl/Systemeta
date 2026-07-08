@@ -52,8 +52,8 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 });
 
 function evaluateExpensePolicy(expense: any): string {
-  const { category, amount, receiptUrl, modeOfTransport, calculatedDistance } = expense;
-  const isOutsideCity = category === "Travel" || category === "Accommodation"; 
+  const { category, amount, receiptUrl, modeOfTransport, calculatedDistance, isOutsideCityMeal } = expense;
+  const isOutsideCity = category === "Travel" || category === "Accommodation" || !!isOutsideCityMeal; 
   const hasBill = !!receiptUrl;
 
   if (category === "Accommodation") {
@@ -123,7 +123,7 @@ function evaluateExpensePolicy(expense: any): string {
 // POST /api/expenses - Submit expense
 router.post("/", async (req: AuthenticatedRequest, res) => {
   try {
-    const { project, category, description, amount, currency, date, receiptUrl, modeOfTransport, fromLocation, toLocation, calculatedDistance } = req.body;
+    const { project, category, description, amount, currency, date, receiptUrl, modeOfTransport, fromLocation, toLocation, calculatedDistance, isOutsideCity } = req.body;
 
     if (!project || !category || !description || !amount || !currency || !date) {
       return res.status(400).json({ message: "All fields are required" });
@@ -138,12 +138,18 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
     const parsedDist = calculatedDistance ? parseFloat(calculatedDistance) : null;
     let finalDescription = description;
     
+    // Prefix description if it's an outside city meal so it's visible in UI
+    if (category === "Meals" && isOutsideCity) {
+      finalDescription = "[Outside City] " + finalDescription;
+    }
+    
     let autoStatus = evaluateExpensePolicy({
       category,
       amount: parsedAmount,
       receiptUrl: receiptValue,
       modeOfTransport,
-      calculatedDistance: parsedDist
+      calculatedDistance: parsedDist,
+      isOutsideCityMeal: isOutsideCity
     });
 
     if (receiptValue) {

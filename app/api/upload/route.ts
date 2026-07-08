@@ -42,11 +42,24 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const supabase = getSupabaseAdmin();
-
-    // Generate unique filename: <folder>/<timestamp>-<random>.<ext>
     const ext = file.name.split(".").pop() || "bin";
     const uniqueName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // If Supabase is not configured, mock the upload for local testing
+    if (!supabaseUrl || !supabaseServiceKey) {
+      console.warn("Supabase not configured. Mocking upload for local testing.");
+      return NextResponse.json({
+        success: true,
+        path: uniqueName,
+        url: `https://dummyimage.com/600x400/cccccc/000000.png&text=Mock+Receipt+${Date.now()}`,
+        fileName: file.name,
+        fileSize: formatFileSize(file.size),
+        fileType: file.type,
+        mocked: true
+      });
+    }
+
+    const supabase = getSupabaseAdmin();
 
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);

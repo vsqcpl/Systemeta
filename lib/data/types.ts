@@ -148,6 +148,7 @@ export interface Expense {
   fromLocation?: string;
   toLocation?: string;
   calculatedDistance?: number | null;
+  isOutsideCity?: boolean;
 }
 
 export type InvoiceStatus = 'draft' | 'outstanding' | 'paid' | 'overdue';

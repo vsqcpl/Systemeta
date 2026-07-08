@@ -172,6 +172,7 @@ export default function ExpensesPage() {
     fromLocation: "",
     toLocation: "",
     calculatedDistance: null as number | null,
+    mealLocation: "residence",
   });
 
   const [fromQuery, setFromQuery] = useState("");
@@ -350,6 +351,7 @@ export default function ExpensesPage() {
       fromLocation: "",
       toLocation: "",
       calculatedDistance: null,
+      mealLocation: "residence",
     });
     setFromQuery("");
     setToQuery("");
@@ -378,6 +380,7 @@ export default function ExpensesPage() {
       fromLocation: newExpense.fromLocation || undefined,
       toLocation: newExpense.toLocation || undefined,
       calculatedDistance: newExpense.calculatedDistance ?? undefined,
+      isOutsideCity: newExpense.category === "Meals" ? newExpense.mealLocation === "outside" : undefined,
     });
 
     // Reset Form
@@ -1648,6 +1651,20 @@ export default function ExpensesPage() {
                   style={{ padding: "10px", borderRadius: "6px" }}
                 />
               </div>
+
+              {newExpense.category === "Meals" && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "12px" }}>
+                  <select
+                    value={newExpense.mealLocation}
+                    onChange={(e) => handleFormChange("mealLocation", e.target.value)}
+                    className="select"
+                    style={{ padding: "10px", borderRadius: "6px" }}
+                  >
+                    <option value="residence">{t("Residence City")}</option>
+                    <option value="outside">{t("Outside City")}</option>
+                  </select>
+                </div>
+              )}
 
               {/* Travel Details Section */}
               {(newExpense.category === "Travel" || newExpense.category === "Transport") && (
