@@ -51,73 +51,73 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-function evaluateExpensePolicy(expense: any): string {
+function evaluateExpensePolicy(expense: any): { status: string, reason?: string } {
   const { category, amount, receiptUrl, modeOfTransport, calculatedDistance, isOutsideCityMeal } = expense;
   const isOutsideCity = category === "Travel" || category === "Accommodation" || !!isOutsideCityMeal; 
   const hasBill = !!receiptUrl;
 
   if (category === "Accommodation") {
-    return amount <= 1500 ? "approved" : "pending";
+    return amount <= 1500 ? { status: "approved" } : { status: "pending", reason: "Exceeds auto-approval limit of ₹1500 for Accommodation." };
   }
 
   if (category === "Meals") {
     if (isOutsideCity) {
-      if (hasBill) return amount <= 600 ? "approved" : "rejected";
-      return amount <= 300 ? "approved" : "rejected";
+      if (hasBill) return amount <= 600 ? { status: "approved" } : { status: "rejected", reason: "Meals outside city with bill exceeded ₹600 limit." };
+      return amount <= 300 ? { status: "approved" } : { status: "rejected", reason: "Meals outside city without bill exceeded ₹300 limit." };
     } else {
-      if (hasBill) return amount <= 200 ? "approved" : "rejected";
-      return amount <= 100 ? "approved" : "rejected";
+      if (hasBill) return amount <= 200 ? { status: "approved" } : { status: "rejected", reason: "Meals inside city with bill exceeded ₹200 limit." };
+      return amount <= 100 ? { status: "approved" } : { status: "rejected", reason: "Meals inside city without bill exceeded ₹100 limit." };
     }
   }
 
   if (category === "Travel" || category === "Transport") {
-    if (modeOfTransport === "Flight") return "pending";
+    if (modeOfTransport === "Flight") return { status: "pending", reason: "Flight travel requires manual approval." };
 
     if (modeOfTransport === "Train" || modeOfTransport === "Metro" || modeOfTransport === "Bus") {
-      return hasBill ? "approved" : "rejected";
+      return hasBill ? { status: "approved" } : { status: "rejected", reason: `${modeOfTransport} travel requires a receipt.` };
     }
 
     if (modeOfTransport === "Auto") {
       if (isOutsideCity) {
-        if (amount <= 150) return "approved";
-        if (amount <= 300) return "pending";
-        return "rejected";
+        if (amount <= 150) return { status: "approved" };
+        if (amount <= 300) return { status: "pending", reason: "Auto outside city exceeded ₹150 auto-approval limit." };
+        return { status: "rejected", reason: "Auto outside city exceeded maximum ₹300 limit." };
       } else {
-        if (amount <= 100) return "approved";
-        if (amount <= 150) return "pending";
-        return "rejected";
+        if (amount <= 100) return { status: "approved" };
+        if (amount <= 150) return { status: "pending", reason: "Auto inside city exceeded ₹100 auto-approval limit." };
+        return { status: "rejected", reason: "Auto inside city exceeded maximum ₹150 limit." };
       }
     }
 
     if (modeOfTransport === "Cab") {
       if (hasBill) {
-        if (amount <= 300) return "approved";
-        return "pending";
+        if (amount <= 300) return { status: "approved" };
+        return { status: "pending", reason: "Cab with bill exceeded ₹300 auto-approval limit." };
       } else {
         if (isOutsideCity) {
-          if (amount <= 150) return "approved";
-          if (amount <= 300) return "pending";
-          return "rejected";
+          if (amount <= 150) return { status: "approved" };
+          if (amount <= 300) return { status: "pending", reason: "Cab outside city without bill exceeded ₹150 auto-approval limit." };
+          return { status: "rejected", reason: "Cab outside city without bill exceeded maximum ₹300 limit." };
         } else {
-          if (amount <= 100) return "approved";
-          if (amount <= 150) return "pending";
-          return "rejected";
+          if (amount <= 100) return { status: "approved" };
+          if (amount <= 150) return { status: "pending", reason: "Cab inside city without bill exceeded ₹100 auto-approval limit." };
+          return { status: "rejected", reason: "Cab inside city without bill exceeded maximum ₹150 limit." };
         }
       }
     }
 
     if (modeOfTransport === "Bike") {
-      if (!calculatedDistance) return "rejected";
-      return amount <= (calculatedDistance * 4) ? "approved" : "rejected";
+      if (!calculatedDistance) return { status: "rejected", reason: "Calculated distance missing for Bike travel." };
+      return amount <= (calculatedDistance * 4) ? { status: "approved" } : { status: "rejected", reason: "Bike expense exceeds standard rate of ₹4/km." };
     }
 
     if (modeOfTransport === "Car") {
-      if (!calculatedDistance) return "rejected";
-      return amount <= (calculatedDistance * 8) ? "approved" : "rejected";
+      if (!calculatedDistance) return { status: "rejected", reason: "Calculated distance missing for Car travel." };
+      return amount <= (calculatedDistance * 8) ? { status: "approved" } : { status: "rejected", reason: "Car expense exceeds standard rate of ₹8/km." };
     }
   }
 
-  return "pending";
+  return { status: "pending" };
 }
 
 // POST /api/expenses - Submit expense
@@ -129,9 +129,16 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    const lastExpense = await prisma.expense.findFirst({ orderBy: { id: "desc" } });
-    const lastNum = lastExpense ? parseInt(lastExpense.id.replace("E", "") || "0", 10) : 0;
-    const nextId = "E" + String(lastNum + 1).padStart(3, "0");
+    const allExpenses = await prisma.expense.findMany({ select: { id: true } });
+    let maxNum = 0;
+    for (const exp of allExpenses) {
+      const match = exp.id.match(/\d+/);
+      if (match) {
+        const num = parseInt(match[0], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    }
+    const nextId = "E" + String(maxNum + 1).padStart(3, "0");
 
     const receiptValue = receiptUrl ? receiptUrl : null;
     const parsedAmount = parseFloat(amount);
@@ -143,7 +150,7 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       finalDescription = "[Outside City] " + finalDescription;
     }
     
-    let autoStatus = evaluateExpensePolicy({
+    const policyResult = evaluateExpensePolicy({
       category,
       amount: parsedAmount,
       receiptUrl: receiptValue,
@@ -152,11 +159,22 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       isOutsideCityMeal: isOutsideCity
     });
 
+    let autoStatus = policyResult.status;
+    if (policyResult.reason) {
+      finalDescription = `[Policy: ${policyResult.reason}] ` + finalDescription;
+    }
+
     if (receiptValue) {
-      const visionResult = await callVisionService(receiptValue);
-      if (visionResult.total_amount !== null && visionResult.total_amount !== parsedAmount) {
+      const visionResult = await callVisionService(receiptValue, {
+        category,
+        amount: parsedAmount,
+        description,
+        date
+      });
+
+      if (!visionResult.is_valid) {
         autoStatus = "rejected";
-        finalDescription = `[OCR DISCREPANCY: Claimed ₹${parsedAmount}, Receipt reads ₹${visionResult.total_amount}] ` + description;
+        finalDescription = `[AI Rejected: ${visionResult.reason || "The receipt does not match the entered details."}] ` + finalDescription;
       }
     }
 

@@ -45,13 +45,19 @@ export async function POST(req: NextRequest) {
     const ext = file.name.split(".").pop() || "bin";
     const uniqueName = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
 
-    // If Supabase is not configured, mock the upload for local testing
+    // If Supabase is not configured, mock the upload for local testing by returning the base64 image
     if (!supabaseUrl || !supabaseServiceKey) {
-      console.warn("Supabase not configured. Mocking upload for local testing.");
+      console.warn("Supabase not configured. Mocking upload for local testing with base64.");
+      
+      const arrayBuffer = await file.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+      const base64Str = buffer.toString("base64");
+      const dataUrl = `data:${file.type};base64,${base64Str}`;
+      
       return NextResponse.json({
         success: true,
         path: uniqueName,
-        url: `https://dummyimage.com/600x400/cccccc/000000.png&text=Mock+Receipt+${Date.now()}`,
+        url: dataUrl,
         fileName: file.name,
         fileSize: formatFileSize(file.size),
         fileType: file.type,

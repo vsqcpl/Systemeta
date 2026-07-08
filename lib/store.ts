@@ -307,7 +307,7 @@ interface AppStore {
   // --- Data CRUD Actions ---
   addProject: (project: Omit<Project, "id" | "health" | "progress" | "spent" | "team">) => void;
   addTask: (task: Omit<Task, "id" | "comments"> & { col?: "todo" | "inprogress" | "review" | "done" }) => void;
-  addExpense: (expense: Omit<Expense, "id" | "status" | "receipt"> & { receiptUrl?: string }) => void;
+  addExpense: (expense: Omit<Expense, "id" | "status" | "receipt"> & { receiptUrl?: string }) => Promise<void>;
   moveTask: (taskId: string, targetCol: "todo" | "inprogress" | "review" | "done", actualCompletionDate?: string) => void;
   updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   addTaskComment: (taskId: string, text: string) => void;
@@ -3116,8 +3116,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
       });
   },
 
-  addExpense: (newExpense) => {
-    fetch("/api/expenses", {
+  addExpense: async (newExpense) => {
+    return fetch("/api/expenses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(newExpense),
@@ -3131,7 +3131,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .then((expense) => {
         useAppStore.getState().showToast(`Expense claim submitted.`, "success");
-        fetch("/api/expenses")
+        return fetch("/api/expenses")
           .then((r) => r.json())
           .then((expenses) => {
             set((state) => ({
@@ -3143,7 +3143,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
           });
       })
       .catch((err) => {
-        useAppStore.getState().showToast("Error submitting expense: " + err.message, "danger");
+        if (err.message.startsWith("OCR Discrepancy:")) {
+          useAppStore.getState().showToast(err.message, "warning");
+        } else {
+          useAppStore.getState().showToast("Error submitting expense: " + err.message, "danger");
+        }
+        throw err;
       });
   },
 

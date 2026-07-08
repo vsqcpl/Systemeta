@@ -361,32 +361,45 @@ export default function ExpensesPage() {
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const handleSubmitExpense = () => {
+  const handleSubmitExpense = async () => {
     if (!newExpense.description || !newExpense.amount) {
       showToast("Please fill in description and amount.", "warning");
       return;
     }
 
-    addExpense({
-      description: newExpense.description,
-      amount: Number(newExpense.amount),
-      consultant: newExpense.consultant,
-      project: newExpense.project,
-      category: newExpense.category as ExpenseCategory,
-      date: newExpense.date,
-      currency: "INR",
-      receiptUrl: receipt?.supabaseUrl,
-      modeOfTransport: newExpense.modeOfTransport || undefined,
-      fromLocation: newExpense.fromLocation || undefined,
-      toLocation: newExpense.toLocation || undefined,
-      calculatedDistance: newExpense.calculatedDistance ?? undefined,
-      isOutsideCity: newExpense.category === "Meals" ? newExpense.mealLocation === "outside" : undefined,
-    });
+    try {
+      const finalProject = newExpense.project || visibleProjects[0]?.id;
+      const finalConsultant = newExpense.consultant || (user?.role === "super_admin" ? data.consultants[0]?.id : user?.id);
 
-    // Reset Form
-    resetExpenseForm();
-    setShowForm(false);
-    showToast("Expense submitted successfully.", "success");
+      if (!finalProject || !finalConsultant) {
+        showToast("Project and Consultant are required.", "warning");
+        return;
+      }
+
+      await addExpense({
+        description: newExpense.description,
+        amount: Number(newExpense.amount),
+        consultant: finalConsultant,
+        project: finalProject,
+        category: newExpense.category as ExpenseCategory,
+        date: newExpense.date,
+        currency: "INR",
+        receiptUrl: receipt?.supabaseUrl,
+        modeOfTransport: newExpense.modeOfTransport || undefined,
+        fromLocation: newExpense.fromLocation || undefined,
+        toLocation: newExpense.toLocation || undefined,
+        calculatedDistance: newExpense.calculatedDistance ?? undefined,
+        isOutsideCity: newExpense.category === "Meals" ? newExpense.mealLocation === "outside" : undefined,
+      });
+
+      // Reset Form only if successful
+      resetExpenseForm();
+      setShowForm(false);
+      showToast("Expense submitted successfully.", "success");
+    } catch (error) {
+      // The store already shows the toast for the error. We just prevent form close.
+      console.warn("Expense submission failed:", error);
+    }
   };
 
   const handleRemoveReceipt = () => {
