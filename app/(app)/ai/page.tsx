@@ -6003,7 +6003,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
         <div className="modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setActiveModal(null)}>
           <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(680px, 95%)", maxHeight: "90vh", overflowY: "auto", boxShadow: "var(--shadow-xl)", border: "1px solid var(--border-default)", animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)" }} onClick={(e) => e.stopPropagation()}>
             <h2 style={{ marginBottom: "4px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>Predict Task Completion Deadline</h2>
-            <p style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "20px" }}>Hybrid rule analyzer + leave calendar conflict engine</p>
+
             
             {!predResult ? (
               <form onSubmit={handlePredictDeadline} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
