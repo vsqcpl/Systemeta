@@ -4,11 +4,20 @@ import { VSQCData, Project, Task, TaskComment, LeaveRequest, Expense, Notificati
 // Intercept all fetch calls to inject CSRF tokens for state-changing endpoints
 if (typeof window !== "undefined") {
   const originalFetch = window.fetch;
-  window.fetch = async (input, init) => {
-    const url = typeof input === "string" ? input : input.url;
+  window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    let url = "";
+    if (typeof input === "string") {
+      url = input;
+    } else if (input instanceof URL) {
+      url = input.href;
+    } else if (input && typeof input === "object" && "url" in input) {
+      url = (input as any).url;
+    }
+
     const isApiCall = url.startsWith("/api/") || url.includes("/api/");
     const method = init?.method?.toUpperCase() || "GET";
     
+    let finalInit = init;
     if (isApiCall && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
       if (!url.includes("/api/auth/csrf-token")) {
         const win = window as any;
@@ -23,16 +32,18 @@ if (typeof window !== "undefined") {
         }
         
         if (win.__csrfToken) {
-          init = init || {};
-          init.headers = {
-            ...init.headers,
-            "X-CSRF-Token": win.__csrfToken,
+          finalInit = {
+            ...init,
+            headers: {
+              ...(init?.headers || {}),
+              "X-CSRF-Token": win.__csrfToken,
+            }
           };
         }
       }
     }
     
-    return originalFetch(input, init);
+    return originalFetch(input, finalInit);
   };
 }
 import { INITIAL_VSQC_DATA } from './data/mockData';
