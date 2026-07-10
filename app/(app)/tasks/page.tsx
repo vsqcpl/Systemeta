@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { Task } from "@/lib/data/types";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,6 +13,7 @@ import {
   IconClose,
 } from "@/components/ui/Icons";
 import { Sparkles } from "lucide-react";
+import AIPageComponent from "@/components/layout/AIPageComponent";
 import {
   DndContext,
   DragEndEvent,
@@ -253,13 +255,16 @@ function TaskDrawer({
   col,
   consultants,
   onClose,
+  onOpenAiInline,
 }: {
   task: Task;
   col: TaskCol;
   consultants: { id: string; name: string; avatar: string; color: string }[];
   onClose: () => void;
+  onOpenAiInline: (view: "delay-dashboard" | "assignment-dashboard" | "clash-dashboard" | null, modal: "estimate-tasks" | null, taskId?: string | null) => void;
 }) {
   const { t } = useTranslation();
+  const router = useRouter();
   const c = consultants.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
   const addTaskComment = useAppStore((state) => state.addTaskComment);
   const addSubtaskToTask = useAppStore((state) => state.addSubtaskToTask);
@@ -669,6 +674,116 @@ function TaskDrawer({
             ))}
           </div>
         )}
+
+        {/* Contextual AI recommendations */}
+        {user && ["super_admin", "project_manager"].includes(user.role) && (
+          <div style={{ 
+            marginTop: "24px", 
+            paddingTop: "16px", 
+            borderTop: "1px solid var(--border-subtle)", 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: "12px" 
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <Sparkles size={13} style={{ color: "#2563eb" }} />
+              <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-primary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                {t("AI Suggestions & Copilot")}
+              </span>
+            </div>
+
+            {/* Recommendation 1: Time Estimation */}
+            <div style={{
+              background: "linear-gradient(135deg, rgba(37, 99, 235, 0.04) 0%, rgba(20, 184, 166, 0.04) 100%)",
+              border: "1px solid rgba(37, 99, 235, 0.12)",
+              borderRadius: "8px",
+              padding: "12px",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>
+                  {t("Need help estimating this task?")}
+                </span>
+                <span className="badge badge-brand" style={{ fontSize: "9px", padding: "1px 4px" }}>{t("AI Est")}</span>
+              </div>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", margin: "0 0 10px 0", lineHeight: "1.3" }}>
+                {t("Estimate task duration, view confidence level, and predict completion dates using central models.")}
+              </p>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button 
+                  className="btn btn-primary btn-sm" 
+                  onClick={() => {
+                    onClose();
+                    onOpenAiInline(null, "estimate-tasks", task.id);
+                  }}
+                  style={{ flex: 1, fontSize: "10px", padding: "3px 6px", height: "26px", justifyContent: "center" }}
+                >
+                  {t("Estimate Task Duration")}
+                </button>
+              </div>
+            </div>
+
+            {/* Recommendation 2: Delay Analysis */}
+            <div style={{
+              background: "linear-gradient(135deg, rgba(224, 155, 45, 0.04) 0%, rgba(20, 184, 166, 0.04) 100%)",
+              border: "1px solid rgba(224, 155, 45, 0.12)",
+              borderRadius: "8px",
+              padding: "12px",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>
+                  {t("Analyze Delay Risk")}
+                </span>
+                <span className="badge badge-warning" style={{ fontSize: "9px", padding: "1px 4px" }}>{t("AI Risk")}</span>
+              </div>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", margin: "0 0 10px 0", lineHeight: "1.3" }}>
+                {t("Scan delay risk level, isolate dependency root causes, and view suggested fixes.")}
+              </p>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button 
+                  className="btn btn-primary btn-sm" 
+                  onClick={() => {
+                    onClose();
+                    onOpenAiInline("delay-dashboard", null, task.id);
+                  }}
+                  style={{ flex: 1, fontSize: "10px", padding: "3px 6px", height: "26px", justifyContent: "center" }}
+                >
+                  {t("Analyze Delay Risk")}
+                </button>
+              </div>
+            </div>
+
+            {/* Recommendation 3: Resource Assigner */}
+            <div style={{
+              background: "linear-gradient(135deg, rgba(99, 102, 241, 0.04) 0%, rgba(20, 184, 166, 0.04) 100%)",
+              border: "1px solid rgba(99, 102, 241, 0.12)",
+              borderRadius: "8px",
+              padding: "12px",
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "4px" }}>
+                <span style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)" }}>
+                  {t("Assign Best Resource using AI")}
+                </span>
+                <span className="badge badge-success" style={{ fontSize: "9px", padding: "1px 4px" }}>{t("AI Match")}</span>
+              </div>
+              <p style={{ fontSize: "11px", color: "var(--text-secondary)", margin: "0 0 10px 0", lineHeight: "1.3" }}>
+                {t("Recommend optimal assignee based on skills profile, workload balance, and reasoning.")}
+              </p>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button 
+                  className="btn btn-primary btn-sm" 
+                  onClick={() => {
+                    onClose();
+                    onOpenAiInline("assignment-dashboard", null, task.id);
+                  }}
+                  style={{ flex: 1, fontSize: "10px", padding: "3px 6px", height: "26px", justifyContent: "center" }}
+                >
+                  {t("Assign Best Resource")}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid var(--border-subtle)" }}>
           <textarea
             className="input"
@@ -685,6 +800,31 @@ function TaskDrawer({
 }
 
 export default function TasksPage() {
+  const router = useRouter();
+  const [showAiCopilot, setShowAiCopilot] = useState(true);
+  const [embeddedAiView, setEmbeddedAiView] = useState<"delay-dashboard" | "assignment-dashboard" | "clash-dashboard" | null>(null);
+  const [embeddedAiModal, setEmbeddedAiModal] = useState<"estimate-tasks" | null>(null);
+  const [embeddedAiTaskId, setEmbeddedAiTaskId] = useState<string | null>(null);
+  const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const [prevSidebarState, setPrevSidebarState] = useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    if (embeddedAiView || embeddedAiModal) {
+      if (prevSidebarState === null) {
+        setPrevSidebarState(sidebarCollapsed);
+      }
+      setSidebarCollapsed(true);
+      document.body.style.overflow = "hidden";
+    } else if (embeddedAiView === null && embeddedAiModal === null && prevSidebarState !== null) {
+      setSidebarCollapsed(prevSidebarState);
+      setPrevSidebarState(null);
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [embeddedAiView, embeddedAiModal, setSidebarCollapsed, sidebarCollapsed, prevSidebarState]);
   const data = useAppStore((state) => state.data);
   const { t } = useTranslation();
   const { user } = useAuth();
@@ -696,6 +836,17 @@ export default function TasksPage() {
   const [activeId, setActiveId] = useState<string | null>(null);
   const [drawerTask, setDrawerTask] = useState<{ task: Task; col: TaskCol } | null>(null);
   const [selectedProjectFilter, setSelectedProjectFilter] = useState("all");
+
+  React.useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'close-ai-modal') {
+        setEmbeddedAiView(null);
+        setEmbeddedAiModal(null);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   // Add Task Modal State
   const [showTaskModal, setShowTaskModal] = useState(false);
@@ -1028,6 +1179,93 @@ export default function TasksPage() {
         </div>
       </div>
 
+      {/* AI Recommendation Center */}
+      {showAiCopilot && user && ["super_admin", "project_manager"].includes(user.role) && (
+        <div style={{
+          background: "linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%)",
+          border: "1px solid rgba(37, 99, 235, 0.15)",
+          borderRadius: "12px",
+          padding: "16px",
+          marginBottom: "20px",
+          boxShadow: "0 4px 20px -2px rgba(37, 99, 235, 0.05)",
+          backdropFilter: "blur(8px)",
+          position: "relative",
+          animation: "slideDown 0.3s ease-out"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "6px", background: "linear-gradient(135deg, #2563eb, #14b8a6)", color: "white" }}>
+                <Sparkles size={14} />
+              </span>
+              <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{t("AI Copilot Recommendations")}</span>
+              <span className="badge badge-brand" style={{ fontSize: "10px", padding: "2px 6px" }}>{t("Recommended")}</span>
+            </div>
+            <button 
+              className="btn btn-ghost btn-sm" 
+              onClick={() => setShowAiCopilot(false)}
+              style={{ padding: "2px", minWidth: "auto", minHeight: "auto", color: "var(--text-secondary)" }}
+            >
+              ×
+            </button>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+            {/* Card 1: Schedule Conflict Detector */}
+            <div style={{ background: "var(--bg-surface)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "rgba(108, 126, 199, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#6C7EC7" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  </div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{t("Detect Scheduling Conflicts")}</h4>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 12px 0", lineHeight: "1.4" }}>
+                  {t("Scan resources, detect overlapping assignments, and suggest optimized project timelines.")}
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="btn btn-primary btn-sm" onClick={() => setEmbeddedAiView("clash-dashboard")} style={{ flex: 1, fontSize: "11px", padding: "4px 8px", justifyContent: "center" }}>{t("Detect Conflicts")}</button>
+              </div>
+            </div>
+
+            {/* Card 2: Task Time Estimation */}
+            <div style={{ background: "var(--bg-surface)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "rgba(46, 134, 193, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#2E86C1" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                  </div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{t("Estimate Task Duration using AI")}</h4>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 12px 0", lineHeight: "1.4" }}>
+                  {t("Run duration estimation, assess confidence intervals, and predict deadline milestones.")}
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="btn btn-primary btn-sm" onClick={() => { setEmbeddedAiModal("estimate-tasks"); setEmbeddedAiTaskId(null); }} style={{ flex: 1, fontSize: "11px", padding: "4px 8px", justifyContent: "center" }}>{t("Estimate Task Duration")}</button>
+              </div>
+            </div>
+
+            {/* Card 3: Automated Task Assigner */}
+            <div style={{ background: "var(--bg-surface)", padding: "14px", borderRadius: "8px", border: "1px solid var(--border-subtle)", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+                  <div style={{ width: "28px", height: "28px", borderRadius: "6px", background: "rgba(99, 102, 241, 0.1)", display: "flex", alignItems: "center", justifyContent: "center", color: "#6366f1" }}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+                  </div>
+                  <h4 style={{ fontSize: "13px", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{t("Assign Best Resource using AI")}</h4>
+                </div>
+                <p style={{ fontSize: "12px", color: "var(--text-secondary)", margin: "0 0 12px 0", lineHeight: "1.4" }}>
+                  {t("Match and recommend team assignees using skill matrix matching and workload models.")}
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button className="btn btn-primary btn-sm" onClick={() => { setEmbeddedAiView("assignment-dashboard"); setEmbeddedAiTaskId(null); }} style={{ flex: 1, fontSize: "11px", padding: "4px 8px", justifyContent: "center" }}>{t("Recommend Assignee")}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {filteredAllTasks.length === 0 ? (
         <div 
           className="card" 
@@ -1223,6 +1461,11 @@ export default function TasksPage() {
             col={liveTask.col}
             consultants={data.consultants}
             onClose={() => setDrawerTask(null)}
+            onOpenAiInline={(view, modal, taskId) => {
+              setEmbeddedAiView(view);
+              setEmbeddedAiModal(modal);
+              setEmbeddedAiTaskId(taskId || null);
+            }}
           />
         );
       })()}
@@ -1751,6 +1994,66 @@ export default function TasksPage() {
                   {t("Confirm")}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {(embeddedAiView || embeddedAiModal) && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(15, 23, 42, 0.4)",
+          backdropFilter: "blur(4px)",
+          zIndex: 99999,
+          display: "flex",
+          justifyContent: "flex-end",
+        }} onClick={() => { setEmbeddedAiView(null); setEmbeddedAiModal(null); }}>
+          <div style={{
+            width: embeddedAiModal ? "min(550px, 100vw)" : "min(1200px, 100vw)",
+            height: "100vh",
+            background: "var(--bg-surface)",
+            boxShadow: "var(--shadow-2xl)",
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+            animation: "slideInRight 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 24px",
+              borderBottom: "1px solid var(--border-subtle)",
+              background: "var(--bg-card)",
+              flexShrink: 0
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "6px", background: "linear-gradient(135deg, #2563eb, #14b8a6)", color: "white" }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                </span>
+                <span style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+                  {embeddedAiModal === "estimate-tasks" && t("Task Time Estimation")}
+                  {embeddedAiView === "delay-dashboard" && t("Delay Detection & Root Cause")}
+                  {embeddedAiView === "assignment-dashboard" && t("Automated Task Assigner")}
+                  {embeddedAiView === "clash-dashboard" && t("Schedule Conflict Detector")}
+                </span>
+              </div>
+              <button 
+                className="btn btn-ghost btn-sm"
+                onClick={() => { setEmbeddedAiView(null); setEmbeddedAiModal(null); }}
+                style={{ fontSize: "18px", padding: "4px", minWidth: "auto" }}
+              >
+                ×
+              </button>
+            </div>
+            <div style={{ flex: 1, padding: "24px" }}>
+              <AIPageComponent 
+                embeddedView={embeddedAiView}
+                embeddedModal={embeddedAiModal}
+                embeddedProjectId={selectedProjectFilter !== "all" ? selectedProjectFilter : null}
+                embeddedTaskId={embeddedAiTaskId}
+                onCloseEmbedded={() => { setEmbeddedAiView(null); setEmbeddedAiModal(null); }}
+              />
             </div>
           </div>
         </div>

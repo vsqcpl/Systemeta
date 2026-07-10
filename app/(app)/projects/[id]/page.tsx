@@ -12,6 +12,7 @@ import { filterProjects } from "@/lib/dataFilters";
 import { ROLES } from "@/lib/roles";
 import ActionGuard from "@/components/guards/ActionGuard";
 import { canUseAiFeature } from "@/lib/featureFlags";
+import AIPageComponent from "@/components/layout/AIPageComponent";
 
 export default function ProjectDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -34,6 +35,27 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const pageRef = useRef<HTMLDivElement>(null);
   const currencyFormat = useAppStore((state) => state.currencyFormat);
   const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+  const [embeddedAiView, setEmbeddedAiView] = useState<"wbs-center" | null>(null);
+  const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const [prevSidebarState, setPrevSidebarState] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (embeddedAiView) {
+      if (prevSidebarState === null) {
+        setPrevSidebarState(sidebarCollapsed);
+      }
+      setSidebarCollapsed(true);
+      document.body.style.overflow = "hidden";
+    } else if (embeddedAiView === null && prevSidebarState !== null) {
+      setSidebarCollapsed(prevSidebarState);
+      setPrevSidebarState(null);
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [embeddedAiView, setSidebarCollapsed, sidebarCollapsed, prevSidebarState]);
 
   const refreshAiInsights = useCallback(async () => {
     setIsLoadingInsights(true);
@@ -63,6 +85,16 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   useEffect(() => {
     if (id) setActiveProjectId(id);
   }, [id, setActiveProjectId]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'close-ai-modal') {
+        setEmbeddedAiView(null);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   // Auto-fetch AI insights on mount if the store has none
   useEffect(() => {
@@ -276,7 +308,17 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
   return (
     <div ref={pageRef} style={{ animation: "fadeIn 0.5s ease-out" }}>
-      {/* Project Header Card */}
+      {embeddedAiView ? (
+        <div style={{ background: "var(--bg-surface)", minHeight: "100%", padding: "12px 0" }}>
+          <AIPageComponent 
+            embeddedView={embeddedAiView}
+            embeddedProjectId={p.id}
+            onCloseEmbedded={() => setEmbeddedAiView(null)}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Project Header Card */}
       <div
         style={{
           background: "var(--bg-surface)",
@@ -439,6 +481,42 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
           </div>
         </div>
       </div>
+
+      {/* project-specific AI WBS Builder recommendation */}
+      {user && ["super_admin", "project_manager"].includes(user.role) && (
+        <div style={{
+          background: "linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%)",
+          border: "1px solid rgba(37, 99, 235, 0.15)",
+          borderRadius: "12px",
+          padding: "16px",
+          marginBottom: "20px",
+          boxShadow: "0 4px 20px -2px rgba(37, 99, 235, 0.05)",
+          backdropFilter: "blur(8px)",
+          animation: "slideDown 0.3s ease-out"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "6px", background: "linear-gradient(135deg, #2563eb, #14b8a6)", color: "white" }}>
+              <Bot size={14} />
+            </span>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{t("Generate Work Breakdown Structure using AI")}</span>
+            <span className="badge badge-brand" style={{ fontSize: "10px", padding: "2px 6px" }}>{t("Recommended")}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, flex: 1, minWidth: "280px", lineHeight: "1.4" }}>
+              {t("Draft standard-aligned structures, analyze structural integrity, or re-sequence paths for this project.")}
+            </p>
+            <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+              <button 
+                className="btn btn-primary btn-sm" 
+                onClick={() => setEmbeddedAiView("wbs-center")}
+                style={{ fontSize: "12px", padding: "6px 12px" }}
+              >
+                {t("Open WBS Builder")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Layout Grid */}
       <div className="grid-7-3">
@@ -792,6 +870,8 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

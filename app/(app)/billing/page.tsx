@@ -1,14 +1,17 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { InvoicesChart } from "@/components/charts/ChartComponents";
 import { formatCurrency } from "@/lib/utils";
 import { useAuth } from "@/hooks/useAuth";
 import { filterProjects } from "@/lib/dataFilters";
 import ActionGuard from "@/components/guards/ActionGuard";
+import AIPageComponent from "@/components/layout/AIPageComponent";
 
 export default function BillingPage() {
+  const router = useRouter();
   const data = useAppStore((state) => state.data);
   const showToast = useAppStore((state) => state.showToast);
   const addInvoice = useAppStore((state) => state.addInvoice);
@@ -32,6 +35,28 @@ export default function BillingPage() {
 
   // Modal State
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [embeddedAiView, setEmbeddedAiView] = useState<"billing-dashboard" | null>(null);
+  const [embeddedAiProjId, setEmbeddedAiProjId] = useState<string | null>(null);
+  const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const [prevSidebarState, setPrevSidebarState] = useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    if (embeddedAiView) {
+      if (prevSidebarState === null) {
+        setPrevSidebarState(sidebarCollapsed);
+      }
+      setSidebarCollapsed(true);
+      document.body.style.overflow = "hidden";
+    } else if (embeddedAiView === null && prevSidebarState !== null) {
+      setSidebarCollapsed(prevSidebarState);
+      setPrevSidebarState(null);
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [embeddedAiView, setSidebarCollapsed, sidebarCollapsed, prevSidebarState]);
   const [clientName, setClientName] = useState("");
   const [project, setProject] = useState("");
   const [invoiceDate, setInvoiceDate] = useState(() => {
@@ -56,11 +81,19 @@ export default function BillingPage() {
         setShowInvoiceModal(false);
       }
     };
-    if (showInvoiceModal) {
-      window.addEventListener("keydown", handleKeyDown);
-    }
+    window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showInvoiceModal]);
+  }, []);
+
+  React.useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'close-ai-modal') {
+        setEmbeddedAiView(null);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   const handleGenerateInvoice = (e: React.FormEvent) => {
     e.preventDefault();
@@ -292,7 +325,17 @@ export default function BillingPage() {
 
   return (
     <div style={{ animation: "fadeIn 0.5s ease-out" }}>
-      {/* Page Header */}
+      {embeddedAiView ? (
+        <div style={{ background: "var(--bg-surface)", minHeight: "100%", padding: "12px 0" }}>
+          <AIPageComponent 
+            embeddedView={embeddedAiView}
+            embeddedProjectId={embeddedAiProjId}
+            onCloseEmbedded={() => setEmbeddedAiView(null)}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Page Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("Billing & Finance")}</h1>
@@ -379,6 +422,46 @@ export default function BillingPage() {
           <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>{t("Past payment deadline")}</div>
         </div>
       </div>
+
+      {/* AI Billing Insights Recommendation Widget */}
+      {user && ["super_admin", "project_manager"].includes(user.role) && (
+        <div style={{
+          background: "linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(37, 99, 235, 0.05) 100%)",
+          border: "1px solid rgba(20, 184, 166, 0.2)",
+          borderRadius: "12px",
+          padding: "16px",
+          marginBottom: "24px",
+          boxShadow: "0 4px 20px -2px rgba(20, 184, 166, 0.05)",
+          backdropFilter: "blur(8px)",
+          animation: "slideDown 0.3s ease-out"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "6px", background: "linear-gradient(135deg, #14b8a6, #2563eb)", color: "white" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            </span>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{t("Analyze Billing Readiness using AI")}</span>
+            <span className="badge badge-brand" style={{ fontSize: "10px", padding: "2px 6px" }}>{t("AI Detected billing insights are available")}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, flex: 1, minWidth: "280px", lineHeight: "1.4" }}>
+              {t("Link milestones to task completion, run schedule variance analysis, and generate statistical revenue forecasts automatically.")}
+            </p>
+            <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+              <button 
+                className="btn btn-primary btn-sm" 
+                onClick={() => {
+                  const firstProj = visibleProjects[0]?.id || "";
+                  setEmbeddedAiProjId(firstProj);
+                  setEmbeddedAiView("billing-dashboard");
+                }}
+                style={{ fontSize: "12px", padding: "6px 12px" }}
+              >
+                {t("Open Billing AI")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Revenue & Collections Chart Card */}
       <div className="card mb-4">
@@ -761,6 +844,8 @@ export default function BillingPage() {
             </form>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
   );

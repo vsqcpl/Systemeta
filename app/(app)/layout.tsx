@@ -28,7 +28,14 @@ export default function AppLayout({
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const [mounted, setMounted] = useState(false);
   const [resolvedModule, setResolvedModule] = useState<string | null>(null);
-
+  const [isInline, setIsInline] = useState(false);
+ 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setIsInline(window.location.search.includes("inline=true"));
+    }
+  }, [pathname]);
+ 
   const { user } = useAuth();
   const isClientContact = user?.role === "client_contact" || user?.role === "Client Contact";
 
@@ -156,6 +163,43 @@ export default function AppLayout({
     );
   }
 
+
+  if (isInline) {
+    return (
+      <div style={{ display: "flex", height: "100vh", overflow: "hidden", position: "relative", background: "transparent" }}>
+        <style dangerouslySetInnerHTML={{ __html: `
+          .modal-overlay {
+            background: transparent !important;
+            backdrop-filter: none !important;
+          }
+          .modal-content {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+            border: 1px solid var(--border-default) !important;
+            margin: auto !important;
+          }
+          .page-header, .page-title, h1.page-title {
+            display: none !important;
+          }
+          .page-content, .screen {
+            padding: 0 !important;
+            margin: 0 !important;
+            height: 100% !important;
+            background: transparent !important;
+          }
+        ` }} />
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh" }}>
+          <div className="page-content" id="page-content" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 1, height: "100%", padding: 0 }}>
+            <div className="screen">
+              <RouteGuard screenKey={getScreenKey(pathname)}>
+                {children}
+              </RouteGuard>
+            </div>
+          </div>
+        </div>
+        <ToastContainer />
+      </div>
+    );
+  }
 
   return (
     <div style={{ display: "flex", height: "100vh", overflow: "hidden", position: "relative" }}>

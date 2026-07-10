@@ -9,7 +9,8 @@ import ActionGuard from "@/components/guards/ActionGuard";
 import { formatCurrency } from "@/lib/utils";
 import { ProjectBudgetChart } from "@/components/charts/ChartComponents";
 import { Project, ProjectStatus, ProjectPriority } from "@/lib/data/types";
-import { FolderOpen, MoreHorizontal } from "lucide-react";
+import { FolderOpen, MoreHorizontal, FolderPlus } from "lucide-react";
+import AIPageComponent from "@/components/layout/AIPageComponent";
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -38,6 +39,29 @@ export default function ProjectsPage() {
   // Local filter preferences (prevents recursive renders/input focus loss -> Bug #11 Fix)
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [embeddedAiView, setEmbeddedAiView] = useState<"wbs-center" | null>(null);
+  const [embeddedAiProjId, setEmbeddedAiProjId] = useState<string | null>(null);
+  const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+  const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
+  const [prevSidebarState, setPrevSidebarState] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (embeddedAiView) {
+      if (prevSidebarState === null) {
+        setPrevSidebarState(sidebarCollapsed);
+      }
+      setSidebarCollapsed(true);
+      document.body.style.overflow = "hidden";
+    } else if (embeddedAiView === null && prevSidebarState !== null) {
+      setSidebarCollapsed(prevSidebarState);
+      setPrevSidebarState(null);
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [embeddedAiView, setSidebarCollapsed, sidebarCollapsed, prevSidebarState]);
+
   const [filterType, setFilterType] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
   const [showModal, setShowModal] = useState(false);
@@ -51,12 +75,21 @@ export default function ProjectsPage() {
   const [npManager, setNpManager] = useState("Super Admin");
   const [npPriority, setNpPriority] = useState<ProjectPriority>("medium");
 
-  // Sync default client name on load or list updates
   useEffect(() => {
     if (clientNames.length > 0 && !npClient) {
       setNpClient(clientNames[0]);
     }
   }, [clientNames, npClient]);
+
+  useEffect(() => {
+    const handleMessage = (e: MessageEvent) => {
+      if (e.data && e.data.type === 'close-ai-modal') {
+        setEmbeddedAiView(null);
+      }
+    };
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   const projectTypes = Array.from(new Set(visibleProjects.map((p) => p.type)));
   const managerNames = Array.from(
@@ -296,7 +329,17 @@ export default function ProjectsPage() {
   return (
     <div ref={portfolioRef}>
     <div style={{ animation: "fadeIn 0.5s ease-out" }}>
-      {/* Header */}
+      {embeddedAiView ? (
+        <div style={{ background: "var(--bg-surface)", minHeight: "100%", padding: "12px 0" }}>
+          <AIPageComponent 
+            embeddedView={embeddedAiView}
+            embeddedProjectId={embeddedAiProjId}
+            onCloseEmbedded={() => setEmbeddedAiView(null)}
+          />
+        </div>
+      ) : (
+        <>
+          {/* Header */}
       <div className="page-header" style={{ flexWrap: "wrap", gap: "12px" }}>
         <div>
           <h1 className="page-title">
@@ -442,6 +485,42 @@ export default function ProjectsPage() {
         {renderMiniStat("Avg. Progress", avgProgressStr, "var(--text-primary)")}
         {renderMiniStat("At Risk", atRiskStr, "#E24B4A")}
       </div>
+
+      {/* AI WBS Builder Recommendation Widget */}
+      {user && ["super_admin", "project_manager"].includes(user.role) && (
+        <div style={{
+          background: "linear-gradient(135deg, rgba(37, 99, 235, 0.05) 0%, rgba(20, 184, 166, 0.05) 100%)",
+          border: "1px solid rgba(37, 99, 235, 0.15)",
+          borderRadius: "12px",
+          padding: "16px",
+          marginBottom: "24px",
+          boxShadow: "0 4px 20px -2px rgba(37, 99, 235, 0.05)",
+          backdropFilter: "blur(8px)",
+          animation: "slideDown 0.3s ease-out"
+        }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
+            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "24px", height: "24px", borderRadius: "6px", background: "linear-gradient(135deg, #2563eb, #14b8a6)", color: "white" }}>
+              <FolderPlus size={14} />
+            </span>
+            <span style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>{t("Generate Work Breakdown Structure using AI")}</span>
+            <span className="badge badge-brand" style={{ fontSize: "10px", padding: "2px 6px" }}>{t("Recommended")}</span>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "16px", flexWrap: "wrap" }}>
+            <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0, flex: 1, minWidth: "280px", lineHeight: "1.4" }}>
+              {t("Create a clean, standards-aligned WBS structure, optimize dependencies, and re-sequence paths instantly using planning models.")}
+            </p>
+            <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
+              <button 
+                className="btn btn-primary btn-sm" 
+                onClick={() => setEmbeddedAiView("wbs-center")}
+                style={{ fontSize: "12px", padding: "6px 12px" }}
+              >
+                {t("Open AI WBS Builder")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Project content */}
       {filteredProjects.length === 0 ? (
@@ -886,6 +965,8 @@ export default function ProjectsPage() {
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
     </div>
     </div>
