@@ -1,6 +1,7 @@
 import { Router, Response } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
 
 const router = Router();
 
@@ -68,17 +69,14 @@ router.post("/", async (req: AuthenticatedRequest, res: Response) => {
     const recipientEmail = recipient?.email || userId;
 
     // Log audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: isSuperAdmin ? "PERMISSION_OVERRIDE_GRANTED" : "PERMISSION_OVERRIDE_REQUESTED",
-        resource: `user:${userId}`,
-        detail: isSuperAdmin
-          ? `Emergency override '${permissionKey}' (${granted ? "grant" : "restrict"}) granted to ${recipientEmail} by ${req.user.email}. Reason: ${reason}. Expires: ${endDate}.`
-          : `Emergency override '${permissionKey}' requested for ${recipientEmail} by Project Manager ${req.user.email}. Reason: ${reason}. Expires: ${endDate}.`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: isSuperAdmin ? "PERMISSION_OVERRIDE_GRANTED" : "PERMISSION_OVERRIDE_REQUESTED",
+      resource: `user:${userId}`,
+      detail: isSuperAdmin
+        ? `Emergency override '${permissionKey}' (${granted ? "grant" : "restrict"}) granted to ${recipientEmail} by ${req.user.email}. Reason: ${reason}. Expires: ${endDate}.`
+        : `Emergency override '${permissionKey}' requested for ${recipientEmail} by Project Manager ${req.user.email}. Reason: ${reason}. Expires: ${endDate}.`,
+      ip: req.ip || "127.0.0.1",
     });
 
     return res.status(201).json(override);
@@ -153,15 +151,12 @@ router.patch("/:id", async (req: AuthenticatedRequest, res: Response) => {
     }
 
     // Log audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: auditAction,
-        resource: `user:${existingOverride.userId}`,
-        detail: auditDetail,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: auditAction,
+      resource: `user:${existingOverride.userId}`,
+      detail: auditDetail,
+      ip: req.ip || "127.0.0.1",
     });
 
     return res.json(updatedOverride);

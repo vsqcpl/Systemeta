@@ -14,7 +14,7 @@ export const auth = betterAuth({
     autoSignIn: false,
     password: {
       hash: async (password: string) => {
-        return bcrypt.hash(password, 10);
+        return bcrypt.hash(password, 12);
       },
       verify: async ({ hash, password }) => {
         return bcrypt.compare(password, hash);

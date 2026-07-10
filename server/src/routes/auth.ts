@@ -1,11 +1,29 @@
 import { Router } from "express";
 import bcrypt from "bcrypt";
+import crypto from "crypto";
 import { fromNodeHeaders } from "better-auth/node";
 import { auth } from "../lib/auth.js";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
 
 const router = Router();
+
+// GET /api/auth/csrf-token
+router.get("/csrf-token", (req, res) => {
+  const isProd = process.env.NODE_ENV === "production";
+  const cookieName = isProd ? "__Secure-csrf-token-sig" : "csrf-token-sig";
+  const token = crypto.randomBytes(32).toString("hex");
+  
+  res.cookie(cookieName, token, {
+    httpOnly: true,
+    secure: isProd,
+    sameSite: "lax",
+    path: "/"
+  });
+  
+  return res.json({ csrfToken: token });
+});
 
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
@@ -51,15 +69,12 @@ router.post("/login", async (req, res) => {
         });
 
         // Log audit
-        await prisma.auditLog.create({
-          data: {
-            timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-            userEmail: dbUser.email,
-            action: "USER_LOGIN",
-            resource: `user:${dbUser.id}`,
-            detail: "User logged in successfully",
-            ip: req.ip || "127.0.0.1",
-          },
+        await logAuditEvent({
+          userEmail: dbUser.email,
+          action: "USER_LOGIN",
+          resource: `user:${dbUser.id}`,
+          detail: "User logged in successfully",
+          ip: req.ip || "127.0.0.1",
         });
       } catch (writeErr) {
         console.warn("Could not write to database during login (Vercel read-only filesystem?):", writeErr);
@@ -158,7 +173,7 @@ router.post("/change-password", authMiddleware, async (req: AuthenticatedRequest
       });
     }
 
-    const saltRounds = 10;
+    const saltRounds = 12;
     const newHash = await bcrypt.hash(newPassword, saltRounds);
 
     // Update both local user passwordHash and Better Auth credentials password
@@ -177,15 +192,12 @@ router.post("/change-password", authMiddleware, async (req: AuthenticatedRequest
     ]);
 
     // Log audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "PASSWORD_CHANGED",
-        resource: `user:${req.user.id}`,
-        detail: "User changed password successfully",
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "PASSWORD_CHANGED",
+      resource: `user:${req.user.id}`,
+      detail: "User changed password successfully",
+      ip: req.ip || "127.0.0.1",
     });
 
     return res.json({ success: true, message: "Password updated successfully" });

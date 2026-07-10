@@ -2,6 +2,8 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { checkPermission, requirePermission } from "../middlewares/rbac.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -101,7 +103,6 @@ router.post("/", requirePermission("Create Projects"), async (req: Authenticated
     const newProject = await prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
         data: {
-          id: nextId,
           name,
           client,
           status: "active",
@@ -120,7 +121,7 @@ router.post("/", requirePermission("Create Projects"), async (req: Authenticated
       await tx.projectAssignment.create({
         data: {
           userId: req.user.id,
-          projectId: nextId,
+          projectId: project.id,
         },
       });
 
@@ -132,7 +133,7 @@ router.post("/", requirePermission("Create Projects"), async (req: Authenticated
         await tx.projectAssignment.create({
           data: {
             userId: managerUser.id,
-            projectId: nextId,
+            projectId: project.id,
           },
         });
       }
@@ -143,25 +144,24 @@ router.post("/", requirePermission("Create Projects"), async (req: Authenticated
           userId: req.user.id,
           action: "Created project",
           subject: name,
-          projectId: nextId,
+          projectId: project.id,
           type: "task",
         },
       });
 
       // Log Audit
-      await tx.auditLog.create({
-        data: {
-          timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-          userEmail: req.user.email,
-          action: "PROJECT_CREATED",
-          resource: `project:${nextId}`,
-          detail: `Created project ${name} with budget ${budget}`,
-          ip: req.ip || "127.0.0.1",
-        },
-      });
+      await logAuditEvent({
+        userEmail: req.user.email,
+        action: "PROJECT_CREATED",
+        resource: `project:${project.id}`,
+        detail: `Created project ${name} with budget ${budget}`,
+        ip: req.ip || "127.0.0.1",
+      }, tx);
 
       return project;
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json({
       ...newProject,
@@ -208,16 +208,15 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "PROJECT_DELETED",
-        resource: `project:${id}`,
-        detail: `Deleted project ${project.name}`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "PROJECT_DELETED",
+      resource: `project:${id}`,
+      detail: `Deleted project ${project.name}`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true, message: "Project deleted successfully" });
   } catch (error) {
@@ -250,14 +249,8 @@ router.post("/:id/milestones", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "Title, date, and amount are required." });
     }
 
-    // Auto-generate a project-scoped ID
-    const existing = await prisma.milestone.findMany({ where: { projectId } });
-    const nextNum = existing.length + 1;
-    const milestoneId = `${projectId}_M${String(nextNum).padStart(3, "0")}`;
-
     const milestone = await prisma.milestone.create({
       data: {
-        id: milestoneId,
         projectId,
         title,
         date,
@@ -265,6 +258,8 @@ router.post("/:id/milestones", async (req: AuthenticatedRequest, res) => {
         status: status || "upcoming"
       }
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json(milestone);
   } catch (error) {

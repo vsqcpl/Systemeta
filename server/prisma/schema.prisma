@@ -8,7 +8,7 @@ generator client {
 }
 
 model User {
-  id                 String    @id
+  id                 String    @id @default(uuid())
   name               String
   email              String    @unique
   emailVerified      Boolean   @default(false)
@@ -82,7 +82,7 @@ model Verification {
 }
 
 model Project {
-  id          String              @id // e.g. P001
+  id          String              @id @default(uuid())
   name        String
   client      String
   status      String              // e.g. active, planning, completed
@@ -112,7 +112,7 @@ model ProjectAssignment {
 }
 
 model Task {
-  id                   String        @id // e.g. T001
+  id                   String        @id @default(uuid())
   title                String
   projectId            String
   project              Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -161,7 +161,7 @@ model TaskComment {
 }
 
 model Milestone {
-  id        String    @id // e.g. M001
+  id        String    @id @default(uuid())
   projectId String
   project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
   title     String
@@ -180,6 +180,8 @@ model Timesheet {
   entries      TimesheetEntry[]
 
   @@unique([consultantId, week])
+  @@index([consultantId])
+  @@index([week])
 }
 
 model TimesheetEntry {
@@ -191,6 +193,9 @@ model TimesheetEntry {
   task        String
   hours       Float
   billable    Boolean   @default(true)
+
+  @@index([projectId])
+  @@index([timesheetId])
 }
 
 model PunchSession {
@@ -209,7 +214,7 @@ model PunchSession {
 }
 
 model LeaveRequest {
-  id           String   @id // e.g. L001
+  id           String   @id @default(uuid())
   consultantId String
   consultant   User     @relation(fields: [consultantId], references: [id], onDelete: Cascade)
   type         String   // e.g. Annual Leave, Sick Leave, Study Leave
@@ -221,7 +226,7 @@ model LeaveRequest {
 }
 
 model Expense {
-  id           String   @id // e.g. E001
+  id           String   @id @default(uuid())
   consultantId String
   consultant   User     @relation(fields: [consultantId], references: [id], onDelete: Cascade)
   projectId    String?
@@ -240,7 +245,7 @@ model Expense {
 }
 
 model Invoice {
-  id        String   @id // e.g. INV-2026-041
+  id        String   @id @default(uuid())
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   client    String
@@ -272,7 +277,7 @@ model Activity {
 }
 
 model Notification {
-  id        String   @id // e.g. N001
+  id        String   @id @default(uuid())
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   type      String   // e.g. alert, approval, risk, info, success

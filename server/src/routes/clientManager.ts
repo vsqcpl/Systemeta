@@ -1,6 +1,7 @@
 import { Router, Request, Response } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware } from "../middlewares/auth.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -36,10 +37,8 @@ async function createClientActivityNotification(
   category: string = "general"
 ) {
   try {
-    const nextNotifId = "N" + String(Math.floor(100000 + Math.random() * 900000));
     await prisma.notification.create({
       data: {
-        id: nextNotifId,
         userId,
         type,
         title,
@@ -48,6 +47,7 @@ async function createClientActivityNotification(
         createdAt: new Date().toISOString(),
       },
     });
+    invalidateDashboardCache();
   } catch (error) {
     console.error("Failed to create client activity notification:", error);
   }

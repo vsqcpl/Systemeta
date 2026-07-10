@@ -2,6 +2,7 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireRoles } from "../middlewares/rbac.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -98,13 +99,8 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
-    const lastTask = await prisma.task.findFirst({ orderBy: { id: "desc" } });
-    const lastNum = lastTask ? parseInt(lastTask.id.replace("T", "") || "0", 10) : 0;
-    const nextId = "T" + String(lastNum + 1).padStart(3, "0");
-
     const newTask = await prisma.task.create({
       data: {
-        id: nextId,
         title,
         projectId: project,
         assigneeId: assignee,
@@ -116,6 +112,8 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
         isMilestone: isMilestone || false,
       },
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json({
       id: newTask.id,
@@ -173,6 +171,8 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
         title: title || undefined,
       },
     });
+
+    invalidateDashboardCache();
 
     return res.json(updatedTask);
   } catch (error) {
@@ -304,6 +304,8 @@ router.post("/:id/subtasks", async (req: AuthenticatedRequest, res) => {
         status: status || "Not Started",
       },
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json(subtask);
   } catch (error) {

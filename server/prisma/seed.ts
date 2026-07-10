@@ -38,7 +38,7 @@ async function main() {
 
   await prisma.user.deleteMany();
 
-  const saltRounds = 10;
+  const saltRounds = 12;
   const passwordHash = await bcrypt.hash("Admin123", saltRounds);
 
   console.log("Creating users...");

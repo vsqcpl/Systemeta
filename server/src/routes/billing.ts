@@ -2,6 +2,8 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireRoles } from "../middlewares/rbac.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -74,16 +76,8 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
-    const lastInvoice = await prisma.invoice.findFirst({ orderBy: { id: "desc" } });
-    // Extract numeric portion: INV-2026-041 → 41
-    const lastNum = lastInvoice
-      ? parseInt(lastInvoice.id.split("-").pop() || "40", 10)
-      : 40;
-    const nextId = `INV-2026-${String(lastNum + 1).padStart(3, "0")}`;
-
     const invoice = await prisma.invoice.create({
       data: {
-        id: nextId,
         projectId: project,
         client,
         amount: parseFloat(amount),
@@ -98,23 +92,22 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       data: {
         userId: req.user.id,
         action: "Approved invoice",
-        subject: `${nextId} – ${client} ₹${(parseFloat(amount) / 100000).toFixed(2)}L`,
+        subject: `${invoice.id} – ${client} ₹${(parseFloat(amount) / 100000).toFixed(2)}L`,
         projectId: project,
         type: "invoice",
       },
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "INVOICE_GENERATED",
-        resource: `invoice:${nextId}`,
-        detail: `Generated invoice ${nextId} for client ${client} with amount ${amount}`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "INVOICE_GENERATED",
+      resource: `invoice:${invoice.id}`,
+      detail: `Generated invoice ${invoice.id} for client ${client} with amount ${amount}`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json({
       id: invoice.id,
@@ -153,16 +146,15 @@ router.patch("/milestones/:id", requireRoles(["super_admin", "accounts", "projec
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "MILESTONE_UPDATED",
-        resource: `milestone:${id}`,
-        detail: `Updated milestone ${id} status to ${status || milestone.status}`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "MILESTONE_UPDATED",
+      resource: `milestone:${id}`,
+      detail: `Updated milestone ${id} status to ${status || milestone.status}`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({
       id: updated.id,

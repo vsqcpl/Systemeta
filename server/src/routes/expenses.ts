@@ -3,6 +3,9 @@ import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { checkPermission, requirePermission } from "../middlewares/rbac.js";
 import { callVisionService } from "../lib/groq.service.js";
+import { validateCsrf } from "../middlewares/csrf.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -121,24 +124,13 @@ function evaluateExpensePolicy(expense: any): { status: string, reason?: string 
 }
 
 // POST /api/expenses - Submit expense
-router.post("/", async (req: AuthenticatedRequest, res) => {
+router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
     const { project, category, description, amount, currency, date, receiptUrl, modeOfTransport, fromLocation, toLocation, calculatedDistance, isOutsideCity } = req.body;
 
     if (!project || !category || !description || !amount || !currency || !date) {
       return res.status(400).json({ message: "All fields are required" });
     }
-
-    const allExpenses = await prisma.expense.findMany({ select: { id: true } });
-    let maxNum = 0;
-    for (const exp of allExpenses) {
-      const match = exp.id.match(/\d+/);
-      if (match) {
-        const num = parseInt(match[0], 10);
-        if (num > maxNum) maxNum = num;
-      }
-    }
-    const nextId = "E" + String(maxNum + 1).padStart(3, "0");
 
     const receiptValue = receiptUrl ? receiptUrl : null;
     const parsedAmount = parseFloat(amount);
@@ -180,7 +172,6 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
 
     const expense = await prisma.expense.create({
       data: {
-        id: nextId,
         consultantId: req.user.id,
         projectId: project,
         category,
@@ -196,6 +187,8 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
         calculatedDistance: parsedDist,
       },
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json({
       id: expense.id,
@@ -220,7 +213,7 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
 });
 
 // PATCH /api/expenses/:id - Approve or Reject expense
-router.patch("/:id", requirePermission("Approve Expenses"), async (req: AuthenticatedRequest, res) => {
+router.patch("/:id", requirePermission("Approve Expenses"), validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -246,16 +239,15 @@ router.patch("/:id", requirePermission("Approve Expenses"), async (req: Authenti
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: `EXPENSE_${status.toUpperCase()}`,
-        resource: `expense:${id}`,
-        detail: `${status.toUpperCase()} expense request for consultant ${expense.consultantId}`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: `EXPENSE_${status.toUpperCase()}`,
+      resource: `expense:${id}`,
+      detail: `${status.toUpperCase()} expense request for consultant ${expense.consultantId}`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({
       id: updated.id,
@@ -294,16 +286,15 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
 
     await prisma.expense.delete({ where: { id } });
 
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "EXPENSE_DELETED",
-        resource: `expense:${id}`,
-        detail: `Deleted expense claim ${id}`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "EXPENSE_DELETED",
+      resource: `expense:${id}`,
+      detail: `Deleted expense claim ${id}`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true });
   } catch (error) {

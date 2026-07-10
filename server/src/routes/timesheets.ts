@@ -2,6 +2,9 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { checkPermission } from "../middlewares/rbac.js";
+import { validateCsrf } from "../middlewares/csrf.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -373,7 +376,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/timesheets - Save/Submit timesheet entries (idempotent overwrite)
-router.post("/", async (req: AuthenticatedRequest, res) => {
+router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
     const { consultant, week, entries } = req.body;
 
@@ -396,45 +399,47 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
     }
 
     const timesheet = await prisma.$transaction(async (tx) => {
-      // Find or create Timesheet record
-      let ts = await tx.timesheet.findUnique({
+      const entryData = entries.map((e: any) => ({
+        day: e.day,
+        projectId: e.project,
+        task: e.task,
+        hours: parseFloat(e.hours),
+        billable: e.billable !== undefined ? e.billable : true,
+      }));
+
+      // Use a single, nested upsert statement to prevent contention from delete-then-insert
+      const ts = await tx.timesheet.upsert({
         where: {
           consultantId_week: {
             consultantId: consultant,
             week: week,
           },
         },
-      });
-
-      if (!ts) {
-        ts = await tx.timesheet.create({
-          data: {
-            consultantId: consultant,
-            week: week,
+        update: {
+          entries: {
+            deleteMany: {},
+            create: entryData,
           },
-        });
-      }
-
-      // Clear existing entries
-      await tx.timesheetEntry.deleteMany({
-        where: { timesheetId: ts.id },
+        },
+        create: {
+          consultantId: consultant,
+          week: week,
+          entries: {
+            create: entryData,
+          },
+        },
       });
 
-      // Create new entries
-      if (entries.length > 0) {
-        await tx.timesheetEntry.createMany({
-          data: entries.map((e: any) => ({
-            timesheetId: ts!.id,
-            day: e.day,
-            projectId: e.project,
-            task: e.task,
-            hours: parseFloat(e.hours),
-            billable: e.billable !== undefined ? e.billable : true,
-          })),
-        });
-      }
+      // Log Centralized Audit Event
+      await logAuditEvent({
+        userEmail: req.user.email,
+        action: "TIMESHEET_SUBMITTED",
+        resource: `timesheet:${ts.id}`,
+        detail: `Submitted timesheet for week of ${week}`,
+        ip: req.ip || "127.0.0.1",
+      }, tx);
 
-      // Log Activity
+      // Log Activity Feed
       await tx.activity.create({
         data: {
           userId: req.user.id,
@@ -447,6 +452,9 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
 
       return ts;
     });
+
+    // Invalidate dashboard cache since timesheet data changed
+    invalidateDashboardCache();
 
     return res.json({ success: true, message: "Timesheet saved successfully" });
   } catch (error) {

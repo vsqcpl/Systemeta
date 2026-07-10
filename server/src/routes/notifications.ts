@@ -1,6 +1,7 @@
 import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -35,13 +36,13 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 router.post("/", async (req: AuthenticatedRequest, res) => {
   try {
     const { id, userId, type, title, message, category } = req.body;
-    if (!id || !userId || !type || !title || !message) {
+    if (!userId || !type || !title || !message) {
       return res.status(400).json({ message: "Missing required notification fields" });
     }
 
     const notification = await prisma.notification.create({
       data: {
-        id,
+        ...(id && { id }),
         userId,
         type,
         title,
@@ -50,6 +51,8 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
         createdAt: new Date().toISOString()
       }
     });
+
+    invalidateDashboardCache();
 
     return res.status(201).json(notification);
   } catch (error) {
@@ -75,6 +78,8 @@ router.post("/:id/read", async (req: AuthenticatedRequest, res) => {
       where: { id },
       data: { read: true },
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true });
   } catch (error) {

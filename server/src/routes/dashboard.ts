@@ -3,6 +3,7 @@ import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { checkPermission } from "../middlewares/rbac.js";
 import { generateDynamicInsights } from "./ai.js";
+import { getCachedDashboard, setDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -11,6 +12,12 @@ router.use(authMiddleware);
 // GET /api/dashboard - Aggregate dashboard statistics
 router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
+    const cacheKey = req.user.role === "client_manager" ? req.user.id : req.user.role;
+    const cachedData = getCachedDashboard(cacheKey, req.user.role);
+    if (cachedData) {
+      return res.json(cachedData);
+    }
+
     // Dynamically regenerate insights to reflect the latest DB state
     try {
       await generateDynamicInsights();
@@ -137,13 +144,8 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     const billable = [0, 0, 0, 0];
     const nonBillable = [0, 0, 0, 0];
     
-    // Find number of consultants in the database
-    const consultants = await prisma.user.findMany({
-      where: { role: { not: "client_contact" } }
-    });
-    const consultantCount = consultants.length;
-    // Each consultant works 40 hours per week.
-    const availableHoursPerWeek = Math.max(40, consultantCount * 40);
+    // Each consultant works 40 hours per week. Redundant consultants fetch removed.
+    const availableHoursPerWeek = Math.max(40, teamMembersCount * 40);
 
     timesheets.forEach((ts) => {
       const date = new Date(ts.week);
@@ -209,13 +211,17 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     const canViewInsights = await checkPermission(req.user.id, req.user.role, "View AI Insights");
     const filteredAiInsights = canViewInsights ? aiInsights : [];
 
-    return res.json({
+    const dashboardResponse = {
       kpis,
       revenueData,
       utilizationData,
       aiInsights: filteredAiInsights,
       activities: formattedActivities,
-    });
+    };
+
+    setDashboardCache(cacheKey, req.user.role, dashboardResponse);
+
+    return res.json(dashboardResponse);
   } catch (error) {
     console.error("GET /dashboard error:", error);
     return res.status(500).json({ message: "Internal server error calculating dashboard" });

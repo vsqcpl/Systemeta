@@ -3,6 +3,8 @@ import bcrypt from "bcrypt";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -64,19 +66,13 @@ router.post("/", requirePermission("Admin Panel Access"), async (req: Authentica
       });
     }
 
-    const saltRounds = 10;
+    const saltRounds = 12;
     const passwordHash = await bcrypt.hash(password, saltRounds);
-
-    // Generate unique ID using max existing ID to avoid collisions on deletion
-    const lastUser = await prisma.user.findFirst({ orderBy: { id: "desc" } });
-    const lastNum = lastUser ? parseInt(lastUser.id.replace("U", "") || "0", 10) : 0;
-    const nextId = "U" + String(lastNum + 1).padStart(3, "0");
 
     // Perform database operations in a transaction
     const newUser = await prisma.$transaction(async (tx) => {
       const user = await tx.user.create({
         data: {
-          id: nextId,
           name,
           email: email.toLowerCase(),
           passwordHash,
@@ -92,10 +88,10 @@ router.post("/", requirePermission("Admin Panel Access"), async (req: Authentica
       // Create Better Auth account
       await tx.account.create({
         data: {
-          id: `account-${nextId}`,
-          accountId: nextId,
+          id: `account-${user.id}`,
+          accountId: user.id,
           providerId: "credential",
-          userId: nextId,
+          userId: user.id,
           password: passwordHash,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -106,26 +102,25 @@ router.post("/", requirePermission("Admin Panel Access"), async (req: Authentica
       if (project_ids && project_ids.length > 0) {
         await tx.projectAssignment.createMany({
           data: project_ids.map((pId: string) => ({
-            userId: nextId,
+            userId: user.id,
             projectId: pId,
           })),
         });
       }
 
       // Create Audit Log
-      await tx.auditLog.create({
-        data: {
-          timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-          userEmail: req.user.email,
-          action: "USER_CREATED",
-          resource: `user:${nextId}`,
-          detail: `Created user ${name} with role ${role}`,
-          ip: req.ip || "127.0.0.1",
-        },
-      });
+      await logAuditEvent({
+        userEmail: req.user.email,
+        action: "USER_CREATED",
+        resource: `user:${user.id}`,
+        detail: `Created user ${name} with role ${role}`,
+        ip: req.ip || "127.0.0.1",
+      }, tx);
 
       return user;
     });
+
+    invalidateDashboardCache();
 
     const { passwordHash: _, ...profile } = newUser;
     return res.status(201).json({
@@ -161,7 +156,7 @@ router.patch("/:id", requirePermission("Admin Panel Access"), async (req: Authen
     let mustForceChange = existingUser.mustChangePassword;
 
     if (password) {
-      const saltRounds = 10;
+      const saltRounds = 12;
       nextPasswordHash = await bcrypt.hash(password, saltRounds);
       mustForceChange = true;
     }
@@ -232,19 +227,18 @@ router.patch("/:id", requirePermission("Admin Panel Access"), async (req: Authen
       }
 
       // Create Audit Log
-      await tx.auditLog.create({
-        data: {
-          timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-          userEmail: req.user.email,
-          action: auditAction,
-          resource: `user:${id}`,
-          detail: auditDetail,
-          ip: req.ip || "127.0.0.1",
-        },
-      });
+      await logAuditEvent({
+        userEmail: req.user.email,
+        action: auditAction,
+        resource: `user:${id}`,
+        detail: auditDetail,
+        ip: req.ip || "127.0.0.1",
+      }, tx);
 
       return user;
     });
+
+    invalidateDashboardCache();
 
     const { passwordHash: _, ...profile } = updatedUser;
     return res.json({
@@ -297,16 +291,15 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "USER_DELETED",
-        resource: `user:${id}`,
-        detail: `Deleted user ${user.name} (${user.email})`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "USER_DELETED",
+      resource: `user:${id}`,
+      detail: `Deleted user ${user.name} (${user.email})`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true, message: "User deleted successfully" });
   } catch (error) {

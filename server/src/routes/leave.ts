@@ -2,6 +2,9 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { checkPermission, requirePermission } from "../middlewares/rbac.js";
+import { validateCsrf } from "../middlewares/csrf.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
 const router = Router();
 
@@ -45,7 +48,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 });
 
 // POST /api/leave - Submit leave request
-router.post("/", async (req: AuthenticatedRequest, res) => {
+router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
     const { type, start, end, days, reason } = req.body;
 
@@ -68,13 +71,8 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       });
     }
 
-    const lastLeave = await prisma.leaveRequest.findFirst({ orderBy: { id: "desc" } });
-    const lastNum = lastLeave ? parseInt(lastLeave.id.replace("L", "") || "0", 10) : 0;
-    const nextId = "L" + String(lastNum + 1).padStart(3, "0");
-
     const leave = await prisma.leaveRequest.create({
       data: {
-        id: nextId,
         consultantId: req.user.id,
         type,
         start,
@@ -96,6 +94,8 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
       },
     });
 
+    invalidateDashboardCache();
+
     return res.status(201).json({
       id: leave.id,
       consultant: leave.consultantId,
@@ -113,7 +113,7 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
 });
 
 // PATCH /api/leave/:id - Approve or Reject leave request
-router.patch("/:id", requirePermission("Approve Leave"), async (req: AuthenticatedRequest, res) => {
+router.patch("/:id", requirePermission("Approve Leave"), validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -139,16 +139,15 @@ router.patch("/:id", requirePermission("Approve Leave"), async (req: Authenticat
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: `LEAVE_${status.toUpperCase()}`,
-        resource: `leave:${id}`,
-        detail: `${status.toUpperCase()} leave request for consultant ${leave.consultantId}`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: `LEAVE_${status.toUpperCase()}`,
+      resource: `leave:${id}`,
+      detail: `${status.toUpperCase()} leave request for consultant ${leave.consultantId}`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({
       id: updated.id,
@@ -202,16 +201,15 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "LEAVE_WITHDRAWN",
-        resource: `leave:${id}`,
-        detail: `Withdrew leave request for consultant ${leave.consultantId} (${leave.type})`,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "LEAVE_WITHDRAWN",
+      resource: `leave:${id}`,
+      detail: `Withdrew leave request for consultant ${leave.consultantId} (${leave.type})`,
+      ip: req.ip || "127.0.0.1",
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true, message: "Leave request withdrawn successfully" });
   } catch (error) {

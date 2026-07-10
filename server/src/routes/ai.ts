@@ -3,6 +3,8 @@ import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { callGroqService } from "../lib/groq.service.js";
 import { requireRoles } from "../middlewares/rbac.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
+import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
@@ -504,12 +506,8 @@ router.post("/daily-delay-alerts", requireRoles(["super_admin", "project_manager
       const notificationTitle = `Deadline Breached: ${task.title}`;
       const notificationMessage = `Task "${task.title}" was due on ${task.dueDate} but remains in status: ${task.status}.`;
       
-      const count = await prisma.notification.count();
-      const notifId = `N${String(count + 1).padStart(3, "0")}`;
-
       const notif = await prisma.notification.create({
         data: {
-          id: notifId,
           userId: task.assigneeId,
           type: "alert",
           title: notificationTitle,
@@ -1605,7 +1603,6 @@ router.post("/save-assignment", requireRoles(["super_admin", "project_manager"])
     try {
       await prisma.notification.create({
         data: {
-          id: `N-ASSIGN-${Date.now().toString().slice(-4)}`,
           userId: selectedId,
           type: "alert",
           title: "New Task Assigned",
@@ -2396,22 +2393,17 @@ router.post("/email-summary", requireRoles(["super_admin", "project_manager"]), 
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "AI_SUMMARY_EMAILED",
-        resource: "ai:summary",
-        detail: emailSentDetail,
-        ip: req.ip || "127.0.0.1"
-      }
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "AI_SUMMARY_EMAILED",
+      resource: "ai:summary",
+      detail: emailSentDetail,
+      ip: req.ip || "127.0.0.1"
     });
 
     // Create Notification
-    const count = await prisma.notification.count();
     await prisma.notification.create({
       data: {
-        id: `N${String(count + 1).padStart(3, "0")}`,
         userId: req.user.id,
         type: "success",
         title: "AI Summary Emailed",
@@ -2421,6 +2413,8 @@ router.post("/email-summary", requireRoles(["super_admin", "project_manager"]), 
         category: "general"
       }
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true, message: "Weekly summary emailed successfully." });
   } catch (error) {
@@ -2458,16 +2452,15 @@ router.post("/push-expenses", async (req: AuthenticatedRequest, res) => {
     });
 
     // Log Audit
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: "EXPENSE_AUTO_PUSHED",
-        resource: `expensesCount:${expenseIds.length}`,
-        detail: `Auto-approved and pushed expenses to billing: ${expenseIds.join(", ")}`,
-        ip: req.ip || "127.0.0.1"
-      }
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "EXPENSE_AUTO_PUSHED",
+      resource: `expensesCount:${expenseIds.length}`,
+      detail: `Auto-approved and pushed expenses to billing: ${expenseIds.join(", ")}`,
+      ip: req.ip || "127.0.0.1"
     });
+
+    invalidateDashboardCache();
 
     return res.json({ success: true, count: updated.count });
   } catch (error) {
@@ -2774,11 +2767,8 @@ router.post("/delay-analysis", requireRoles(["super_admin", "project_manager"]),
         where: { userId: t.assigneeId, title: notifTitle }
       });
       if (!existing) {
-        const cCount = await prisma.notification.count();
-        const nId = `N${String(cCount + 1).padStart(3, "0")}`;
         const newNotif = await prisma.notification.create({
           data: {
-            id: nId,
             userId: t.assigneeId,
             type: "alert",
             title: notifTitle,

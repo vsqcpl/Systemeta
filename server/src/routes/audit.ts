@@ -2,6 +2,7 @@ import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { requirePermission } from "../middlewares/rbac.js";
+import { logAuditEvent } from "../lib/auditLogger.js";
 
 const router = Router();
 
@@ -41,15 +42,12 @@ router.post("/", async (req: AuthenticatedRequest, res) => {
 
     const detail = `Admin operation on ${target_type || "resource"} ${target_id}${reason ? `. Reason: ${reason}` : ""}`;
 
-    await prisma.auditLog.create({
-      data: {
-        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
-        userEmail: req.user.email,
-        action: action,
-        resource: target_id,
-        detail: detail,
-        ip: req.ip || "127.0.0.1",
-      },
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: action,
+      resource: target_id,
+      detail: detail,
+      ip: req.ip || "127.0.0.1",
     });
 
     return res.json({ success: true });

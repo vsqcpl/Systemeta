@@ -1,5 +1,40 @@
 import { create } from 'zustand';
 import { VSQCData, Project, Task, TaskComment, LeaveRequest, Expense, Notification, Timesheet, Invoice, User, Consultant, Client, ClientContact, ClientCall, ClientMeeting, FollowUp, Requirement, Opportunity, RequirementStatus } from './data/types';
+
+// Intercept all fetch calls to inject CSRF tokens for state-changing endpoints
+if (typeof window !== "undefined") {
+  const originalFetch = window.fetch;
+  window.fetch = async (input, init) => {
+    const url = typeof input === "string" ? input : input.url;
+    const isApiCall = url.startsWith("/api/") || url.includes("/api/");
+    const method = init?.method?.toUpperCase() || "GET";
+    
+    if (isApiCall && ["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
+      if (!url.includes("/api/auth/csrf-token")) {
+        const win = window as any;
+        if (!win.__csrfToken) {
+          try {
+            const csrfRes = await originalFetch("/api/auth/csrf-token");
+            const csrfData = await csrfRes.json();
+            win.__csrfToken = csrfData.csrfToken;
+          } catch (err) {
+            console.error("Error fetching CSRF token:", err);
+          }
+        }
+        
+        if (win.__csrfToken) {
+          init = init || {};
+          init.headers = {
+            ...init.headers,
+            "X-CSRF-Token": win.__csrfToken,
+          };
+        }
+      }
+    }
+    
+    return originalFetch(input, init);
+  };
+}
 import { INITIAL_VSQC_DATA } from './data/mockData';
 import { formatCurrency, setGlobalCurrencyFormat, setGlobalCurrencySymbol } from './utils';
 
