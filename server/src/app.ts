@@ -74,7 +74,7 @@ app.use("/api/ai", aiRateLimiter);
 
 // Mount Better Auth handler
 app.all("/api/auth/*", (req, res, next) => {
-  const customPaths = ["/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/change-password"];
+  const customPaths = ["/api/auth/login", "/api/auth/logout", "/api/auth/me", "/api/auth/change-password", "/api/auth/csrf-token"];
   if (customPaths.includes(req.path)) {
     return next();
   }

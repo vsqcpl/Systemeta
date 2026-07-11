@@ -24,10 +24,12 @@ if (typeof window !== "undefined") {
         if (!win.__csrfToken) {
           try {
             const csrfRes = await originalFetch("/api/auth/csrf-token");
-            const csrfData = await csrfRes.json();
-            win.__csrfToken = csrfData.csrfToken;
+            if (csrfRes.ok) {
+              const csrfData = await csrfRes.json();
+              win.__csrfToken = csrfData.csrfToken;
+            }
           } catch (err) {
-            console.error("Error fetching CSRF token:", err);
+            // Ignore error to prevent Next.js dev overlay
           }
         }
         

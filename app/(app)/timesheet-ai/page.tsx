@@ -43,8 +43,8 @@ function CircleScore({ value, label, color }: { value: number | "N/A"; label: st
   const circ = 2 * Math.PI * r;
   const dash = value === "N/A" ? 0 : (value / 100) * circ;
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", minWidth: "50px" }}>
-      <svg width="52" height="52" viewBox="0 0 60 60">
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", minWidth: "40px", flex: 1 }}>
+      <svg width="44" height="44" viewBox="0 0 60 60">
         <circle cx="30" cy="30" r={r} fill="none" stroke="var(--border-subtle)" strokeWidth="5" />
         <circle
           cx="30" cy="30" r={r} fill="none" stroke={color} strokeWidth="5"
@@ -55,7 +55,7 @@ function CircleScore({ value, label, color }: { value: number | "N/A"; label: st
         />
         <text x="30" y="35" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">{value === "N/A" ? "N/A" : `${value}%`}</text>
       </svg>
-      <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "center", wordBreak: "break-word", overflowWrap: "anywhere" }}>{label}</span>
+      <span style={{ fontSize: "9px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "center", wordBreak: "break-word", overflowWrap: "anywhere" }}>{label}</span>
     </div>
   );
 }
@@ -184,8 +184,8 @@ function CarbonTrackerCard({ consultants, projects, rawExpenses }: { consultants
   const highestMode = breakdown[0]?.val > 0 ? breakdown[0].name.split(" ")[0] : "travel";
 
   return (
-    <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "visible", boxSizing: "border-box" }}>
-      <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+    <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "visible", boxSizing: "border-box", height: "800px" }}>
+      <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
         {/* Card Header */}
         <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px" }}>
           <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: "rgba(16,185,129,0.12)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
@@ -269,7 +269,7 @@ function CarbonTrackerCard({ consultants, projects, rawExpenses }: { consultants
         )}
 
         {/* Emissions Breakdown */}
-        <div style={{ marginBottom: "16px", flex: 1, minWidth: 0 }}>
+        <div style={{ marginBottom: "16px", flex: 1, minWidth: 0, overflowY: "auto", paddingRight: "4px" }}>
           <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Travel Emissions Breakdown by Mode</div>
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {breakdown.map((b) => (
@@ -543,11 +543,11 @@ export default function TimesheetAIPage() {
       </div>
 
       {/* 4-Card Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(340px, 1fr))", gridAutoRows: "1fr", gap: "18px", marginTop: "8px" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gridAutoRows: "1fr", gap: "18px", marginTop: "8px" }}>
 
         {/* ── Card 1: Efficiency Tracking ────────────────────────────────────── */}
-        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box", height: "800px" }}>
+          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
 
             {/* Card Header */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px" }}>
@@ -594,7 +594,7 @@ export default function TimesheetAIPage() {
 
 
                 {/* Task list — over / under */}
-                <div style={{ marginBottom: "16px" }}>
+                <div style={{ marginBottom: "16px", flex: 1, overflowY: "auto", minHeight: 0, paddingRight: "4px" }}>
                   <div style={{ display: "flex", gap: "8px", marginBottom: "8px", fontSize: "10.5px", fontWeight: 600, color: "var(--text-tertiary)" }}>
                     <span style={{ color: "#e11d48" }}>● Over Budget</span>
                     <span style={{ color: "#059669" }}>● Under Budget</span>
@@ -650,8 +650,8 @@ export default function TimesheetAIPage() {
         </div>
 
         {/* ── Card 2: Performance Metrics Dashboard ──────────────────────────── */}
-        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box", height: "800px" }}>
+          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
 
             {/* Card Header */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px" }}>
@@ -906,15 +906,15 @@ export default function TimesheetAIPage() {
                 </div>
 
                 {/* Circle KPIs */}
-                <div style={{ display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: "12px 6px", padding: "12px 8px", marginBottom: "16px", background: "var(--bg-surface-2)", borderRadius: "12px", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "nowrap", gap: "4px", padding: "12px 6px", marginBottom: "16px", background: "var(--bg-surface-2)", borderRadius: "12px", border: "1px solid var(--border-subtle)" }}>
                   {/* Utilization Metric - Scoped exclusively to the Performance Metrics Dashboard card */}
                   {(() => {
                     const r = 22;
                     const circ = 2 * Math.PI * r;
                     const dash = calculatedUtilization === "N/A" ? 0 : ((calculatedUtilization as number) / 100) * circ;
                     return (
-                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", minWidth: "50px" }}>
-                        <svg width="52" height="52" viewBox="0 0 60 60">
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px", minWidth: "40px", flex: 1 }}>
+                        <svg width="44" height="44" viewBox="0 0 60 60">
                           <circle cx="30" cy="30" r={r} fill="none" stroke="var(--border-subtle)" strokeWidth="5" />
                           <circle
                             cx="30" cy="30" r={r} fill="none" stroke="#2563eb" strokeWidth="5"
@@ -927,7 +927,7 @@ export default function TimesheetAIPage() {
                             {calculatedUtilization === "N/A" ? "N/A" : `${calculatedUtilization}%`}
                           </text>
                         </svg>
-                        <span style={{ fontSize: "10px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "center", wordBreak: "break-word", overflowWrap: "anywhere" }}>
+                        <span style={{ fontSize: "9px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "center", wordBreak: "break-word", overflowWrap: "anywhere" }}>
                           Utilisation
                         </span>
                       </div>
@@ -939,7 +939,7 @@ export default function TimesheetAIPage() {
                 </div>
 
                 {/* Consultant comparison table */}
-                <div style={{ marginBottom: "16px", flex: 1, minWidth: 0 }}>
+                <div style={{ marginBottom: "16px", flex: 1, minWidth: 0, overflowY: "auto", paddingRight: "4px" }}>
                   <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px" }}>Team Comparison</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "5px" }}>
                     {consultants.map((c) => {
@@ -1109,8 +1109,8 @@ export default function TimesheetAIPage() {
         </div>
 
         {/* ── Card 3: Expense Monitoring Panel ─────────────────────── */}
-        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box" }}>
-          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+        <div className="card card-hoverable" style={{ display: "flex", flexDirection: "column", minWidth: 0, overflow: "hidden", boxSizing: "border-box", height: "800px" }}>
+          <div className="card-body-lg" style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, minHeight: 0 }}>
 
             {/* Card Header */}
             <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "18px" }}>
