@@ -427,11 +427,7 @@ function AdminPageContent() {
       }
     }
 
-    // Role-based validations
-    const rolesRequiringProjects = ["project_manager", "senior_consultant", "consultant"];
-    if (rolesRequiringProjects.includes(formRole) && formProjectIds.length === 0) {
-      errs.projects = "Please assign at least 1 project";
-    }
+
 
     if (formRole === "client_contact" && !formClientId) {
       errs.client = "Please link a client";
@@ -1826,7 +1822,7 @@ function AdminPageContent() {
               {["project_manager", "senior_consultant", "consultant"].includes(formRole) && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                   <label style={{ fontSize: "12.5px", fontWeight: 600, color: "var(--text-secondary)" }}>
-                    Assign to Project(s) <span style={{ color: "red" }}>*</span>
+                    Assign to Project(s)
                   </label>
                   <div style={{
                     maxHeight: "130px",

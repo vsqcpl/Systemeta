@@ -482,6 +482,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
         </div>
       </div>
 
+
       {/* project-specific AI WBS Builder recommendation */}
       {user && ["super_admin", "project_manager"].includes(user.role) && (
         <div style={{
@@ -674,70 +675,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             </div>
           )}
 
-          {/* AI Insights Card */}
-          {(user?.role === ROLES.SUPER_ADMIN || user?.role === ROLES.PROJECT_MANAGER) &&
-            canUseAiFeature("milestone_insights", user.role as any) && (
-            <div className="card" style={{ background: "linear-gradient(135deg, #0f172a, #1e293b)", border: "none" }}>
-              <div className="card-body">
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px", marginBottom: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                    <span style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "var(--brand-300)" }}>
-                      <Bot size={20} />
-                    </span>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "white" }}>AI Recommendations</span>
-                  </div>
-                  <button
-                    title="Refresh AI insights"
-                    onClick={refreshAiInsights}
-                    disabled={isLoadingInsights}
-                    style={{ background: "rgba(255,255,255,0.1)", border: "none", borderRadius: "6px", cursor: "pointer", padding: "4px 6px", display: "flex", alignItems: "center" }}
-                  >
-                    <RefreshCw size={13} color="rgba(255,255,255,0.7)" style={{ animation: isLoadingInsights ? "spin 1s linear infinite" : "none" }} />
-                  </button>
-                </div>
-                {isLoadingInsights ? (
-                  <div style={{ padding: "16px", textAlign: "center", color: "rgba(255, 255, 255, 0.5)", fontSize: "11px" }}>
-                    Generating insights...
-                  </div>
-                ) : data.aiInsights.length === 0 ? (
-                  <div style={{ padding: "12px", textAlign: "center", color: "rgba(255, 255, 255, 0.5)", fontSize: "11px" }}>
-                    No insights yet. Click ↻ to generate.
-                  </div>
-                ) : (
-                  data.aiInsights.slice(0, 2).map((i, idx) => (
-                    <div
-                      key={idx}
-                      style={{
-                        background: "rgba(255, 255, 255, 0.08)",
-                        borderRadius: "10px",
-                        padding: "12px",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      <div style={{ fontSize: "12px", fontWeight: 600, color: "white", marginBottom: "4px" }}>
-                        {i.title}
-                      </div>
-                      <div style={{ fontSize: "11px", color: "rgba(255, 255, 255, 0.6)", lineHeight: 1.5 }}>
-                        {i.description}
-                      </div>
-                      <button
-                        className="btn btn-sm"
-                        style={{
-                          background: "rgba(255, 255, 255, 0.15)",
-                          color: "white",
-                          marginTop: "8px",
-                          fontSize: "11px",
-                        }}
-                        onClick={() => showToast(`Action: ${i.action}`, "success")}
-                      >
-                        {i.action} →
-                      </button>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
+
         </div>
       </div>
       <QuickAddModal open={showAddTask} onClose={() => setShowAddTask(false)} />
