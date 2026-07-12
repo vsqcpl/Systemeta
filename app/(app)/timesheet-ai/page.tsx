@@ -331,7 +331,7 @@ export default function TimesheetAIPage() {
 
   useEffect(() => {
     if (user && (user.role === "accounts" || user.role === "client_contact")) {
-      router.replace("/dashboard");
+      router?.replace("/dashboard");
     }
   }, [user, router]);
 

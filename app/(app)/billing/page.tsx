@@ -736,6 +736,8 @@ export default function BillingPage() {
         </div>
       </div>
       )}
+        </>
+      )}
 
       {/* Generate Invoice Modal */}
       {showInvoiceModal && (
