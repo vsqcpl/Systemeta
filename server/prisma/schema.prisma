@@ -250,10 +250,27 @@ model Invoice {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   client    String
   amount    Float
-  status    String   // e.g. draft, outstanding, paid, overdue
+  status    String   // e.g. draft, issued, partially_paid, paid, overdue, cancelled
   issued    String
   due       String?
   paid      String?
+
+  payments  Payment[]
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount          Float
+  date            String
+  method          String
+  referenceNumber String?
+  transactionId   String?
+  remarks         String?
+  proofUrl        String?
+  recordedBy      String
+  recordedAt      DateTime @default(now())
 }
 
 model AIInsight {

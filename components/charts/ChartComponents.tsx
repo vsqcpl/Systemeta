@@ -870,10 +870,9 @@ export function InvoicesChart() {
       if (isNaN(date.getTime())) return;
       const qIdx = Math.floor(date.getMonth() / 3);
       if (qIdx >= 0 && qIdx <= 3) {
-        if (inv.status === "paid") {
-          collected[qIdx] += inv.amount;
-        } else if (inv.status === "outstanding" || inv.status === "overdue") {
-          outstanding[qIdx] += inv.amount;
+        if (inv.status !== "draft" && inv.status !== "cancelled") {
+          collected[qIdx] += inv.collectedAmount || 0;
+          outstanding[qIdx] += inv.outstandingAmount ?? inv.amount;
         } else if (inv.status === "draft") {
           forecast[qIdx] += inv.amount;
         }

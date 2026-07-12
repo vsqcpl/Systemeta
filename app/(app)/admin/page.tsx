@@ -427,7 +427,8 @@ function AdminPageContent() {
       }
     }
 
-
+    // Role-based validations
+    // Project assignment is optional for all roles
 
     if (formRole === "client_contact" && !formClientId) {
       errs.client = "Please link a client";

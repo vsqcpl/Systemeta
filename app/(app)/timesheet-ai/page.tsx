@@ -310,11 +310,24 @@ function CarbonTrackerCard({ consultants, projects, rawExpenses }: { consultants
 
 // ── Main Page ──────────────────────────────────────────────────────────────────
 export default function TimesheetAIPage() {
-  const showToast = useAppStore((state) => state.showToast);
+  const router = typeof window !== "undefined" ? useRouter() : null;
   const data = useAppStore((state) => state.data);
+
+  // Helper for flattening task states
+  const getFlatTasksLocal = (tasksState: any) => {
+    if (!tasksState) return [];
+    if (Array.isArray(tasksState)) return tasksState;
+    const flat: any[] = [];
+    if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
+    if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
+    if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
+    if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
+    return flat;
+  };
+
+  const showToast = useAppStore((state) => state.showToast);
   const { t } = useTranslation();
   const user = useAppStore((state) => state.user);
-  const router = useRouter();
 
   useEffect(() => {
     if (user && (user.role === "accounts" || user.role === "client_contact")) {
@@ -675,7 +688,12 @@ export default function TimesheetAIPage() {
                   userTimesheets.forEach((ts: any) => {
                     if (ts.entries && Array.isArray(ts.entries)) {
                       ts.entries.forEach((entry: any) => {
-                        if (selectedDashboardTask !== "All Tasks" && entry.task !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
+                        let matchesTask = false;
+                        if (selectedDashboardTask !== "All Tasks") {
+                          const taskObj = getFlatTasksLocal(data.tasks).find((t: any) => t.id === selectedDashboardTask);
+                          matchesTask = taskObj ? (entry.task === taskObj.title || entry.task === taskObj.id) : (entry.task === selectedDashboardTask);
+                          if (!matchesTask && entry.project !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
+                        }
                         if (entry.punchInTime && entry.punchOutTime) {
                           const inTime = new Date(entry.punchInTime).getTime();
                           const outTime = new Date(entry.punchOutTime).getTime();
@@ -756,16 +774,7 @@ export default function TimesheetAIPage() {
                   // --- Efficiency Metric Calculation - Scoped exclusively to the Performance Metrics Dashboard card ---
                   let calculatedEfficiency: number | "N/A" = "N/A";
                   if (selectedConsultant && data.tasks) {
-                    const getFlatTasksLocal = (tasksState: any) => {
-                      if (!tasksState) return [];
-                      if (Array.isArray(tasksState)) return tasksState;
-                      const flat: any[] = [];
-                      if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
-                      if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
-                      if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
-                      if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
-                      return flat;
-                    };
+                    // const getFlatTasksLocal = ... (hoisted)
                     const allTasks = getFlatTasksLocal(data.tasks);
                     let totalPlannedHours = 0;
                     let totalActualHours = 0;
@@ -875,16 +884,7 @@ export default function TimesheetAIPage() {
                   >
                     <option value="All Tasks">All Assigned Tasks</option>
                     {(() => {
-                      const getFlatTasksLocal = (tasksState: any) => {
-                        if (!tasksState) return [];
-                        if (Array.isArray(tasksState)) return tasksState;
-                        const flat: any[] = [];
-                        if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
-                        if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
-                        if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
-                        if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
-                        return flat;
-                      };
+                      // const getFlatTasksLocal = ... (hoisted)
                       return getFlatTasksLocal(data.tasks).filter((task: any) => {
                         let isAssigned = false;
                         if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
@@ -948,7 +948,12 @@ export default function TimesheetAIPage() {
                       userTimesheets.forEach((ts: any) => {
                         if (ts.entries && Array.isArray(ts.entries)) {
                           ts.entries.forEach((entry: any) => {
-                            if (selectedDashboardTask !== "All Tasks" && entry.task !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
+                            let matchesTask = false;
+                            if (selectedDashboardTask !== "All Tasks") {
+                              const taskObj = getFlatTasksLocal(data.tasks).find((t: any) => t.id === selectedDashboardTask);
+                              matchesTask = taskObj ? (entry.task === taskObj.title || entry.task === taskObj.id) : (entry.task === selectedDashboardTask);
+                              if (!matchesTask && entry.project !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
+                            }
                             if (entry.punchInTime && entry.punchOutTime) {
                               const inTime = new Date(entry.punchInTime).getTime();
                               const outTime = new Date(entry.punchOutTime).getTime();
