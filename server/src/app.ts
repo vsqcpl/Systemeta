@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth.js";
 import routes from "./routes/index.js";
+import authRoutes from "./routes/auth.js";
+import debugRoutes from "./routes/debug.js";
 
 dotenv.config();
 
@@ -92,6 +94,7 @@ app.get("/", (req: Request, res: Response) => {
 });
 
 // App API routes
+app.use("/api/debug", debugRoutes);
 app.use("/api", routes);
 
 // Global Error Handler
