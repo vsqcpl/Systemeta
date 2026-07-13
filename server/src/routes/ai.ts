@@ -17,7 +17,7 @@ router.use(authMiddleware);
 
 // ─── IP-based rate limiter for /groq endpoint ─────────────────────────────────
 const GROQ_WINDOW_MS = 60_000;
-const GROQ_MAX_CALLS = 20;
+const GROQ_MAX_CALLS = 100;
 const groqIpLog = new Map<string, number[]>();
 function isGroqRateLimited(ip: string): boolean {
   const now = Date.now();

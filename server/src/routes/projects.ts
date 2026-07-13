@@ -282,4 +282,68 @@ router.delete("/:id/milestones/:milestoneId", async (req: AuthenticatedRequest, 
   }
 });
 
+// POST /api/projects/:id/members - Add a user to project team
+router.post("/:id/members", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    // PM only adds to own projects; Super Admin can add to any
+    if (req.user.role !== "super_admin") {
+      if (req.user.role !== "project_manager") {
+        return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can add members" });
+      }
+      const isAssigned = await prisma.projectAssignment.findFirst({
+        where: { projectId: id, userId: req.user.id }
+      });
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Forbidden: You do not manage this project" });
+      }
+    }
+
+    // Create the assignment if not already exists
+    const existing = await prisma.projectAssignment.findUnique({
+      where: {
+        userId_projectId: { userId, projectId: id }
+      }
+    });
+
+    if (!existing) {
+      await prisma.projectAssignment.create({
+        data: { userId, projectId: id }
+      });
+    }
+
+    invalidateDashboardCache();
+
+    // Return the updated project with team member list
+    const updatedProject = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        users: { select: { userId: true } }
+      }
+    });
+
+    const formatted = {
+      ...updatedProject,
+      manager: updatedProject?.managerName || "",
+      team: updatedProject?.users.map((u) => u.userId) || []
+    };
+
+    return res.json(formatted);
+  } catch (error) {
+    console.error("POST /projects/:id/members error:", error);
+    return res.status(500).json({ message: "Internal server error adding member to project" });
+  }
+});
+
 export default router;

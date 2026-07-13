@@ -55,6 +55,7 @@ export interface Task {
   title: string;
   project: string; // Project ID
   assignee: string; // Consultant ID
+  assignees?: string[]; // Multiple Consultant IDs
   priority: ProjectPriority;
   dueDate: string;
   estimate: number;

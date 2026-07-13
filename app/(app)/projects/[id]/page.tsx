@@ -352,6 +352,57 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             </div>
           </div>
           <div style={{ display: "flex", gap: "8px", flexShrink: 0, alignItems: "center" }}>
+            {(() => {
+              const isSuperAdmin = user?.role?.toLowerCase() === "super_admin";
+              const isPM = user?.role?.toLowerCase() === "project_manager";
+              const canAddProjectMember = isSuperAdmin || (isPM && p.managerName === user?.name);
+              const currentTeamIds = p.team || [];
+              const unassignedUsers = (data.users || []).filter((u: any) => !currentTeamIds.includes(u.id));
+
+              if (canAddProjectMember && unassignedUsers.length > 0) {
+                return (
+                  <select
+                    className="select"
+                    value=""
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        fetch(`/api/projects/${p.id}/members`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ userId: val }),
+                        })
+                          .then((res) => {
+                            if (!res.ok) throw new Error("Failed to add member");
+                            return res.json();
+                          })
+                          .then((updatedProj) => {
+                            useAppStore.setState((state) => {
+                              const projects = state.data.projects.map((proj) =>
+                                proj.id === updatedProj.id ? { ...proj, team: updatedProj.team } : proj
+                              );
+                              return { data: { ...state.data, projects } };
+                            });
+                            showToast("Member added to project", "success");
+                          })
+                          .catch((err) => {
+                            showToast("Error: " + err.message, "danger");
+                          });
+                      }
+                    }}
+                    style={{ minWidth: "140px" }}
+                  >
+                    <option value="" disabled>+ {t("Add Member")}</option>
+                    {unassignedUsers.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name}
+                      </option>
+                    ))}
+                  </select>
+                );
+              }
+              return null;
+            })()}
             <select
               className="select"
               value={p.id}
