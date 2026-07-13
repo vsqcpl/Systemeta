@@ -3,19 +3,30 @@ import prisma from "../lib/prisma.js";
 import { authMiddleware } from "../middlewares/auth.js";
 import { invalidateDashboardCache } from "../lib/dashboardCache.js";
 
+import { checkPermission } from "../middlewares/rbac.js";
+
 const router = Router();
 
 // ─── RBAC Gate ────────────────────────────────────────────────────────────────
-function requireClientManager(req: Request, res: Response, next: Function) {
-  const role = (req as any).user?.role;
+async function requireClientManager(req: Request, res: Response, next: Function) {
+  const user = (req as any).user;
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  const role = user.role;
   // Allow read-only (GET) requests for all authenticated roles so dashboard/sync succeeds
   if (req.method === "GET") {
     return next();
   }
-  if (role !== "client_manager" && role !== "super_admin") {
-    return res.status(403).json({ error: "Access denied. Client Manager role required." });
+  if (role === "client_manager") {
+    return next();
   }
-  next();
+  // Check if they have the active "CRM Access" override
+  const hasCrmOverride = await checkPermission(user.id, role, "CRM Access");
+  if (hasCrmOverride) {
+    return next();
+  }
+  return res.status(403).json({ error: "Access denied. Client Manager role required." });
 }
 
 // Apply auth + role gate to all routes in this file

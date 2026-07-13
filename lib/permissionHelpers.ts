@@ -199,9 +199,12 @@ function getMatrixPermission(permissionKey: string, role: string): boolean | nul
 export function getScreenAccess(screen: string, role: UserRole): AccessLevel {
   const normRole = normalizeRole(role);
   
-  // CRM screens are strictly client_manager only
+  // CRM screens are strictly client_manager only, or allowed via override
   if (screen.startsWith("crm_") && normRole !== "client_manager") {
-    return null;
+    const override = getActiveOverride("CRM Access");
+    if (override !== true) {
+      return null;
+    }
   }
 
   // Client Manager cannot access Project Management, Admin, or Consultant Analytics screens
@@ -267,8 +270,12 @@ export function canDo(action: string, role: UserRole): boolean {
     "generate_crm_reports",
     "view_client_analytics"
   ];
+  // CRM actions are strictly client_manager only, or allowed via override
   if (crmActions.includes(action) && normRole !== "client_manager") {
-    return false;
+    const override = getActiveOverride("CRM Access");
+    if (override !== true) {
+      return false;
+    }
   }
 
   if (normRole === "super_admin") return true;

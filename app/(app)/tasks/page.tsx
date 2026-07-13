@@ -1276,7 +1276,7 @@ export default function TasksPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `VSQC_Tasks_${dateStr}.csv`;
+    a.download = `Systemeta_Tasks_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     showToast("Export downloaded successfully", "success");

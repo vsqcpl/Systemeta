@@ -161,7 +161,7 @@ export default function AppLayout({
   if (!mounted || (!resolvedModule && !activeModule)) {
     return (
       <div className="loading-screen">
-        <div className="loading-logo">VS</div>
+        <div className="loading-logo">SM</div>
         <div className="loading-text">Loading workspace...</div>
         <div className="loading-bar">
           <div className="loading-bar-fill"></div>

@@ -91,7 +91,7 @@ export default function ChangePasswordPage() {
       <div className="login-card" style={{ width: "min(460px, 90%)" }}>
         {/* Header */}
         <div className="login-logo-wrap">
-          <div className="login-logo-mark">VS</div>
+          <div className="login-logo-mark">SM</div>
           <div>
             <div className="login-logo-name">Update Password</div>
             <div className="login-logo-sub">Security Policy Enforcement</div>

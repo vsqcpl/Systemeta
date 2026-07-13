@@ -76,6 +76,7 @@ export default function BillingPage() {
   const [paymentReference, setPaymentReference] = useState("");
   const [paymentRemarks, setPaymentRemarks] = useState("");
   const addPayment = useAppStore((state: any) => state.addPayment);
+  const [isSubmittingPayment, setIsSubmittingPayment] = React.useState(false);
 
   // Auto-select first project
   React.useEffect(() => {
@@ -148,22 +149,25 @@ export default function BillingPage() {
     setShowInvoiceModal(false);
   };
 
-  const handleRecordPayment = (e: React.FormEvent) => {
+  const handleRecordPayment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!showPaymentModal || !paymentAmount || parseFloat(paymentAmount) <= 0) return;
-    
-    addPayment(showPaymentModal, {
-      amount: parseFloat(paymentAmount),
-      date: paymentDate,
-      method: paymentMethod,
-      referenceNumber: paymentReference,
-      remarks: paymentRemarks,
-    });
-
-    setShowPaymentModal(null);
-    setPaymentAmount("");
-    setPaymentReference("");
-    setPaymentRemarks("");
+    setIsSubmittingPayment(true);
+    try {
+      await addPayment(showPaymentModal, {
+        amount: parseFloat(paymentAmount),
+        date: paymentDate,
+        method: paymentMethod,
+        referenceNumber: paymentReference,
+        remarks: paymentRemarks,
+      });
+      setShowPaymentModal(null);
+      setPaymentAmount("");
+      setPaymentReference("");
+      setPaymentRemarks("");
+    } finally {
+      setIsSubmittingPayment(false);
+    }
   };
 
   const handleExportCSV = () => {
@@ -211,7 +215,7 @@ export default function BillingPage() {
     const dateStr = new Date().toISOString().split("T")[0];
     
     link.setAttribute("href", url);
-    link.setAttribute("download", `VSQC_Invoices_${dateStr}.csv`);
+    link.setAttribute("download", `Systemeta_Invoices_${dateStr}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();
@@ -234,7 +238,7 @@ export default function BillingPage() {
       doc.setTextColor(255, 255, 255);
       doc.setFont("Helvetica", "bold");
       doc.setFontSize(22);
-      doc.text("VSQC ENTERPRISE PLATFORM", 20, 25);
+      doc.text("SYSTEMETA ENTERPRISE PLATFORM", 20, 25);
 
       doc.setFontSize(10);
       doc.setFont("Helvetica", "normal");
@@ -319,7 +323,7 @@ export default function BillingPage() {
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(9);
       doc.setTextColor(148, 163, 184);
-      doc.text("VSQC Enterprise Performance Platform · Confidential", 20, 272);
+      doc.text("Systemeta Enterprise Platform · Confidential", 20, 272);
       doc.text("Page 1 of 1", 190, 272, { align: "right" });
 
       doc.save(`Invoice_${inv.id}.pdf`);
@@ -947,8 +951,10 @@ export default function BillingPage() {
                   <textarea value={paymentRemarks} onChange={(e) => setPaymentRemarks(e.target.value)} className="input" style={{ minHeight: "60px", resize: "vertical" }} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
-                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPaymentModal(null)}>{t("Cancel")}</button>
-                  <button type="submit" className="btn btn-primary btn-sm">{t("Record Payment")}</button>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPaymentModal(null)} disabled={isSubmittingPayment}>{t("Cancel")}</button>
+                  <button type="submit" className="btn btn-primary btn-sm" disabled={isSubmittingPayment}>
+                    {isSubmittingPayment ? t("Recording...") : t("Record Payment")}
+                  </button>
                 </div>
               </form>
             </div>

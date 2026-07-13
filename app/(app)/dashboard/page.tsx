@@ -59,7 +59,7 @@ export default function DashboardPage() {
       
       const nowStr = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) || new Date().toLocaleString();
       footer.innerHTML = `
-        <span>VSQC Platform — Executive Dashboard Export</span>
+        <span>Systemeta Platform — Executive Dashboard Export</span>
         <span>Generated on: ${nowStr}</span>
       `;
       container.appendChild(footer);
@@ -148,7 +148,7 @@ export default function DashboardPage() {
       }
       
       const dateStr = new Date().toISOString().split("T")[0];
-      pdf.save(`VSQC_Executive_Dashboard_${dateStr}.pdf`);
+      pdf.save(`Systemeta_Executive_Dashboard_${dateStr}.pdf`);
       showToast("Export downloaded successfully", "success");
     } catch (err) {
       console.error(err);

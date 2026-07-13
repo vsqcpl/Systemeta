@@ -88,7 +88,7 @@ export default function ResourcesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `VSQC_Resources_${dateStr}.csv`;
+    a.download = `Systemeta_Resources_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     showToast("Export downloaded successfully", "success");
@@ -137,7 +137,7 @@ export default function ResourcesPage() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `VSQC_Consultant_Availability_${dateStr}.csv`);
+    link.setAttribute("download", `Systemeta_Consultant_Availability_${dateStr}.csv`);
     link.style.visibility = "hidden";
     document.body.appendChild(link);
     link.click();

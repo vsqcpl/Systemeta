@@ -92,9 +92,9 @@ export default function LoginPage() {
       <div className="login-card">
         {/* Logo */}
         <div className="login-logo-wrap">
-          <div className="login-logo-mark">VS</div>
+          <div className="login-logo-mark">SM</div>
           <div>
-            <div className="login-logo-name">VSQC Platform</div>
+            <div className="login-logo-name">Systemeta</div>
             <div className="login-logo-sub">Enterprise Operations Suite</div>
           </div>
         </div>
@@ -222,7 +222,7 @@ export default function LoginPage() {
               letterSpacing: "0.5px",
             }}
           >
-            VSQC v3.1
+            Systemeta v3.1
           </span>
           <div style={{ flex: 1, height: "1px", background: "var(--border-subtle)" }}></div>
         </div>

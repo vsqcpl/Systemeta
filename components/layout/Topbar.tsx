@@ -8,6 +8,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { ROLES, UserRole } from "@/lib/roles";
 import { getModuleEntryPage } from "@/lib/redirectMap";
 import { IconBriefcase, IconClock } from "@/components/ui/Icons";
+import { usePermission } from "@/hooks/usePermission";
 
 export default function Topbar() {
   const pathname = usePathname();
@@ -132,6 +133,23 @@ export default function Topbar() {
   const isClientContact = user?.role === ROLES.CLIENT_CONTACT;
   const isClientManager = user?.role === ROLES.CLIENT_MANAGER || user?.role === "client_manager";
 
+  const { canAccess } = usePermission();
+
+  const allowedModules: ("projects" | "timesheets" | "crm")[] = [];
+  if (!isClientContact) {
+    if (user?.role === "super_admin" || canAccess("portfolio_dashboard")) {
+      allowedModules.push("projects");
+    }
+    if (user?.role === "super_admin" || user?.role === "client_manager" || canAccess("crm_dashboard")) {
+      allowedModules.push("crm");
+    }
+    if (canAccess("timesheet_daily_log")) {
+      allowedModules.push("timesheets");
+    }
+  }
+
+  const activeModuleIndex = allowedModules.indexOf(activeModule as any);
+
   return (
     <header className="topbar" style={{ position: "relative" }}>
       <div className="topbar-breadcrumb" id="breadcrumb" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -174,7 +192,7 @@ export default function Topbar() {
           style={{ cursor: "pointer" }}
           onClick={() => router.push(isClientContact ? "/portal" : "/select-module")}
         >
-          VSQC
+          Systemeta
         </span>
 
         <span className="breadcrumb-sep" style={{ marginLeft: "4.5px" }}>›</span>
@@ -183,50 +201,51 @@ export default function Topbar() {
         </span>
 
         {/* Module Switcher - Positioned inline near the breadcrumb */}
-        {!isClientContact && !isClientManager && (
-          <div className="topbar-module-switcher" id="module-switcher">
-            <div className={`switcher-indicator ${activeModule === "projects" ? "projects-active" : "timesheets-active"}`} />
-            <button
-              id="module-btn-projects"
-              className={`switcher-btn ${activeModule === "projects" ? "active" : ""}`}
-              onClick={() => handleModuleSwitch("projects")}
-              title={t("Project Management")}
-            >
-              <IconBriefcase size={13} style={{ marginRight: "4px" }} />
-              <span>{t("Project Management")}</span>
-            </button>
-            <button
-              id="module-btn-timesheets"
-              className={`switcher-btn ${activeModule === "timesheets" ? "active" : ""}`}
-              onClick={() => handleModuleSwitch("timesheets")}
-              title={t("Timesheet")}
-            >
-              <IconClock size={13} style={{ marginRight: "4px" }} />
-              <span>{t("Timesheet")}</span>
-            </button>
-          </div>
-        )}
-        {isClientManager && (
-          <div className="topbar-module-switcher" id="module-switcher">
-            <div className={`switcher-indicator ${activeModule === "crm" ? "projects-active" : "timesheets-active"}`} />
-            <button
-              id="module-btn-crm"
-              className={`switcher-btn ${activeModule === "crm" ? "active" : ""}`}
-              onClick={() => handleModuleSwitch("crm")}
-              title={t("CRM")}
-            >
-              <IconBriefcase size={13} style={{ marginRight: "4px" }} />
-              <span>{t("CRM") || "CRM"}</span>
-            </button>
-            <button
-              id="module-btn-timesheets"
-              className={`switcher-btn ${activeModule === "timesheets" ? "active" : ""}`}
-              onClick={() => handleModuleSwitch("timesheets")}
-              title={t("Timesheet")}
-            >
-              <IconClock size={13} style={{ marginRight: "4px" }} />
-              <span>{t("Timesheet")}</span>
-            </button>
+        {/* Module Switcher - Positioned inline near the breadcrumb */}
+        {!isClientContact && allowedModules.length > 1 && (
+          <div className="topbar-module-switcher" id="module-switcher" style={{ position: "relative" }}>
+            {activeModuleIndex !== -1 && (
+              <div
+                className="switcher-indicator"
+                style={{
+                  width: `calc((100% - ${(allowedModules.length - 1) * 3}px) / ${allowedModules.length})`,
+                  transform: `translateX(calc(${activeModuleIndex * 100}% + ${activeModuleIndex * 3}px))`,
+                }}
+              />
+            )}
+            {allowedModules.includes("projects") && (
+              <button
+                id="module-btn-projects"
+                className={`switcher-btn ${activeModule === "projects" ? "active" : ""}`}
+                onClick={() => handleModuleSwitch("projects")}
+                title={t("Project Management")}
+              >
+                <IconBriefcase size={13} style={{ marginRight: "4px" }} />
+                <span>{t("Project Management")}</span>
+              </button>
+            )}
+            {allowedModules.includes("crm") && (
+              <button
+                id="module-btn-crm"
+                className={`switcher-btn ${activeModule === "crm" ? "active" : ""}`}
+                onClick={() => handleModuleSwitch("crm")}
+                title={t("CRM")}
+              >
+                <IconBriefcase size={13} style={{ marginRight: "4px" }} />
+                <span>{t("CRM") || "CRM"}</span>
+              </button>
+            )}
+            {allowedModules.includes("timesheets") && (
+              <button
+                id="module-btn-timesheets"
+                className={`switcher-btn ${activeModule === "timesheets" ? "active" : ""}`}
+                onClick={() => handleModuleSwitch("timesheets")}
+                title={t("Timesheet")}
+              >
+                <IconClock size={13} style={{ marginRight: "4px" }} />
+                <span>{t("Timesheet")}</span>
+              </button>
+            )}
           </div>
         )}
       </div>

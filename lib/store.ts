@@ -373,7 +373,7 @@ interface AppStore {
   updateUserMFA: (id: string, mfa: boolean) => void;
   updateUserStatus: (id: string, status: 'active' | 'inactive') => void;
   addInvoice: (invoice: Omit<Invoice, "id" | "status">) => void;
-  addPayment: (invoiceId: string, paymentData: any) => void;
+  addPayment: (invoiceId: string, paymentData: any) => Promise<void>;
   updateMilestone: (id: string, updates: any) => void;
   inviteUser: (user: Omit<User, "id" | "status" | "mfa" | "lastLogin">) => void;
   deleteProject: (id: string) => Promise<boolean>;
@@ -424,6 +424,7 @@ interface AppStore {
     endDate?: string;
     reason?: string;
   }) => Promise<void>;
+  deleteOverride: (id: string) => Promise<void>;
 
   // --- Emission Factors ---
   emissionFactors: Record<string, number>;
@@ -3749,36 +3750,45 @@ export const useAppStore = create<AppStore>((set, get) => ({
       });
   },
 
-  addPayment: (invoiceId, paymentData) => {
-    fetch(`/api/billing/invoices/${invoiceId}/payments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(paymentData),
-    })
-      .then(async (res) => {
-        if (!res.ok) {
-          const err = await res.json();
-          throw new Error(err.message || "Failed to record payment");
-        }
-        return res.json();
-      })
-      .then(() => {
-        useAppStore.getState().showToast("Payment recorded successfully", "success");
-        fetch("/api/billing")
-          .then((r) => r.json())
-          .then((billing) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                invoices: billing.invoices,
-                milestones: billing.milestones,
-              },
-            }));
-          });
-      })
-      .catch((err) => {
-        useAppStore.getState().showToast("Error recording payment: " + err.message, "danger");
+  addPayment: async (invoiceId, paymentData) => {
+    try {
+      const res = await fetch(`/api/billing/invoices/${invoiceId}/payments`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(paymentData),
       });
+
+      if (!res.ok) {
+        let errMsg = "Failed to record payment";
+        try {
+          const err = await res.json();
+          errMsg = err.message || errMsg;
+        } catch (_) {}
+        useAppStore.getState().showToast("Error recording payment: " + errMsg, "danger");
+        return;
+      }
+
+      useAppStore.getState().showToast("Payment recorded successfully", "success");
+
+      // Refresh billing data
+      try {
+        const billingRes = await fetch("/api/billing");
+        if (billingRes.ok) {
+          const billing = await billingRes.json();
+          set((state) => ({
+            data: {
+              ...state.data,
+              invoices: billing.invoices ?? state.data.invoices,
+              milestones: billing.milestones ?? state.data.milestones,
+            },
+          }));
+        }
+      } catch (refreshErr) {
+        console.warn("Billing data refresh failed:", refreshErr);
+      }
+    } catch (err: any) {
+      useAppStore.getState().showToast("Error recording payment: " + (err.message || "Network error"), "danger");
+    }
   },
 
   updateMilestone: (id, updates) => {
@@ -4378,7 +4388,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to create override");
+        throw new Error(body.message || body.error || "Failed to create override");
       }
       useAppStore.getState().showToast("Permission override created successfully.", "success");
       await useAppStore.getState().fetchOverrides();
@@ -4396,13 +4406,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.error || "Failed to update override");
+        throw new Error(body.message || body.error || "Failed to update override");
       }
       const actionLabel = update.action === "approve" ? "approved" : update.action === "revoke" ? "revoked" : "extended";
       useAppStore.getState().showToast(`Override ${actionLabel} successfully.`, "success");
       await useAppStore.getState().fetchOverrides();
     } catch (err: any) {
       useAppStore.getState().showToast("Error updating override: " + err.message, "danger");
+    }
+  },
+
+  deleteOverride: async (id) => {
+    try {
+      const res = await fetch(`/api/overrides/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.message || "Failed to delete override");
+      }
+      useAppStore.getState().showToast("Override deleted successfully.", "success");
+      await useAppStore.getState().fetchOverrides();
+    } catch (err: any) {
+      useAppStore.getState().showToast("Error deleting override: " + err.message, "danger");
     }
   },
 }));

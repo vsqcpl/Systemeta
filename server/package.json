@@ -1,8 +1,8 @@
 {
-  "name": "vsqc-backend",
+  "name": "systemeta-backend",
   "version": "1.0.0",
   "type": "module",
-  "description": "Express backend for VSQC Platform",
+  "description": "Express backend for Systemeta Platform",
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",

@@ -12,7 +12,7 @@ export default function EntryPage() {
 
   return (
     <div className="loading-screen">
-      <div className="loading-logo">VS</div>
+      <div className="loading-logo">SM</div>
       <div className="loading-text">Redirecting to login...</div>
       <div className="loading-bar">
         <div className="loading-bar-fill"></div>

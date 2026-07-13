@@ -10,9 +10,9 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "VSQC Platform — Enterprise Operations",
+  title: "Systemeta — Enterprise Operations",
   description:
-    "VSQC Platform — Enterprise SaaS for consulting firms. Unified project management, timesheets, billing, resource planning, and AI insights.",
+    "Systemeta — Enterprise SaaS for consulting firms. Unified project management, timesheets, billing, resource planning, and AI insights.",
 };
 
 import { AuthProvider } from "@/context/AuthContext";

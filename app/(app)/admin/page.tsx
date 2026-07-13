@@ -71,6 +71,13 @@ function AdminPageContent() {
   const fetchOverrides = useAppStore((state) => state.fetchOverrides);
   const createOverride = useAppStore((state) => state.createOverride);
   const updateOverride = useAppStore((state) => state.updateOverride);
+  const deleteOverride = useAppStore((state: any) => state.deleteOverride);
+
+  // Extend override modal state
+  const [extendOverrideId, setExtendOverrideId] = useState<string | null>(null);
+  const [extendEndDate, setExtendEndDate] = useState<string>("");
+  const [extendReason, setExtendReason] = useState<string>("");
+  const [isExtending, setIsExtending] = useState(false);
 
   // Override form states
   const [selectedUserId, setSelectedUserId] = useState<string>("");
@@ -190,7 +197,7 @@ function AdminPageContent() {
   }, []);
 
   // Form settings states
-  const [platformName, setPlatformName] = useState("VSQC Platform");
+  const [platformName, setPlatformName] = useState("Systemeta");
   const [platformNameError, setPlatformNameError] = useState("");
   const [selectedCurrency, setSelectedCurrency] = useState("₹ Indian Rupee (INR)");
   const [selectedFiscalYear, setSelectedFiscalYear] = useState("January");
@@ -199,7 +206,7 @@ function AdminPageContent() {
   const [selectedNumbering, setSelectedNumbering] = useState<'indian' | 'intl'>("indian");
 
   const [initialSettings, setInitialSettings] = useState({
-    platformName: "VSQC Platform",
+    platformName: "Systemeta",
     defaultCurrency: "₹ Indian Rupee (INR)",
     fiscalYearStart: "January",
     timezone: "Asia/Kolkata (UTC+5:30)",
@@ -265,7 +272,7 @@ function AdminPageContent() {
 
   // Load settings on mount
   useEffect(() => {
-    let platform = "VSQC Platform";
+    let platform = "Systemeta";
     let currency = "₹ Indian Rupee (INR)";
     let fiscalYear = "January";
     let tz = "Asia/Kolkata (UTC+5:30)";
@@ -276,7 +283,7 @@ function AdminPageContent() {
       const savedSettings = localStorage.getItem("vsqc_settings");
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        platform = parsed.platformName || "VSQC Platform";
+        platform = parsed.platformName || "Systemeta";
         currency = parsed.defaultCurrency || "₹ Indian Rupee (INR)";
         fiscalYear = parsed.fiscalYearStart || "January";
         tz = parsed.timezone || "Asia/Kolkata (UTC+5:30)";
@@ -630,7 +637,7 @@ function AdminPageContent() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `VSQC_Users_${dateStr}.csv`; a.click();
+    a.href = url; a.download = `Systemeta_Users_${dateStr}.csv`; a.click();
     URL.revokeObjectURL(url);
     showToast("Export downloaded successfully", "success");
   };
@@ -646,7 +653,7 @@ function AdminPageContent() {
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = `VSQC_AuditLog_${dateStr}.csv`; a.click();
+    a.href = url; a.download = `Systemeta_AuditLog_${dateStr}.csv`; a.click();
     URL.revokeObjectURL(url);
     showToast("Export downloaded successfully", "success");
   };
@@ -710,7 +717,7 @@ function AdminPageContent() {
   };
 
   const handleConfirmRestoreDefaults = () => {
-    const defaultPlatform = "VSQC Platform";
+    const defaultPlatform = "Systemeta";
     const defaultCurrency = "₹ Indian Rupee (INR)";
     const defaultFiscalYear = "January";
     const defaultTimezone = "Asia/Kolkata (UTC+5:30)";
@@ -887,7 +894,7 @@ function AdminPageContent() {
       {/* Loading state indicator */}
       {loadingData ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "200px" }}>
-          <div className="loading-logo" style={{ animation: "pulse 1.5s infinite", fontSize: "28px" }}>VS</div>
+          <div className="loading-logo" style={{ animation: "pulse 1.5s infinite", fontSize: "28px" }}>SM</div>
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "12px" }}>Loading records...</div>
         </div>
       ) : (
@@ -1380,9 +1387,15 @@ function AdminPageContent() {
                                         </td>
                                         {isSuperAdmin && (
                                           <td style={{ padding: "10px 12px" }}>
-                                            <div style={{ display: "flex", gap: "6px" }}>
+                                            <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                                              <button className="btn btn-ghost btn-sm" style={{ color: "#2E86C1", fontSize: "11px" }}
+                                                onClick={() => { setExtendOverrideId(o.id); setExtendEndDate(""); setExtendReason(""); }}>
+                                                Extend
+                                              </button>
                                               <button className="btn btn-ghost btn-sm" style={{ color: "var(--danger-500)", fontSize: "11px" }}
                                                 onClick={() => updateOverride(o.id, { action: 'revoke' })}>Revoke</button>
+                                              <button className="btn btn-ghost btn-sm" style={{ color: "var(--text-tertiary)", fontSize: "11px" }}
+                                                onClick={() => { if (confirm('Permanently delete this override record?')) deleteOverride(o.id); }}>Delete</button>
                                             </div>
                                           </td>
                                         )}
@@ -1410,6 +1423,7 @@ function AdminPageContent() {
                                     <th style={{ padding: "8px 12px", fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "left" }}>Status</th>
                                     <th style={{ padding: "8px 12px", fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "left" }}>Reason</th>
                                     <th style={{ padding: "8px 12px", fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "left" }}>Expired</th>
+                                    {isSuperAdmin && <th style={{ padding: "8px 12px", fontSize: "11px", color: "var(--text-tertiary)", fontWeight: 600, textAlign: "left" }}>Actions</th>}
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -1420,6 +1434,12 @@ function AdminPageContent() {
                                       <td style={{ padding: "9px 12px" }}><span style={badgeStyle('gray')}>{o.status || 'expired'}</span></td>
                                       <td style={{ padding: "9px 12px", fontSize: "12px", color: "var(--text-primary)", maxWidth: "180px" }}>{o.reason}</td>
                                       <td style={{ padding: "9px 12px", fontSize: "12px", color: "var(--text-secondary)" }}>{new Date(o.endDate).toLocaleDateString()}</td>
+                                      {isSuperAdmin && (
+                                        <td style={{ padding: "9px 12px" }}>
+                                          <button className="btn btn-ghost btn-sm" style={{ color: "var(--text-tertiary)", fontSize: "11px" }}
+                                            onClick={() => { if (confirm('Permanently delete this override record?')) deleteOverride(o.id); }}>Delete</button>
+                                        </td>
+                                      )}
                                     </tr>
                                   ))}
                                 </tbody>
@@ -1824,7 +1844,7 @@ function AdminPageContent() {
                 </label>
                 <input
                   type="email"
-                  placeholder="e.g. john.doe@vsqc.com"
+                  placeholder="e.g. john.doe@systemeta.com"
                   value={formEmail}
                   onChange={(e) => setFormEmail(e.target.value)}
                   className="input"
@@ -2176,7 +2196,7 @@ function AdminPageContent() {
               {t("Restore Default Settings")}
             </h3>
             <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "20px", lineHeight: 1.5 }}>
-              Are you sure you want to reset all settings to defaults? This will restore the platform name to "VSQC Platform", the default currency to INR, numbering system to Indian, timezone to Asia/Kolkata, language to English (India), and default security & notifications policies.
+              Are you sure you want to reset all settings to defaults? This will restore the platform name to "Systemeta", the default currency to INR, numbering system to Indian, timezone to Asia/Kolkata, language to English (India), and default security & notifications policies.
             </p>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
@@ -2191,6 +2211,44 @@ function AdminPageContent() {
                 onClick={handleConfirmRestoreDefaults}
               >
                 Restore Defaults
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ─── Extend Override Modal ─────────────────────────────────────────── */}
+      {extendOverrideId && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999 }}>
+          <div style={{ background: "var(--bg-card)", borderRadius: "12px", boxShadow: "0 24px 60px rgba(0,0,0,0.3)", width: "440px", maxWidth: "calc(100vw - 48px)", padding: "28px", animation: "cardEntrance 0.3s cubic-bezier(0.175,0.885,0.32,1.275)" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "20px" }}>
+              <Shield size={18} color="#2E86C1" />
+              <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>Extend Override</h3>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>New Expiration Date *</label>
+                <input type="date" className="input" value={extendEndDate} onChange={(e) => setExtendEndDate(e.target.value)}
+                  min={new Date().toISOString().split("T")[0]} style={{ width: "100%", fontSize: "13px" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>Reason for Extension *</label>
+                <textarea className="input" value={extendReason} onChange={(e) => setExtendReason(e.target.value)}
+                  placeholder="Provide justification for extending this override..." rows={3}
+                  style={{ width: "100%", fontSize: "13px", resize: "vertical" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "20px" }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => setExtendOverrideId(null)} disabled={isExtending}>Cancel</button>
+              <button className="btn btn-primary btn-sm" disabled={isExtending || !extendEndDate || !extendReason.trim()}
+                onClick={async () => {
+                  if (!extendEndDate || !extendReason.trim()) { showToast("Please fill in all required fields.", "warning"); return; }
+                  setIsExtending(true);
+                  try {
+                    await updateOverride(extendOverrideId, { action: "extend", endDate: extendEndDate, reason: extendReason.trim() });
+                    setExtendOverrideId(null);
+                  } finally { setIsExtending(false); }
+                }}>
+                {isExtending ? "Extending..." : "Confirm Extension"}
               </button>
             </div>
           </div>

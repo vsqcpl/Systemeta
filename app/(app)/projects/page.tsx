@@ -220,7 +220,7 @@ export default function ProjectsPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `VSQC_Portfolio_${dateStr}.csv`;
+    a.download = `Systemeta_Portfolio_${dateStr}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     showToast("Export downloaded successfully", "success");
@@ -316,7 +316,7 @@ export default function ProjectsPage() {
       }
 
       const dateStr = new Date().toISOString().split("T")[0];
-      pdf.save(`VSQC_Portfolio_${dateStr}.pdf`);
+      pdf.save(`Systemeta_Portfolio_${dateStr}.pdf`);
       showToast("Export downloaded successfully", "success");
     } catch (err) {
       console.error(err);

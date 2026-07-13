@@ -194,7 +194,7 @@ export default function Sidebar() {
             title="Executive Dashboard"
             style={{ textDecoration: "none" }}
           >
-            VS
+            SM
           </Link>
 
           <button

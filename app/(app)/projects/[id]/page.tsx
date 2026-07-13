@@ -268,7 +268,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
       const safeName = p.name.replace(/[^a-zA-Z0-9]/g, "_").substring(0, 30);
       const dateStr = new Date().toISOString().split("T")[0];
-      pdf.save(`VSQC_Project_${safeName}_${dateStr}.pdf`);
+      pdf.save(`Systemeta_Project_${safeName}_${dateStr}.pdf`);
       showToast("Export downloaded successfully", "success");
     } catch (err) {
       console.error(err);

@@ -17,7 +17,7 @@ export default function AIAssistant() {
     {
       id: "welcome",
       sender: "ai",
-      text: "Hello! I'm the VSQC AI Assistant.\n\nI can help with attendance, timesheets, leave requests, projects, and any other operational queries.",
+      text: "Hello! I'm the Systemeta AI Assistant.\n\nI can help with attendance, timesheets, leave requests, projects, and any other operational queries.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -68,7 +68,7 @@ export default function AIAssistant() {
       );
       contextLines.push(`Total Logged Timesheet Hours: ${totalTimesheetHours}h`);
 
-      const systemContext = `You are the VSQC AI Assistant for an enterprise operations platform. Answer concisely and helpfully. 
+      const systemContext = `You are the Systemeta AI Assistant for an enterprise operations platform. Answer concisely and helpfully. 
 Current platform data:
 ${contextLines.join("\n")}
 Only reference figures that appear in this context. If data is unavailable, say so.`;
@@ -197,7 +197,7 @@ Only reference figures that appear in this context. If data is unavailable, say 
                   </div>
                 </div>
                 <div>
-                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>VSQC AI Assistant</div>
+                  <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)" }}>Systemeta AI Assistant</div>
                   <div style={{ fontSize: "11px", color: "#1ABC9C" }}>Online</div>
                 </div>
               </div>

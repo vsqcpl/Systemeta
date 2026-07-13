@@ -106,11 +106,11 @@ export default function SelectModulePage() {
               boxShadow: "0 4px 12px rgba(14, 165, 233, 0.25)",
             }}
           >
-            VS
+            SM
           </div>
           <div>
             <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.3px" }}>
-              VSQC Platform
+              Systemeta
             </div>
             <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
               Enterprise Operations Suite
@@ -179,7 +179,7 @@ export default function SelectModulePage() {
         <div className="ms-badge" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
           <CheckCircle size={14} color="var(--success-500)" /> Signed in successfully
         </div>
-        <h1 className="ms-title">Welcome to VSQC Platform</h1>
+        <h1 className="ms-title">Welcome to Systemeta</h1>
         <p className="ms-subtitle">Select a module to get started</p>
       </div>
 
