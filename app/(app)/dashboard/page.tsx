@@ -16,9 +16,7 @@ import {
   IconTarget,
   IconWallet,
   IconTrendingUp,
-  IconTimer,
   IconUsers,
-  IconStar,
 } from "@/components/ui/Icons";
 
 import QuickAddModal from "@/components/QuickAddModal";
@@ -289,19 +287,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Card 6: Billable Hours */}
-        <div className="kpi-card">
-          <span className="kpi-label">{t("Billable Hours")}</span>
-          <div className="kpi-icon"><IconTimer size={16} /></div>
-          <span className="kpi-value">{data.kpis.billableHours.toLocaleString()}</span>
-          <div className="kpi-sparkline">
-            <KpiSparklineChart sparkData={[1500, 1620, 1780, 1690, 1750, data.kpis.billableHours]} color="#1ABC9C" />
-          </div>
-          <div className="kpi-footer">
-            <span className="kpi-change positive">↑ 5.2%</span>
-            <span className="kpi-trend">{t("this month")}</span>
-          </div>
-        </div>
+
 
         {/* Card 7: Team Members */}
         <div className="kpi-card">
@@ -317,19 +303,6 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Card 8: Client Satisfaction */}
-        <div className="kpi-card">
-          <span className="kpi-label">{t("Client Satisfaction")}</span>
-          <div className="kpi-icon"><IconStar size={16} /></div>
-          <span className="kpi-value">{data.kpis.clientSatisfaction}%</span>
-          <div className="kpi-sparkline">
-            <KpiSparklineChart sparkData={[92, 93, 93, 94, 94, data.kpis.clientSatisfaction]} color="#E09B2D" />
-          </div>
-          <div className="kpi-footer">
-            <span className="kpi-change positive">↑ 0.2%</span>
-            <span className="kpi-trend">{t("NPS survey rating")}</span>
-          </div>
-        </div>
       </div>
 
 

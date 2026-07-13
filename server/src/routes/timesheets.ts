@@ -547,9 +547,18 @@ router.post("/punch-out", async (req: AuthenticatedRequest, res) => {
 // GET /api/timesheets/punch-sessions
 router.get("/punch-sessions", async (req: AuthenticatedRequest, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, employeeId } = req.query;
     
-    let whereClause: any = { consultantId: req.user.id };
+    let targetConsultantId = req.user.id;
+    if (employeeId && typeof employeeId === "string") {
+      if (req.user.role === "super_admin") {
+        targetConsultantId = employeeId;
+      } else if (employeeId !== req.user.id) {
+        return res.status(403).json({ message: "Forbidden" });
+      }
+    }
+    
+    let whereClause: any = { consultantId: targetConsultantId };
     
     if (startDate && endDate) {
       whereClause.date = {

@@ -32,6 +32,7 @@ model User {
   
   projects           ProjectAssignment[]
   tasks              Task[]
+  taskAssignments    TaskAssignment[]
   timesheets         Timesheet[]
   punchSessions      PunchSession[]
   leaveRequests      LeaveRequest[]
@@ -128,9 +129,19 @@ model Task {
   actualCompletionDate String?
   comments             TaskComment[]
   subtasks             Subtask[]
+  assignees            TaskAssignment[]
 
   @@index([projectId])
   @@index([assigneeId])
+}
+
+model TaskAssignment {
+  taskId String
+  userId String
+  task   Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, userId])
 }
 
 model Subtask {
@@ -250,10 +261,27 @@ model Invoice {
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   client    String
   amount    Float
-  status    String   // e.g. draft, outstanding, paid, overdue
+  status    String   // e.g. draft, issued, partially_paid, paid, overdue, cancelled
   issued    String
   due       String?
   paid      String?
+
+  payments  Payment[]
+}
+
+model Payment {
+  id              String   @id @default(uuid())
+  invoiceId       String
+  invoice         Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount          Float
+  date            String
+  method          String
+  referenceNumber String?
+  transactionId   String?
+  remarks         String?
+  proofUrl        String?
+  recordedBy      String
+  recordedAt      DateTime @default(now())
 }
 
 model AIInsight {

@@ -12,7 +12,7 @@ router.use(authMiddleware);
 // GET /api/dashboard - Aggregate dashboard statistics
 router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
-    const cacheKey = req.user.role === "client_manager" ? req.user.id : req.user.role;
+    const cacheKey = req.user.id;
     const cachedData = getCachedDashboard(cacheKey, req.user.role);
     if (cachedData) {
       return res.json(cachedData);
@@ -35,7 +35,11 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     let timesheetWhere: any = { billable: true };
     let clientNames: string[] = [];
 
-    if (req.user.role === "client_manager") {
+    const hasCrossProject = await checkPermission(req.user.id, req.user.role, "Cross-Project Visibility");
+
+    if (req.user.role === "super_admin" || req.user.role === "accounts" || hasCrossProject) {
+      // No extra filtering needed; keep defaults to see all projects/tasks
+    } else if (req.user.role === "client_manager") {
       const clients = await prisma.client.findMany({
         where: { createdBy: req.user.id },
         select: { name: true },
@@ -57,6 +61,42 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       milestoneWhere = { projectId: { in: clientProjectIds }, status: "upcoming" };
       projectSumWhere = { client: { in: clientNames } };
       timesheetWhere = { projectId: { in: clientProjectIds }, billable: true };
+    } else if (req.user.role === "client_contact" && req.user.clientId) {
+      const clientProjects = await prisma.project.findMany({
+        where: { client: req.user.clientId },
+        select: { id: true },
+      });
+      const clientProjectIds = clientProjects.map((p) => p.id);
+
+      projectWhere = { status: "active", client: req.user.clientId };
+      taskWhere = {
+        projectId: { in: clientProjectIds },
+        status: { in: ["todo", "inprogress", "review"] },
+        dueDate: { lt: new Date().toISOString().split("T")[0] },
+      };
+      milestoneWhere = { projectId: { in: clientProjectIds }, status: "upcoming" };
+      projectSumWhere = { client: req.user.clientId };
+      timesheetWhere = { projectId: { in: clientProjectIds }, billable: true };
+    } else {
+      // PM, Senior Consultant, Consultant see only their assigned projects and tasks
+      const assignments = await prisma.projectAssignment.findMany({
+        where: { userId: req.user.id },
+        select: { projectId: true },
+      });
+      const projectIds = assignments.map((a) => a.projectId);
+
+      projectWhere = { status: "active", id: { in: projectIds } };
+      taskWhere = {
+        status: { in: ["todo", "inprogress", "review"] },
+        dueDate: { lt: new Date().toISOString().split("T")[0] },
+        OR: [
+          { projectId: { in: projectIds } },
+          { assigneeId: req.user.id }
+        ]
+      };
+      milestoneWhere = { projectId: { in: projectIds }, status: "upcoming" };
+      projectSumWhere = { id: { in: projectIds } };
+      timesheetWhere = { projectId: { in: projectIds }, billable: true };
     }
 
     const [

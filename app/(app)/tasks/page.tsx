@@ -19,7 +19,8 @@ import {
   DragEndEvent,
   DragOverlay,
   DragStartEvent,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   useDroppable,
@@ -106,7 +107,8 @@ function TaskCard({
   
   const isAssignee = task.assignee === user?.id;
   const isManager = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
-  const canMove = isAssignee || isManager;
+  const isSeniorConsultant = user?.role === "senior_consultant" || user?.role === "Senior Consultant";
+  const canMove = (isAssignee || isManager || isSeniorConsultant) && !(!isManager && col === "done");
 
   const attributesAndListeners = useDraggable({
     id: task.id,
@@ -165,7 +167,6 @@ function TaskCard({
         <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>
           {task.title}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "10px" }}>{task.id}</div>
         {task.progress !== undefined && (
           <div style={{ marginBottom: "10px" }}>
             <div className="progress-bar" style={{ height: "4px" }}>
@@ -271,7 +272,11 @@ function TaskDrawer({
   const moveTask = useAppStore((state) => state.moveTask);
   const showToast = useAppStore((state) => state.showToast);
   const deleteTaskComments = useAppStore((state) => state.deleteTaskComments);
+  const data = useAppStore((state) => state.data);
   const { user } = useAuth();
+
+  const isManager = user?.role?.toLowerCase() === "super_admin" || user?.role?.toLowerCase() === "project_manager";
+  const [showReviewModal, setShowReviewModal] = React.useState(col === "review" && isManager);
 
   const [manageCommentsMode, setManageCommentsMode] = React.useState(false);
   const [selectedCommentIds, setSelectedCommentIds] = React.useState<string[]>([]);
@@ -286,6 +291,7 @@ function TaskDrawer({
   const [rejectReason, setRejectReason] = React.useState("");
   const [rejectAssignee, setRejectAssignee] = React.useState(task.assignee);
   const [rejectEfficiency, setRejectEfficiency] = React.useState("5");
+  const [rejectDue, setRejectDue] = React.useState(task.dueDate || "");
 
   const handleSatisfiedYes = () => {
     moveTask(task.id, "done", new Date().toISOString().split("T")[0]);
@@ -310,6 +316,14 @@ function TaskDrawer({
       sessionStorage.setItem(`efficiency_penalty_${c.name}`, (currentPenalty + parseInt(rejectEfficiency, 10)).toString());
     }
 
+    if (rejectDue && rejectDue !== task.dueDate) {
+      const today = new Date().toISOString().split("T")[0];
+      if (rejectDue < today) {
+        showToast("New due date cannot be set in the past", "danger");
+        return;
+      }
+    }
+
     // 2. Local State Optimistic Update: Move to inprogress & update assignee
     useAppStore.setState((state) => {
       const newTasks = { ...state.data.tasks };
@@ -320,7 +334,7 @@ function TaskDrawer({
         const list = newTasks[column as keyof typeof newTasks];
         const idx = list.findIndex(t => t.id === task.id);
         if (idx !== -1) {
-          foundTask = { ...list[idx], assignee: rejectAssignee };
+          foundTask = { ...list[idx], assignee: rejectAssignee, dueDate: rejectDue };
           newTasks[column as keyof typeof newTasks] = list.filter(t => t.id !== task.id);
           break;
         }
@@ -343,7 +357,8 @@ function TaskDrawer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         status: "inprogress",
-        assigneeId: rejectAssignee
+        assigneeId: rejectAssignee,
+        dueDate: rejectDue
       }),
     })
       .then((res) => {
@@ -398,6 +413,107 @@ function TaskDrawer({
           boxShadow: "var(--shadow-xl)", zIndex: 499, overflowY: "auto", padding: "24px",
         }}
       >
+        {showReviewModal && (
+          <div style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(0,0,0,0.6)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 600,
+            padding: "24px"
+          }}>
+            <div className="card" style={{
+              background: "var(--bg-surface)",
+              padding: "24px",
+              borderRadius: "12px",
+              border: "1px solid var(--border-default)",
+              width: "100%",
+              boxShadow: "var(--shadow-xl)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px"
+            }}>
+              {!showRejectForm ? (
+                <>
+                  <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+                    {t("Are you satisfied with this work?")}
+                  </h3>
+                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.4, margin: 0 }}>
+                    {t("This task is currently In Review. You can approve it to mark it Done, or reject it back to In Progress.")}
+                  </p>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                    <button className="btn btn-ghost btn-sm" onClick={() => setShowReviewModal(false)}>{t("Dismiss")}</button>
+                    <button className="btn btn-danger btn-sm" onClick={() => setShowRejectForm(true)}>{t("Reject")}</button>
+                    <button className="btn btn-success btn-sm" onClick={handleSatisfiedYes}>{t("Approve")}</button>
+                  </div>
+                </>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <h3 style={{ fontSize: "15px", fontWeight: 700, color: "var(--text-primary)" }}>
+                    {t("Reject Work")}
+                  </h3>
+                  
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("Reason")}</label>
+                    <textarea 
+                      className="input" 
+                      placeholder={t("Provide reason for rejecting...")}
+                      value={rejectReason}
+                      onChange={(e) => setRejectReason(e.target.value)}
+                      style={{ width: "100%", minHeight: "60px", resize: "vertical", fontSize: "12px" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("New Assignee")}</label>
+                    <select 
+                      className="select" 
+                      value={rejectAssignee}
+                      onChange={(e) => setRejectAssignee(e.target.value)}
+                      style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                    >
+                      {consultants.map(cons => (
+                        <option key={cons.id} value={cons.id}>{cons.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("Reduce Efficiency (Current Assignee: {name})").replace("{name}", c.name)}</label>
+                    <input 
+                      type="number"
+                      className="input" 
+                      value={rejectEfficiency}
+                      onChange={(e) => setRejectEfficiency(e.target.value)}
+                      min="0"
+                      max="100"
+                      style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("New Due Date")}</label>
+                    <input 
+                      type="date"
+                      className="input" 
+                      value={rejectDue}
+                      onChange={(e) => setRejectDue(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]}
+                      style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                    />
+                  </div>
+
+                  <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "8px" }}>
+                    <button className="btn btn-sm" style={{ background: "var(--bg-surface-3)" }} onClick={() => { setShowRejectForm(false); setShowReviewModal(false); }}>{t("Cancel")}</button>
+                    <button className="btn btn-primary btn-sm" onClick={handleSubmitRejection}>{t("Submit")}</button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span className={`badge ${COL_BADGE[col]}`}>{t(COL_LABELS[col])}</span>
@@ -407,70 +523,16 @@ function TaskDrawer({
         </div>
         <h2 style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "16px", lineHeight: 1.4 }}>{task.title}</h2>
 
-        {col === "review" && (
+        {col === "review" && !isManager && (
           <div style={{ marginBottom: "20px", padding: "16px", border: "1px solid var(--border-default)", borderRadius: "10px", background: "var(--bg-surface-2)" }}>
-            {!showRejectForm ? (
-              <>
-                <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "12px" }}>Are you satisfied with this work?</h3>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button className="btn btn-success btn-sm" onClick={handleSatisfiedYes}>Yes</button>
-                  <button className="btn btn-danger btn-sm" onClick={handleSatisfiedNo}>No</button>
-                </div>
-              </>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                <h3 style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px" }}>Reject Work</h3>
-                
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Reason</label>
-                  <textarea 
-                    className="input" 
-                    placeholder="Provide reason for rejecting..."
-                    value={rejectReason}
-                    onChange={(e) => setRejectReason(e.target.value)}
-                    style={{ width: "100%", minHeight: "60px", resize: "vertical", fontSize: "12px" }}
-                  />
-                </div>
-
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>New Assignee</label>
-                  <select 
-                    className="select" 
-                    value={rejectAssignee}
-                    onChange={(e) => setRejectAssignee(e.target.value)}
-                    style={{ width: "100%", fontSize: "12px", padding: "6px" }}
-                  >
-                    {consultants.map(cons => (
-                      <option key={cons.id} value={cons.id}>{cons.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>Reduce Efficiency (Current Assignee: {c.name})</label>
-                  <input 
-                    type="number"
-                    className="input" 
-                    value={rejectEfficiency}
-                    onChange={(e) => setRejectEfficiency(e.target.value)}
-                    min="0"
-                    max="100"
-                    style={{ width: "100%", fontSize: "12px", padding: "6px" }}
-                  />
-                </div>
-
-                <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "8px" }}>
-                  <button className="btn btn-sm" style={{ background: "var(--bg-surface-3)" }} onClick={() => setShowRejectForm(false)}>Cancel</button>
-                  <button className="btn btn-primary btn-sm" onClick={handleSubmitRejection}>Submit</button>
-                </div>
-              </div>
-            )}
+            <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+              {t("This task is currently In Review. A Project Manager or Super Admin will approve or reject it.")}
+            </span>
           </div>
         )}
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "20px" }}>
           {[
-            { label: t("Assignee"), value: (<div style={{ display: "flex", alignItems: "center", gap: "6px" }}><div className="avatar" style={{ background: c.color, width: "20px", height: "20px", minWidth: "20px", fontSize: "8px" }}>{c.avatar}</div><span>{c.name}</span></div>) },
             { label: t("Priority"), value: (<span style={{ fontWeight: 700, color: PRIORITY_COLORS[task.priority] }}>{t(task.priority.charAt(0).toUpperCase() + task.priority.slice(1))}</span>) },
             { label: t("Due Date"), value: task.dueDate },
             { label: t("Estimate"), value: `${task.estimate}h` },
@@ -481,6 +543,95 @@ function TaskDrawer({
             </div>
           ))}
         </div>
+
+        {/* Multiple Assignees section */}
+        {(() => {
+          const project = data.projects.find((p) => p.id === task.project);
+          const projectTeamIds = project?.team || [];
+          const eligibleUsers = (data.users || []).filter((u: any) => projectTeamIds.includes(u.id));
+          const currentAssignees = task.assignees && task.assignees.length > 0 ? task.assignees : [task.assignee];
+          const unassignedProjectUsers = eligibleUsers.filter((u: any) => !currentAssignees.includes(u.id));
+
+          return (
+            <div style={{ marginBottom: "20px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                  {t("Assignees")}
+                </div>
+                
+                {unassignedProjectUsers.length > 0 && (
+                  <select
+                    className="select"
+                    value=""
+                    onChange={(e) => {
+                      const newUserId = e.target.value;
+                      if (newUserId) {
+                        const updated = Array.from(new Set([...currentAssignees, newUserId]));
+                        useAppStore.getState().updateTask(task.id, { assignees: updated });
+                      }
+                    }}
+                    style={{ fontSize: "11px", padding: "2px 8px", height: "auto" }}
+                  >
+                    <option value="" disabled>+ {t("Add Member")}</option>
+                    {unassignedProjectUsers.map((u: any) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {currentAssignees.map((userId) => {
+                  const u = (data.users || []).find((x: any) => x.id === userId) || { name: userId, avatar: "?", color: "#64748b" };
+                  const initial = u.name.split(" ").map((n: any) => n[0]).join("").toUpperCase().slice(0, 2);
+                  return (
+                    <div 
+                      key={userId} 
+                      style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: "6px", 
+                        padding: "4px 8px", 
+                        background: "var(--bg-surface-2)", 
+                        borderRadius: "20px", 
+                        border: "1px solid var(--border-subtle)" 
+                      }}
+                    >
+                      <div className="avatar" style={{ background: (u as any).color || "#64748b", width: "18px", height: "18px", fontSize: "7.5px" }}>
+                        {initial}
+                      </div>
+                      <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>{u.name}</span>
+                      {currentAssignees.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const updated = currentAssignees.filter((id) => id !== userId);
+                            useAppStore.getState().updateTask(task.id, { 
+                              assignees: updated,
+                              assignee: userId === task.assignee ? updated[0] : undefined
+                            });
+                          }}
+                          style={{ 
+                            background: "none", 
+                            border: "none", 
+                            color: "var(--text-tertiary)", 
+                            cursor: "pointer", 
+                            padding: 0, 
+                            fontSize: "13px",
+                            lineHeight: 1,
+                            marginLeft: "2px"
+                          }}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
         {task.progress !== undefined && (
           <div style={{ marginBottom: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
@@ -802,6 +953,41 @@ function TaskDrawer({
 export default function TasksPage() {
   const router = useRouter();
   const [showAiCopilot, setShowAiCopilot] = useState(true);
+  const data = useAppStore((state) => state.data);
+
+  const allEligibleAssignees = React.useMemo(() => {
+    const list: { id: string; name: string; avatar: string; color: string; role?: string }[] = [];
+    
+    // 1. Add all from data.users
+    if (data.users && Array.isArray(data.users)) {
+      for (const u of data.users) {
+        const existingConsultant = data.consultants.find((c) => c.id === u.id || c.name === u.name);
+        const initials = u.name.split(" ").map((n: any) => n[0]).join("").toUpperCase().slice(0, 2);
+        list.push({
+          id: u.id,
+          name: u.name,
+          avatar: existingConsultant?.avatar || initials || "?",
+          color: existingConsultant?.color || "#64748b",
+          role: u.role
+        });
+      }
+    }
+
+    // 2. Add any other from data.consultants that are not in list
+    for (const c of data.consultants) {
+      if (!list.find((x) => x.id === c.id)) {
+        list.push({
+          id: c.id,
+          name: c.name,
+          avatar: c.avatar,
+          color: c.color,
+          role: c.role
+        });
+      }
+    }
+
+    return list;
+  }, [data.users, data.consultants]);
   const [embeddedAiView, setEmbeddedAiView] = useState<"delay-dashboard" | "assignment-dashboard" | "clash-dashboard" | null>(null);
   const [embeddedAiModal, setEmbeddedAiModal] = useState<"estimate-tasks" | null>(null);
   const [embeddedAiTaskId, setEmbeddedAiTaskId] = useState<string | null>(null);
@@ -825,7 +1011,6 @@ export default function TasksPage() {
       document.body.style.overflow = "";
     };
   }, [embeddedAiView, embeddedAiModal, setSidebarCollapsed, sidebarCollapsed, prevSidebarState]);
-  const data = useAppStore((state) => state.data);
   const { t } = useTranslation();
   const { user } = useAuth();
   const visibleProjects = user ? filterProjects(data.projects, user) : [];
@@ -853,6 +1038,14 @@ export default function TasksPage() {
   const [ntTitle, setNtTitle] = useState("");
   const [ntProject, setNtProject] = useState("");
   const [ntAssignees, setNtAssignees] = useState<{ id: string; hours: string }[]>([]);
+
+  const createModalProject = data.projects.find((p) => p.id === ntProject);
+  const createModalTeamIds = createModalProject?.team || [];
+  const createModalEligibleAssignees = React.useMemo(() => {
+    return createModalTeamIds.length > 0 
+      ? allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id))
+      : allEligibleAssignees;
+  }, [createModalTeamIds, allEligibleAssignees]);
   const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
   const [ntPriority, setNtPriority] = useState<any>("medium");
   const [ntDue, setNtDue] = useState("");
@@ -1059,7 +1252,7 @@ export default function TasksPage() {
     const dateStr = new Date().toISOString().split("T")[0];
     const headers = ["Task ID", "Task Name", "Project", "Assignee", "Status", "Priority", "Due Date", "Created Date"];
     const rows = filteredAllTasks.map((t) => {
-      const c = data.consultants.find((x) => x.id === t.assignee);
+      const c = allEligibleAssignees.find((x) => x.id === t.assignee);
       return [
         t.id,
         `"${t.title}"`,
@@ -1082,7 +1275,10 @@ export default function TasksPage() {
     showToast("Export downloaded successfully", "success");
   };
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+  const sensors = useSensors(
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
+  );
 
   const allTasks = Object.entries(data.tasks).flatMap(([col, tasks]) =>
     tasks.map((t) => ({ ...t, col: col as TaskCol }))
@@ -1111,6 +1307,11 @@ export default function TasksPage() {
     if (!found) return;
     const newCol = over.id as TaskCol;
     if (found.col !== newCol) {
+      const isManager = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
+      if (!isManager && newCol === "done") {
+        showToast(t("Only Project Managers and Super Admins can set tasks to Done directly"), "danger");
+        return;
+      }
       if (newCol === "done") {
         setCompletionModalTask({ task: found.task, newCol });
         setCompletionDate(new Date().toISOString().split("T")[0]);
@@ -1300,7 +1501,7 @@ export default function TasksPage() {
                       key={col}
                       col={col}
                       tasks={colTasks}
-                      consultants={data.consultants}
+                      consultants={allEligibleAssignees}
                       onOpen={(task, c) => setDrawerTask({ task, col: c })}
                     />
                   );
@@ -1335,7 +1536,9 @@ export default function TasksPage() {
                   </thead>
                   <tbody>
                     {filteredAllTasks.map((task) => {
-                      const c = data.consultants.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
+                      const c = allEligibleAssignees.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
+                      const proj = data.projects.find((p) => p.id === task.project);
+                      const projectName = proj ? proj.name : task.project;
                       return (
                         <tr key={task.id} style={{ cursor: "pointer" }} onClick={() => setDrawerTask({ task: task, col: task.col })}>
                           <td><input type="checkbox" onClick={(e) => e.stopPropagation()} style={{ cursor: "pointer" }} /></td>
@@ -1348,7 +1551,7 @@ export default function TasksPage() {
                               </div>
                             </div>
                           </td>
-                          <td><span className="badge badge-gray" style={{ fontSize: "11px" }}>{task.project}</span></td>
+                          <td><span className="badge badge-gray" style={{ fontSize: "11px" }}>{projectName}</span></td>
                           <td>
                             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                               <div className="avatar" style={{ background: c.color, width: "22px", height: "22px", minWidth: "22px", fontSize: "8px" }}>{c.avatar}</div>
@@ -1423,7 +1626,7 @@ export default function TasksPage() {
                                  {t(COL_LABELS[col])} ({colTasks.length})
                                </div>
                                {colTasks.map((task) => {
-                                 const c = data.consultants.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
+                                 const c = allEligibleAssignees.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
                                  return (
                                    <div
                                      key={task.id}
@@ -1459,7 +1662,7 @@ export default function TasksPage() {
           <TaskDrawer
             task={liveTask}
             col={liveTask.col}
-            consultants={data.consultants}
+            consultants={allEligibleAssignees}
             onClose={() => setDrawerTask(null)}
             onOpenAiInline={(view, modal, taskId) => {
               setEmbeddedAiView(view);
@@ -1649,7 +1852,7 @@ export default function TasksPage() {
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val === "SELECT_ALL") {
-                          setNtAssignees(data.consultants.map(c => ({ id: c.id, hours: "" })));
+                          setNtAssignees(createModalEligibleAssignees.map(c => ({ id: c.id, hours: "" })));
                         } else if (val === "CLEAR_ALL") {
                           setNtAssignees([]);
                         } else if (val && !ntAssignees.find(a => a.id === val)) {
@@ -1661,7 +1864,7 @@ export default function TasksPage() {
                       <option value="" disabled>{t("Add an assignee...")}</option>
                       <option value="SELECT_ALL">{t("Select All")}</option>
                       <option value="CLEAR_ALL">{t("Clear All")}</option>
-                      {data.consultants.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => (
+                      {createModalEligibleAssignees.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
@@ -1671,7 +1874,7 @@ export default function TasksPage() {
                     {ntAssignees.length > 0 && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", background: "var(--bg-surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
                         {ntAssignees.map((assignee, idx) => {
-                          const c = data.consultants.find(x => x.id === assignee.id);
+                          const c = allEligibleAssignees.find(x => x.id === assignee.id);
                           return (
                             <div key={assignee.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>

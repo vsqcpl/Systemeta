@@ -55,6 +55,7 @@ export interface Task {
   title: string;
   project: string; // Project ID
   assignee: string; // Consultant ID
+  assignees?: string[]; // Multiple Consultant IDs
   priority: ProjectPriority;
   dueDate: string;
   estimate: number;
@@ -151,7 +152,21 @@ export interface Expense {
   isOutsideCity?: boolean;
 }
 
-export type InvoiceStatus = 'draft' | 'outstanding' | 'paid' | 'overdue';
+export type InvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+
+export interface Payment {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  date: string;
+  method: string;
+  referenceNumber?: string;
+  transactionId?: string;
+  remarks?: string;
+  proofUrl?: string;
+  recordedBy: string;
+  recordedAt?: string;
+}
 
 export interface Invoice {
   id: string;
@@ -162,6 +177,9 @@ export interface Invoice {
   issued: string;
   due?: string;
   paid?: string;
+  collectedAmount?: number;
+  outstandingAmount?: number;
+  payments?: Payment[];
 }
 
 export type AIInsightSeverity = 'high' | 'medium' | 'low' | 'info';
@@ -361,6 +379,7 @@ export interface VSQCData {
   leaveRequests: LeaveRequest[];
   expenses: Expense[];
   invoices: Invoice[];
+  payments?: Payment[];
   aiInsights: AIInsight[];
   activities: Activity[];
   notifications: Notification[];

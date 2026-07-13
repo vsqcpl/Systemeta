@@ -373,6 +373,7 @@ interface AppStore {
   updateUserMFA: (id: string, mfa: boolean) => void;
   updateUserStatus: (id: string, status: 'active' | 'inactive') => void;
   addInvoice: (invoice: Omit<Invoice, "id" | "status">) => void;
+  addPayment: (invoiceId: string, paymentData: any) => void;
   updateMilestone: (id: string, updates: any) => void;
   inviteUser: (user: Omit<User, "id" | "status" | "mfa" | "lastLogin">) => void;
   deleteProject: (id: string) => Promise<boolean>;
@@ -3721,6 +3722,38 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error generating invoice: " + err.message, "danger");
+      });
+  },
+
+  addPayment: (invoiceId, paymentData) => {
+    fetch(`/api/billing/invoices/${invoiceId}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(paymentData),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.message || "Failed to record payment");
+        }
+        return res.json();
+      })
+      .then(() => {
+        useAppStore.getState().showToast("Payment recorded successfully", "success");
+        fetch("/api/billing")
+          .then((r) => r.json())
+          .then((billing) => {
+            set((state) => ({
+              data: {
+                ...state.data,
+                invoices: billing.invoices,
+                milestones: billing.milestones,
+              },
+            }));
+          });
+      })
+      .catch((err) => {
+        useAppStore.getState().showToast("Error recording payment: " + err.message, "danger");
       });
   },
 

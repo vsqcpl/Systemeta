@@ -67,6 +67,16 @@ export default function BillingPage() {
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<{ clientName?: string; project?: string; invoiceDate?: string; dueDate?: string; amount?: string }>({});
 
+  // Payment Modals State
+  const [showPaymentModal, setShowPaymentModal] = useState<string | null>(null);
+  const [showHistoryModal, setShowHistoryModal] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [paymentMethod, setPaymentMethod] = useState("Bank Transfer");
+  const [paymentReference, setPaymentReference] = useState("");
+  const [paymentRemarks, setPaymentRemarks] = useState("");
+  const addPayment = useAppStore((state: any) => state.addPayment);
+
   // Auto-select first project
   React.useEffect(() => {
     if (visibleProjects.length > 0 && !project) {
@@ -138,6 +148,24 @@ export default function BillingPage() {
     setShowInvoiceModal(false);
   };
 
+  const handleRecordPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showPaymentModal || !paymentAmount || parseFloat(paymentAmount) <= 0) return;
+    
+    addPayment(showPaymentModal, {
+      amount: parseFloat(paymentAmount),
+      date: paymentDate,
+      method: paymentMethod,
+      referenceNumber: paymentReference,
+      remarks: paymentRemarks,
+    });
+
+    setShowPaymentModal(null);
+    setPaymentAmount("");
+    setPaymentReference("");
+    setPaymentRemarks("");
+  };
+
   const handleExportCSV = () => {
     if (data.invoices.length === 0) {
       showToast("No invoices to export", "danger");
@@ -159,7 +187,7 @@ export default function BillingPage() {
       return (isNegative ? "-" : "") + "₹" + formatted;
     };
 
-    const headers = ["Invoice ID", "Client", "Project", "Date", "Due Date", "Amount", "Status"];
+    const headers = ["Invoice ID", "Client", "Project", "Date", "Due Date", "Amount", "Collected", "Outstanding", "Status"];
     const rows = data.invoices.map((inv) => [
       inv.id,
       inv.client,
@@ -167,6 +195,8 @@ export default function BillingPage() {
       inv.issued,
       inv.due || "—",
       formatCsvAmount(inv.amount),
+      formatCsvAmount(inv.collectedAmount || 0),
+      formatCsvAmount(inv.outstandingAmount ?? inv.amount),
       inv.status,
     ]);
 
@@ -304,17 +334,12 @@ export default function BillingPage() {
     return statusFilter === "All Status" || inv.status.toLowerCase() === statusFilter.toLowerCase();
   });
 
-  const totalOutstanding = visibleInvoices
-    .filter((i) => i.status === "outstanding")
-    .reduce((s, i) => s + i.amount, 0);
-
+  const totalOutstanding = visibleInvoices.reduce((s, i) => s + (i.outstandingAmount ?? i.amount), 0);
   const totalInvoiced = visibleInvoices.reduce((s, i) => s + i.amount, 0);
-  const totalCollected = visibleInvoices
-    .filter((i) => i.status === "paid")
-    .reduce((s, i) => s + i.amount, 0);
+  const totalCollected = visibleInvoices.reduce((s, i) => s + (i.collectedAmount || 0), 0);
   const totalOverdue = visibleInvoices
     .filter((i) => i.status === "overdue")
-    .reduce((s, i) => s + i.amount, 0);
+    .reduce((s, i) => s + (i.outstandingAmount ?? i.amount), 0);
 
   const formatShortAmount = formatCurrency;
   const updateMilestone = useAppStore((state) => state.updateMilestone);
@@ -524,6 +549,8 @@ export default function BillingPage() {
                 <th>{t("Client")}</th>
                 <th>{t("Project")}</th>
                 <th>{t("Amount")}</th>
+                <th>{t("Collected")}</th>
+                <th>{t("Outstanding")}</th>
                 <th>{t("Issued")}</th>
                 <th>{t("Due")}</th>
                 <th>{t("Status")}</th>
@@ -533,18 +560,22 @@ export default function BillingPage() {
             <tbody>
               {filteredInvoices.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--text-tertiary)", fontSize: "13px" }}>
+                  <td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "var(--text-tertiary)", fontSize: "13px" }}>
                     {t("No invoices found")}
                   </td>
                 </tr>
               ) : (
                 filteredInvoices.map((inv) => {
-                  const statusBadge = {
+                  const statusBadge: Record<string, string> = {
                     paid: "badge-success",
                     outstanding: "badge-brand",
+                    issued: "badge-brand",
+                    partially_paid: "badge-warning",
                     overdue: "badge-danger",
                     draft: "badge-gray",
-                  }[inv.status] || "badge-gray";
+                    cancelled: "badge-gray",
+                  };
+                  const badgeClass = statusBadge[inv.status] || "badge-gray";
 
                   const isOverdue = inv.status === "overdue";
 
@@ -567,14 +598,42 @@ export default function BillingPage() {
                       <td style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>
                         {formatCurrency(inv.amount)}
                       </td>
+                      <td style={{ fontWeight: 600, fontSize: "13px", color: "var(--success-600)" }}>
+                        {formatCurrency(inv.collectedAmount || 0)}
+                      </td>
+                      <td style={{ fontWeight: 600, fontSize: "13px", color: "var(--warning-600)" }}>
+                        {formatCurrency(inv.outstandingAmount ?? inv.amount)}
+                      </td>
                       <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{inv.issued}</td>
                       <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{inv.due || "—"}</td>
                       <td>
-                        <span className={`badge ${statusBadge}`} style={{ fontSize: "11px" }}>
+                        <span className={`badge ${badgeClass}`} style={{ fontSize: "11px" }}>
                           {t(inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
                         </span>
                       </td>
-                      <td style={{ textAlign: "right" }}>
+                      <td style={{ textAlign: "right", display: "flex", gap: "4px", justifyContent: "flex-end" }}>
+                        {inv.status !== "paid" && inv.status !== "cancelled" && (
+                          <button
+                            className="btn btn-ghost btn-icon btn-sm"
+                            onClick={() => setShowPaymentModal(inv.id)}
+                            title={t("Receive Payment")}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <line x1="12" y1="5" x2="12" y2="19"></line>
+                              <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                          </button>
+                        )}
+                        <button
+                          className="btn btn-ghost btn-icon btn-sm"
+                          onClick={() => setShowHistoryModal(inv.id)}
+                          title={t("Payment History")}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <polyline points="12 6 12 12 16 14"></polyline>
+                          </svg>
+                        </button>
                         <button
                           className="btn btn-ghost btn-icon btn-sm"
                           onClick={() => handleDownloadInvoice(inv)}
@@ -676,6 +735,8 @@ export default function BillingPage() {
           </table>
         </div>
       </div>
+      )}
+        </>
       )}
 
       {/* Generate Invoice Modal */}
@@ -845,8 +906,101 @@ export default function BillingPage() {
           </div>
         </div>
       )}
-        </>
-      )}
+      {/* Receive Payment Modal */}
+      {showPaymentModal && (() => {
+        const inv = data.invoices.find((i) => i.id === showPaymentModal);
+        const outstanding = inv ? (inv.outstandingAmount ?? inv.amount) : 0;
+        return (
+          <div
+            className="modal-overlay"
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+            onClick={() => setShowPaymentModal(null)}
+          >
+            <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(520px, 95%)", boxShadow: "var(--shadow-xl)" }} onClick={e => e.stopPropagation()}>
+              <h2 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: 700 }}>{t("Receive Payment")} - {showPaymentModal}</h2>
+              <form onSubmit={handleRecordPayment} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <label style={{ fontSize: "12.5px", fontWeight: 600 }}>{t("Amount")} (Max: {formatCurrency(outstanding)}) <span style={{ color: "red" }}>*</span></label>
+                  <input type="number" step="0.01" max={outstanding} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} className="input" required />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <label style={{ fontSize: "12.5px", fontWeight: 600 }}>{t("Payment Date")} <span style={{ color: "red" }}>*</span></label>
+                    <input type="date" value={paymentDate} onChange={(e) => setPaymentDate(e.target.value)} className="input" required />
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <label style={{ fontSize: "12.5px", fontWeight: 600 }}>{t("Payment Method")} <span style={{ color: "red" }}>*</span></label>
+                    <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)} className="select" required>
+                      <option value="Bank Transfer">Bank Transfer</option>
+                      <option value="Credit Card">Credit Card</option>
+                      <option value="Check">Check</option>
+                      <option value="Cash">Cash</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <label style={{ fontSize: "12.5px", fontWeight: 600 }}>{t("Reference / Transaction ID")}</label>
+                  <input type="text" value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} className="input" />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                  <label style={{ fontSize: "12.5px", fontWeight: 600 }}>{t("Remarks (Optional)")}</label>
+                  <textarea value={paymentRemarks} onChange={(e) => setPaymentRemarks(e.target.value)} className="input" style={{ minHeight: "60px", resize: "vertical" }} />
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "12px" }}>
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPaymentModal(null)}>{t("Cancel")}</button>
+                  <button type="submit" className="btn btn-primary btn-sm">{t("Record Payment")}</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Payment History Modal */}
+      {showHistoryModal && (() => {
+        const inv = data.invoices.find((i) => i.id === showHistoryModal);
+        const payments = inv?.payments || [];
+        return (
+          <div
+            className="modal-overlay"
+            style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", backdropFilter: "blur(4px)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+            onClick={() => setShowHistoryModal(null)}
+          >
+            <div className="modal-content" style={{ background: "var(--bg-surface)", borderRadius: "12px", padding: "24px", width: "min(600px, 95%)", boxShadow: "var(--shadow-xl)", maxHeight: "80vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+              <h2 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: 700 }}>{t("Payment History")} - {showHistoryModal}</h2>
+              {payments.length === 0 ? (
+                <div style={{ padding: "24px", textAlign: "center", color: "var(--text-tertiary)" }}>{t("No payments recorded for this invoice yet.")}</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid var(--border-default)", textAlign: "left", color: "var(--text-secondary)" }}>
+                      <th style={{ padding: "8px" }}>{t("Date")}</th>
+                      <th style={{ padding: "8px" }}>{t("Amount")}</th>
+                      <th style={{ padding: "8px" }}>{t("Method")}</th>
+                      <th style={{ padding: "8px" }}>{t("Reference")}</th>
+                      <th style={{ padding: "8px" }}>{t("Recorded By")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payments.map((p) => (
+                      <tr key={p.id} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                        <td style={{ padding: "8px" }}>{p.date}</td>
+                        <td style={{ padding: "8px", fontWeight: 600, color: "var(--success-600)" }}>{formatCurrency(p.amount)}</td>
+                        <td style={{ padding: "8px" }}>{p.method}</td>
+                        <td style={{ padding: "8px", fontFamily: "monospace" }}>{p.referenceNumber || "—"}</td>
+                        <td style={{ padding: "8px" }}>{p.recordedBy}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowHistoryModal(null)}>{t("Close")}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

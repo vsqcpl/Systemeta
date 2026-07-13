@@ -36,21 +36,32 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     const whereClause = !isElevated ? { projectId: { in: projectsFilter } } : {};
 
     const [invoices, milestones] = await Promise.all([
-      prisma.invoice.findMany({ where: whereClause }),
+      prisma.invoice.findMany({ 
+        where: whereClause,
+        include: { payments: true }
+      }),
       prisma.milestone.findMany({ where: whereClause }),
     ]);
 
     return res.json({
-      invoices: invoices.map((i) => ({
-        id: i.id,
-        project: i.projectId,
-        client: i.client,
-        amount: i.amount,
-        status: i.status,
-        issued: i.issued,
-        due: i.due || undefined,
-        paid: i.paid || undefined,
-      })),
+      invoices: invoices.map((i) => {
+        const collectedAmount = i.payments.reduce((sum, p) => sum + p.amount, 0);
+        const outstandingAmount = i.amount - collectedAmount;
+
+        return {
+          id: i.id,
+          project: i.projectId,
+          client: i.client,
+          amount: i.amount,
+          status: i.status,
+          issued: i.issued,
+          due: i.due || undefined,
+          paid: i.paid || undefined,
+          collectedAmount,
+          outstandingAmount,
+          payments: i.payments,
+        };
+      }),
       milestones: milestones.map((m) => ({
         id: m.id,
         project: m.projectId,
@@ -167,6 +178,102 @@ router.patch("/milestones/:id", requireRoles(["super_admin", "accounts", "projec
   } catch (error) {
     console.error("PATCH /billing/milestones error:", error);
     return res.status(500).json({ message: "Internal server error updating milestone" });
+  }
+});
+
+// POST /api/billing/invoices/:id/payments - Record a payment
+router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { amount, date, method, referenceNumber, transactionId, remarks, proofUrl } = req.body;
+
+    const parsedAmount = parseFloat(amount);
+    if (!parsedAmount || parsedAmount <= 0) {
+      return res.status(400).json({ message: "Invalid payment amount" });
+    }
+
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: { payments: true },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+
+    const currentCollected = invoice.payments.reduce((sum, p) => sum + p.amount, 0);
+    const outstanding = invoice.amount - currentCollected;
+
+    if (parsedAmount > outstanding) {
+      return res.status(400).json({ message: "Payment amount exceeds outstanding balance" });
+    }
+
+    const nextCollected = currentCollected + parsedAmount;
+    let newStatus = invoice.status;
+
+    if (nextCollected >= invoice.amount) {
+      newStatus = "paid";
+    } else if (nextCollected > 0) {
+      newStatus = "partially_paid";
+    }
+
+    const result = await prisma.$transaction(async (tx) => {
+      const payment = await tx.payment.create({
+        data: {
+          invoiceId: id,
+          amount: parsedAmount,
+          date,
+          method,
+          referenceNumber,
+          transactionId,
+          remarks,
+          proofUrl,
+          recordedBy: req.user.name,
+        },
+      });
+
+      const updatedInvoice = await tx.invoice.update({
+        where: { id },
+        data: {
+          status: newStatus,
+          ...(newStatus === "paid" ? { paid: date } : {}),
+        },
+        include: { payments: true },
+      });
+
+      // Log Audit
+      await tx.auditLog.create({
+        data: {
+          timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+          userEmail: req.user.email,
+          action: "PAYMENT_RECORDED",
+          resource: `invoice:${id}`,
+          detail: `Recorded payment of ${parsedAmount} via ${method} for invoice ${id}`,
+          ip: req.ip || "127.0.0.1",
+        },
+      });
+
+      return updatedInvoice;
+    });
+
+    const collectedAmount = result.payments.reduce((sum, p) => sum + p.amount, 0);
+    
+    return res.status(201).json({
+      id: result.id,
+      project: result.projectId,
+      client: result.client,
+      amount: result.amount,
+      status: result.status,
+      issued: result.issued,
+      due: result.due || undefined,
+      paid: result.paid || undefined,
+      collectedAmount,
+      outstandingAmount: result.amount - collectedAmount,
+      payments: result.payments,
+    });
+  } catch (error) {
+    console.error("POST /billing/invoices/:id/payments error:", error);
+    return res.status(500).json({ message: "Internal server error recording payment" });
   }
 });
 

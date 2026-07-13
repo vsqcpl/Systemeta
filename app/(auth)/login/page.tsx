@@ -88,18 +88,6 @@ export default function LoginPage() {
       <div className="login-orb login-orb-2"></div>
       <div className="login-orb login-orb-3"></div>
 
-      {/* Branded side strip */}
-      <div
-        style={{
-          position: "fixed",
-          left: 0,
-          top: 0,
-          bottom: 0,
-          width: "5px",
-          background: "linear-gradient(180deg, var(--brand-600), var(--brand-400))",
-          zIndex: 600,
-        }}
-      ></div>
 
       <div className="login-card">
         {/* Logo */}

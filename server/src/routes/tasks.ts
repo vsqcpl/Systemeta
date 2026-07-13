@@ -36,10 +36,21 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     }
 
     const tasks = await prisma.task.findMany({
-      where: isSpecialRole ? {} : { projectId: { in: projectsFilter } },
+      where: isSpecialRole
+        ? {}
+        : {
+            OR: [
+              { projectId: { in: projectsFilter } },
+              { assigneeId: req.user.id },
+              { assignees: { some: { userId: req.user.id } } },
+            ],
+          },
       include: {
         comments: true,
         subtasks: true,
+        assignees: {
+          select: { userId: true },
+        },
       },
     });
 
@@ -49,6 +60,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       title: t.title,
       project: t.projectId,
       assignee: t.assigneeId,
+      assignees: t.assignees.map((a) => a.userId),
       priority: t.priority,
       dueDate: t.dueDate,
       estimate: t.estimate,
@@ -93,24 +105,40 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 // POST /api/tasks - Create a task
 router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, project, assignee, priority, dueDate, estimate, status, tags, isMilestone } = req.body;
+    const { title, project, assignee, priority, dueDate, estimate, status, tags, isMilestone, assignees } = req.body;
 
     if (!title || !project || !assignee || !priority || !dueDate || !estimate) {
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
-    const newTask = await prisma.task.create({
-      data: {
-        title,
-        projectId: project,
-        assigneeId: assignee,
-        priority,
-        dueDate,
-        estimate: parseFloat(estimate),
-        status: status || "todo",
-        tags: tags ? (Array.isArray(tags) ? tags.join(", ") : String(tags)) : "",
-        isMilestone: isMilestone || false,
-      },
+    const newTask = await prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({
+        data: {
+          title,
+          projectId: project,
+          assigneeId: assignee,
+          priority,
+          dueDate,
+          estimate: parseFloat(estimate),
+          status: status || "todo",
+          tags: tags ? (Array.isArray(tags) ? tags.join(", ") : String(tags)) : "",
+          isMilestone: isMilestone || false,
+        },
+      });
+
+      const list = assignees && Array.isArray(assignees) && assignees.length > 0 ? assignees : [assignee];
+      
+      await tx.taskAssignment.createMany({
+        data: list.map((uId: string) => ({
+          taskId: task.id,
+          userId: uId,
+        })),
+      });
+
+      return {
+        ...task,
+        assignees: list,
+      };
     });
 
     invalidateDashboardCache();
@@ -120,6 +148,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
       title: newTask.title,
       project: newTask.projectId,
       assignee: newTask.assigneeId,
+      assignees: newTask.assignees,
       priority: newTask.priority,
       dueDate: newTask.dueDate,
       estimate: newTask.estimate,
@@ -140,41 +169,110 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
 router.patch("/:id", async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { status, progress, actualCompletionDate, assigneeId, estimate, priority, dueDate, title } = req.body;
+    const { status, progress, actualCompletionDate, assigneeId, assignee, estimate, priority, dueDate, title, assignees } = req.body;
 
     const task = await prisma.task.findUnique({ 
-      where: { id }
+      where: { id },
+      include: { assignees: true }
     });
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
+    const isAssignee = task.assigneeId === req.user.id || task.assignees.some((a) => a.userId === req.user.id);
+    const project = await prisma.project.findUnique({ where: { id: task.projectId } });
+    const isProjectManager = project && project.managerName === req.user.name;
+
     const membership = await prisma.projectAssignment.findFirst({
       where: { projectId: task.projectId, userId: req.user.id }
     });
-    if (!membership && req.user.role !== "super_admin") {
+    if (!membership && req.user.role !== "super_admin" && !isAssignee && !isProjectManager) {
       return res.status(403).json({ 
-        message: "Forbidden: You are not assigned to this project" 
+        message: "Forbidden: You are not assigned to this project or task" 
       });
     }
 
-    const updatedTask = await prisma.task.update({
-      where: { id },
-      data: {
-        status: status || undefined,
-        progress: progress !== undefined ? parseInt(progress) : undefined,
-        actualCompletionDate: actualCompletionDate !== undefined ? actualCompletionDate : undefined,
-        assigneeId: assigneeId || undefined,
-        estimate: estimate !== undefined ? parseFloat(estimate) : undefined,
-        priority: priority || undefined,
-        dueDate: dueDate || undefined,
-        title: title || undefined,
-      },
+    // Enforce In Review status gate:
+    if (status && status !== task.status) {
+      const isPM = req.user.role === "project_manager";
+      const isSuperAdmin = req.user.role === "super_admin";
+      const isManagerRole = isSuperAdmin || isPM;
+
+      if (!isManagerRole) {
+        if (status === "done") {
+          return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can set tasks to Done" });
+        }
+      }
+
+      // Check if the PM manages this project
+      if (isPM && !isSuperAdmin) {
+        const isAssignedPM = await prisma.projectAssignment.findFirst({
+          where: { projectId: task.projectId, userId: req.user.id }
+        });
+        if (!isAssignedPM && !isProjectManager) {
+          return res.status(403).json({ message: "Forbidden: You do not manage this project" });
+        }
+      }
+    }
+
+    const finalAssigneeId = assigneeId || assignee;
+
+    const updatedTask = await prisma.$transaction(async (tx) => {
+      if (assignees !== undefined && Array.isArray(assignees)) {
+        await tx.taskAssignment.deleteMany({
+          where: { taskId: id },
+        });
+        if (assignees.length > 0) {
+          await tx.taskAssignment.createMany({
+            data: assignees.map((userId: string) => ({
+              taskId: id,
+              userId: userId,
+            })),
+          });
+        }
+      }
+
+      return tx.task.update({
+        where: { id },
+        data: {
+          status: status || undefined,
+          progress: progress !== undefined ? parseInt(progress) : undefined,
+          actualCompletionDate: actualCompletionDate !== undefined ? actualCompletionDate : undefined,
+          assigneeId: finalAssigneeId || undefined,
+          estimate: estimate !== undefined ? parseFloat(estimate) : undefined,
+          priority: priority || undefined,
+          dueDate: dueDate || undefined,
+          title: title || undefined,
+        },
+        include: {
+          comments: true,
+          subtasks: true,
+          assignees: {
+            select: { userId: true },
+          },
+        },
+      });
     });
+
+    const formattedUpdatedTask = {
+      id: updatedTask.id,
+      title: updatedTask.title,
+      project: updatedTask.projectId,
+      assignee: updatedTask.assigneeId,
+      assignees: updatedTask.assignees.map((a) => a.userId),
+      priority: updatedTask.priority,
+      dueDate: updatedTask.dueDate,
+      estimate: updatedTask.estimate,
+      progress: updatedTask.progress,
+      status: updatedTask.status,
+      tags: updatedTask.tags,
+      isMilestone: updatedTask.isMilestone,
+      actualCompletionDate: updatedTask.actualCompletionDate || undefined,
+    };
 
     invalidateDashboardCache();
 
-    return res.json(updatedTask);
+    return res.json(formattedUpdatedTask);
   } catch (error) {
     console.error("PATCH /tasks/:id error:", error);
     return res.status(500).json({ message: "Internal server error updating task" });
@@ -191,17 +289,22 @@ router.post("/:id/comments", async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ message: "Comment text is required" });
     }
 
-    const task = await prisma.task.findUnique({ where: { id } });
+    const task = await prisma.task.findUnique({ 
+      where: { id },
+      include: { assignees: true }
+    });
     if (!task) {
       return res.status(404).json({ message: "Task not found" });
     }
 
+    const isAssignee = task.assigneeId === req.user.id || task.assignees.some((a) => a.userId === req.user.id);
+
     const membership = await prisma.projectAssignment.findFirst({
       where: { projectId: task.projectId, userId: req.user.id }
     });
-    if (!membership && req.user.role !== "super_admin") {
+    if (!membership && req.user.role !== "super_admin" && !isAssignee) {
       return res.status(403).json({ 
-        message: "Forbidden: You are not assigned to this project" 
+        message: "Forbidden: You are not assigned to this project or task" 
       });
     }
 

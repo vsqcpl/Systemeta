@@ -107,8 +107,8 @@ export default function TimesheetsPage() {
     }
 
     punchSessions.forEach((s: any) => {
-      // Only include if it's for the currently selected user (API only returns logged-in user's sessions anyway)
-      if (user?.id === consultantId && s.date === targetDateStr && s.punchOut) {
+      const sConsultantId = s.consultantId || s.consultant;
+      if (sConsultantId === consultantId && s.date === targetDateStr && s.punchOut) {
         const diffMs = new Date(s.punchOut).getTime() - new Date(s.punchIn).getTime();
         totalHours += parseFloat((diffMs / 3600000).toFixed(2));
       }
@@ -462,7 +462,8 @@ export default function TimesheetsPage() {
   useEffect(() => {
     if (!user) return;
     
-    fetch(`/api/timesheets/punch-sessions`)
+    const queryParam = selectedCalendarUser ? `?employeeId=${selectedCalendarUser}` : "";
+    fetch(`/api/timesheets/punch-sessions${queryParam}`)
       .then(res => res.json())
       .then(resData => {
         if (resData.success) {
@@ -470,11 +471,12 @@ export default function TimesheetsPage() {
           
           // Inject fetched sessions directly into the store so AI Center reads them naturally
           const storeData = useAppStore.getState().data;
+          const targetUserForTimesheet = selectedCalendarUser || user.id;
           const userTimesheet = storeData.timesheets.find(
-            (t) => t.consultant === user.id && t.week === targetWeekKey
+            (t) => t.consultant === targetUserForTimesheet && t.week === targetWeekKey
           ) || {
             id: `ts-${Date.now()}`,
-            consultant: user.id,
+            consultant: targetUserForTimesheet,
             week: targetWeekKey,
             entries: []
           };
@@ -507,8 +509,8 @@ export default function TimesheetsPage() {
           
           useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray } });
 
-          // If viewing current week, restore running timer state safely
-          if (weekOffset === 0) {
+          // If viewing current week and it's the logged-in user, restore running timer state safely
+          if (weekOffset === 0 && targetUserForTimesheet === user.id) {
             const todayStr = new Date().toISOString().split('T')[0];
             const todaysSessions = resData.sessions.filter((s: any) => s.date === todayStr);
             const activeSession = todaysSessions.find((s: any) => !s.punchOut);
@@ -566,7 +568,7 @@ export default function TimesheetsPage() {
         }
       })
       .catch(console.error);
-  }, [weekOffset, user, weekStart, targetWeekKey]);
+  }, [weekOffset, user, weekStart, targetWeekKey, selectedCalendarUser]);
 
   const getWeekRangeLabel = () => {
     const start = new Date(weekStart);
@@ -818,7 +820,7 @@ export default function TimesheetsPage() {
           {/* Summary Section */}
           <div className="grid-3-2 mb-4">
             {/* Punch Clock Card */}
-            <div className="punch-clock">
+            <div className="punch-clock" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
               <div className="punch-status">
                 <div
                   className="punch-status-dot"
@@ -853,42 +855,24 @@ export default function TimesheetsPage() {
               >
                 {punchedIn ? `⏹ ${t("Punch Out")}` : `▶ ${t("Punch In")}`}
               </button>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px", marginTop: "20px", textAlign: "center" }}>
-                <div>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "white" }}>
-                    {punchHoursToday > 0 ? `${punchHoursToday}h` : "—"}
-                  </div>
-                  <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)" }}>{t("Today")}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "white" }}>
-                    {(punchHoursWeek + (punchedIn ? parseFloat(runningTimer.split(":")[0]) : 0)).toFixed(1)}h
-                  </div>
-                  <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)" }}>{t("This Week")}</div>
-                </div>
-                <div>
-                  <div style={{ fontSize: "16px", fontWeight: 700, color: "white" }}>
-                    {(punchHoursWeek * 0.82).toFixed(1)}h
-                  </div>
-                  <div style={{ fontSize: "10.5px", color: "rgba(255,255,255,0.6)" }}>{t("Billable")}</div>
-                </div>
-              </div>
             </div>
 
             {/* Attendance Calendar Card */}
             <div className="card">
               <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="card-title">{t("Attendance Calendar")}</span>
-                <select 
-                  className="select premium-select" 
-                  value={selectedCalendarUser}
-                  onChange={(e) => setSelectedCalendarUser(e.target.value)}
-                  style={{ width: "200px", height: "32px", fontSize: "12px", padding: "0 8px" }}
-                >
-                  {data.consultants?.map((c: any) => (
-                    <option key={c.id} value={c.id}>{c.name}</option>
-                  ))}
-                </select>
+                {user?.role === "super_admin" && (
+                  <select 
+                    className="select premium-select" 
+                    value={selectedCalendarUser}
+                    onChange={(e) => setSelectedCalendarUser(e.target.value)}
+                    style={{ width: "200px", height: "32px", fontSize: "12px", padding: "0 8px" }}
+                  >
+                    {data.consultants?.map((c: any) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                )}
               </div>
               <div className="card-body">
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: "4px", textAlign: "center" }}>
@@ -918,6 +902,9 @@ export default function TimesheetsPage() {
                       if (hours >= 8) {
                         bgColor = "#E8F8F5"; // Green
                         color = "#27AE60";
+                      } else if (hours >= 6) {
+                        bgColor = "#EBF5FB"; // Light Blue
+                        color = "#2E86C1";
                       } else {
                         bgColor = "#FDEDEC"; // Red
                         color = "#E74C3C";
