@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import NotificationPanel from "./NotificationPanel";
@@ -31,6 +31,43 @@ export default function Topbar() {
   const setActiveModule = useAppStore((state) => state.setActiveModule);
 
   const { t } = useTranslation();
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const buttonRefs = useRef<{ [key: string]: HTMLButtonElement | null }>({});
+  const [indicatorStyle, setIndicatorStyle] = React.useState<React.CSSProperties>({ opacity: 0 });
+
+  const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
+
+  useIsomorphicLayoutEffect(() => {
+    const updateIndicator = () => {
+      const activeBtn = activeModule ? buttonRefs.current[activeModule] : null;
+      if (activeBtn) {
+        setIndicatorStyle({
+          left: `${activeBtn.offsetLeft}px`,
+          width: `${activeBtn.offsetWidth}px`,
+          opacity: 1,
+        });
+      } else {
+        setIndicatorStyle({ opacity: 0 });
+      }
+    };
+
+    updateIndicator();
+
+    const win = typeof window !== "undefined" ? (window as any) : null;
+    if (win) {
+      if ("ResizeObserver" in win) {
+        const observer = new win.ResizeObserver(updateIndicator);
+        if (containerRef.current) {
+          observer.observe(containerRef.current);
+        }
+        return () => observer.disconnect();
+      } else {
+        win.addEventListener("resize", updateIndicator);
+        return () => win.removeEventListener("resize", updateIndicator);
+      }
+    }
+  }, [activeModule]);
 
   // Restore module selection from localStorage on mount
   useEffect(() => {
@@ -203,18 +240,23 @@ export default function Topbar() {
         {/* Module Switcher - Positioned inline near the breadcrumb */}
         {/* Module Switcher - Positioned inline near the breadcrumb */}
         {!isClientContact && allowedModules.length > 1 && (
-          <div className="topbar-module-switcher" id="module-switcher" style={{ position: "relative" }}>
+          <div
+            ref={containerRef}
+            className="topbar-module-switcher"
+            id="module-switcher"
+            style={{ position: "relative" }}
+          >
             {activeModuleIndex !== -1 && (
               <div
                 className="switcher-indicator"
-                style={{
-                  width: `calc((100% - ${(allowedModules.length - 1) * 3}px) / ${allowedModules.length})`,
-                  transform: `translateX(calc(${activeModuleIndex * 100}% + ${activeModuleIndex * 3}px))`,
-                }}
+                style={indicatorStyle}
               />
             )}
             {allowedModules.includes("projects") && (
               <button
+                ref={(el) => {
+                  buttonRefs.current["projects"] = el;
+                }}
                 id="module-btn-projects"
                 className={`switcher-btn ${activeModule === "projects" ? "active" : ""}`}
                 onClick={() => handleModuleSwitch("projects")}
@@ -226,6 +268,9 @@ export default function Topbar() {
             )}
             {allowedModules.includes("crm") && (
               <button
+                ref={(el) => {
+                  buttonRefs.current["crm"] = el;
+                }}
                 id="module-btn-crm"
                 className={`switcher-btn ${activeModule === "crm" ? "active" : ""}`}
                 onClick={() => handleModuleSwitch("crm")}
@@ -237,6 +282,9 @@ export default function Topbar() {
             )}
             {allowedModules.includes("timesheets") && (
               <button
+                ref={(el) => {
+                  buttonRefs.current["timesheets"] = el;
+                }}
                 id="module-btn-timesheets"
                 className={`switcher-btn ${activeModule === "timesheets" ? "active" : ""}`}
                 onClick={() => handleModuleSwitch("timesheets")}

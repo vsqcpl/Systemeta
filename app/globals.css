@@ -3709,13 +3709,13 @@ canvas { image-rendering: -webkit-optimize-contrast; }
   margin-left: 16px;
   display: flex;
   align-items: center;
-  width: 240px;
+  width: max-content;
   height: 38px;
   background: rgba(255, 255, 255, 0.9);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgba(148, 163, 184, 0.25);
-  border-radius: 18px;
+  border-radius: 9999px;
   padding: 3px;
   box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
   gap: 3px;
@@ -3736,21 +3736,11 @@ canvas { image-rendering: -webkit-optimize-contrast; }
   position: absolute;
   top: 3px;
   bottom: 3px;
-  left: 3px;
-  width: calc(50% - 4.5px);
   background: linear-gradient(135deg, #2563EB, #3B82F6);
-  border-radius: 15px;
-  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 9999px;
+  transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1), width 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
   z-index: 0;
   box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
-}
-
-.switcher-indicator.projects-active {
-  transform: translateX(0);
-}
-
-.switcher-indicator.timesheets-active {
-  transform: translateX(calc(100% + 3px));
 }
 
 [data-theme="dark"] .switcher-indicator,
@@ -3759,9 +3749,6 @@ canvas { image-rendering: -webkit-optimize-contrast; }
 }
 
 .switcher-btn {
-  flex: 1;
-  width: 0;
-  min-width: 0;
   height: 100%;
   display: flex;
   align-items: center;
@@ -3773,11 +3760,11 @@ canvas { image-rendering: -webkit-optimize-contrast; }
   color: var(--text-secondary);
   cursor: pointer;
   z-index: 1;
-  border-radius: 15px;
+  border-radius: 9999px;
   transition: color 0.2s ease, background-color 0.2s ease, transform 0.1s ease;
   outline: none !important;
   white-space: nowrap;
-  padding: 0 8px;
+  padding: 0 16px;
 }
 
 .switcher-btn:hover:not(.active) {
@@ -3803,34 +3790,29 @@ canvas { image-rendering: -webkit-optimize-contrast; }
   .topbar-module-switcher {
     position: relative;
     margin-left: 12px;
-    width: 230px;
+    width: max-content;
     height: 36px;
     padding: 2px;
-    border-radius: 16px;
+    border-radius: 9999px;
     gap: 2px;
   }
   .switcher-indicator {
     top: 2px;
     bottom: 2px;
-    left: 2px;
-    width: calc(50% - 3px);
-    border-radius: 14px;
-  }
-  .switcher-indicator.timesheets-active {
-    transform: translateX(calc(100% + 2px));
+    border-radius: 9999px;
   }
   .switcher-btn {
     font-size: 10.5px;
-    padding: 0 4px;
-    border-radius: 14px;
+    padding: 0 12px;
+    border-radius: 9999px;
   }
 }
 
 @media (max-width: 640px) {
   .topbar-module-switcher {
-    width: auto;
-    flex: 1;
-    max-width: 140px;
+    width: max-content;
+    flex: none;
+    max-width: none;
     margin-left: 8px;
   }
   .switcher-btn span {
@@ -3841,8 +3823,8 @@ canvas { image-rendering: -webkit-optimize-contrast; }
     width: 15px;
     height: 15px;
   }
-  .switcher-indicator {
-    width: calc(50% - 3px);
+  .switcher-btn {
+    padding: 0 10px;
   }
 }
 
