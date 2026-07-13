@@ -252,6 +252,17 @@ function AdminPageContent() {
   const [isSavingAll, setIsSavingAll] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
 
+  // Emission Factors
+  const storeEmissionFactors = useAppStore((state) => state.emissionFactors);
+  const setStoreEmissionFactors = useAppStore((state) => state.setEmissionFactors);
+  const [adminEmissionFactors, setAdminEmissionFactors] = useState(storeEmissionFactors || {});
+
+  useEffect(() => {
+    if (storeEmissionFactors) {
+      setAdminEmissionFactors(storeEmissionFactors);
+    }
+  }, [storeEmissionFactors]);
+
   // Load settings on mount
   useEffect(() => {
     let platform = "VSQC Platform";
@@ -797,6 +808,10 @@ function AdminPageContent() {
       setLanguage(selectedLanguage, !isLangChanged);
       setInitialSettings(settingsObj);
     } catch (_) {}
+    
+    // Save emission factors
+    setStoreEmissionFactors(adminEmissionFactors);
+
     try { localStorage.setItem("vsqc_notif_settings", JSON.stringify({ email: notifEmail, slack: notifSlack, aiAlerts: notifAiAlerts, weeklyDigest: notifWeeklyDigest })); } catch (_) {}
     try { localStorage.setItem("vsqc_security_settings", JSON.stringify({ forceMfa: secForceMfa, sessionTimeout: secSessionTimeout, passwordPolicy: secPasswordPolicy, ipWhitelist: secIpWhitelist })); } catch (_) {}
     try { localStorage.setItem("vsqc_integration_settings", JSON.stringify({ ms365: intMs365, salesforce: intSalesforce, jira: intJira, sap: intSap })); } catch (_) {}
@@ -1598,6 +1613,29 @@ function AdminPageContent() {
                     </div>
                   </div>
                 </div>
+
+                {/* Carbon Footprint Emission Factors */}
+                {isSuperAdmin && (
+                  <div className="card" style={{ overflow: "visible" }}>
+                    <div className="card-header" style={{ marginBottom: 0 }}>
+                      <span className="card-title">{t("Carbon Emission Factors (kgCO2e/km)")}</span>
+                    </div>
+                    <div className="card-body">
+                      {Object.keys(adminEmissionFactors).map((vehicle) => (
+                        <div key={vehicle} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
+                          <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t(vehicle)}</div>
+                          <input 
+                            type="number" 
+                            step="0.01"
+                            value={adminEmissionFactors[vehicle]}
+                            onChange={(e) => setAdminEmissionFactors({...adminEmissionFactors, [vehicle]: parseFloat(e.target.value) || 0})}
+                            style={{ width: "80px", padding: "4px 8px", border: "1px solid var(--border-default)", borderRadius: "4px", fontSize: "13px", textAlign: "right" }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Notifications Settings */}
                 <div className="card">

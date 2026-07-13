@@ -424,6 +424,10 @@ interface AppStore {
     endDate?: string;
     reason?: string;
   }) => Promise<void>;
+
+  // --- Emission Factors ---
+  emissionFactors: Record<string, number>;
+  setEmissionFactors: (factors: Record<string, number>) => void;
 }
 
 export const translations = {
@@ -3016,6 +3020,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
   timezone: 'Asia/Kolkata (UTC+5:30)',
   language: 'English (India)',
 
+  // --- Emission Factors Defaults ---
+  emissionFactors: {
+    Flight: 0.25,
+    Train: 0.04,
+    Car: 0.17,
+    Bus: 0.08,
+    Metro: 0.04,
+    Cab: 0.20,
+    Bike: 0.09,
+    Auto: 0.12,
+  },
+
   // --- Punch Clock Defaults ---
   punchedIn: false,
   punchStartTime: null,
@@ -3073,6 +3089,14 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (!silent) {
       set({ toast: { message: "Language updated to " + language, type: "success" } });
     }
+  },
+
+  // --- Emission Factors Actions ---
+  setEmissionFactors: (factors) => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vsqc_emission_factors', JSON.stringify(factors));
+    }
+    set({ emissionFactors: factors });
   },
 
   // --- Punch Clock Actions ---

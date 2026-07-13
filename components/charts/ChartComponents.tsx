@@ -1287,7 +1287,7 @@ export function TrendScatterChart({ customConsultants }: { customConsultants?: a
                 const dataPoint = ctx.raw as { x: number; y: number };
                 return [
                   `${ctx.dataset.label}`,
-                  `Util: ${dataPoint.x}%`,
+                  `Prod: ${dataPoint.x}%`,
                   `Rate: ${formatCurrency(dataPoint.y)}/hr`,
                 ];
               },
@@ -1297,7 +1297,7 @@ export function TrendScatterChart({ customConsultants }: { customConsultants?: a
         scales: {
           x: {
             ...baseScale(),
-            title: { display: true, text: "Utilization %", color: textColor, font: baseFont },
+            title: { display: true, text: "Productivity %", color: textColor, font: baseFont },
             min: 30,
             max: 105,
             ticks: { ...baseScale().ticks, callback: (v) => `${v}%` },

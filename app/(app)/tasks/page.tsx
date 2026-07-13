@@ -104,6 +104,8 @@ function TaskCard({
 }) {
   const { t } = useTranslation();
   const { user } = useAuth();
+  const data = useAppStore((state) => state.data);
+  const project = data.projects.find((p) => p.id === task.project);
   
   const isAssignee = task.assignee === user?.id;
   const isManager = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
@@ -164,9 +166,14 @@ function TaskCard({
           ))}
         </div>
       )}
-        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>
+        <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "4px", lineHeight: 1.4 }}>
           {task.title}
         </div>
+        {project && (
+          <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+            <IconFolder size={12} /> {project.name}
+          </div>
+        )}
         {task.progress !== undefined && (
           <div style={{ marginBottom: "10px" }}>
             <div className="progress-bar" style={{ height: "4px" }}>

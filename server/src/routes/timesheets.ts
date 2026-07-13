@@ -559,6 +559,9 @@ router.get("/punch-sessions", async (req: AuthenticatedRequest, res) => {
     }
     
     let whereClause: any = { consultantId: targetConsultantId };
+    if (targetConsultantId === "all") {
+      whereClause = {};
+    }
     
     if (startDate && endDate) {
       whereClause.date = {
@@ -569,7 +572,12 @@ router.get("/punch-sessions", async (req: AuthenticatedRequest, res) => {
 
     const sessions = await prisma.punchSession.findMany({
       where: whereClause,
-      orderBy: { punchIn: 'asc' }
+      orderBy: { punchIn: 'asc' },
+      include: {
+        consultant: {
+          select: { name: true, role: true }
+        }
+      }
     });
 
     return res.json({ success: true, sessions });

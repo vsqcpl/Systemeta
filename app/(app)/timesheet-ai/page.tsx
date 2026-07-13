@@ -83,7 +83,7 @@ function CarbonTrackerCard({ consultants, projects, rawExpenses }: { consultants
   const isEmpFiltered = selectedEmployees.length > 0;
 
   // Actual Travel Emissions Calculation
-  const emissionFactors: Record<string, number> = {
+  const emissionFactors = useAppStore((state) => state.emissionFactors) || {
     Flight: 0.25,
     Train: 0.04,
     Car: 0.17,
@@ -415,10 +415,11 @@ export default function TimesheetAIPage() {
       const planned = rawEstimate !== null && !isNaN(rawEstimate) ? rawEstimate : null;
       const actual = actualHours;
       const status = planned !== null && actual > planned ? "over" : "under";
-      
+      const projectName = data.projects?.find((p: any) => p.id === t.project)?.name || t.project;
+
       return {
         task: t.title,
-        project: t.project,
+        project: projectName,
         planned,
         actual,
         status,
@@ -635,15 +636,17 @@ export default function TimesheetAIPage() {
                         color: t.planned !== null && t.status === "over" ? "#e11d48" : "#059669",
                         flexShrink: 0,
                       }}>
-                        {t.planned === null ? "—" : (t.status === "over" ? `+${t.actual - t.planned}h` : `-${t.planned - t.actual}h`)}
+                        {t.planned === null ? "—" : (t.status === "over" ? `+${Number((t.actual - t.planned).toFixed(2))}h` : `-${Number((t.planned - t.actual).toFixed(2))}h`)}
                       </span>
                     </div>
                   ))}
                 </div>
 
-                {/* AI Recommendation */}
-                <div style={{ background: "rgba(37,99,235,0.06)", border: "1px solid rgba(37,99,235,0.18)", borderRadius: "10px", padding: "12px 14px", marginTop: "auto" }}>
-                  <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#2563eb", marginBottom: "4px" }}>💡 AI Recommendation</div>
+                {/* AI Insight */}
+                <div style={{ background: "rgba(16,185,129,0.07)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "10px", padding: "12px 14px", marginTop: "auto" }}>
+                  <div style={{ fontSize: "10.5px", fontWeight: 700, color: "#10b981", marginBottom: "4px", display: "flex", alignItems: "center", gap: "4px" }}>
+                    <IconLightbulb size={12} /> AI Insight
+                  </div>
                   <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5, wordBreak: "break-word", overflowWrap: "break-word" }}>
                     {selectedTask.planned === null 
                       ? `"${selectedTask.task}" does not have a planned estimate. Update the task estimate in the Project Management module to receive AI recommendations on resource allocation.`
@@ -756,9 +759,10 @@ export default function TimesheetAIPage() {
                           }
                         });
                       });
-                      
                       if (totalHours >= 8) {
-                        presentDays++;
+                        presentDays += 1;
+                      } else if (totalHours > 5) {
+                        presentDays += 0.5;
                       }
                     }
                   }

@@ -6,7 +6,7 @@
 
 export function getAttendanceCredit(hours: number): number {
   if (hours >= 8) return 1.0;
-  if (hours >= 6) return 0.5;
+  if (hours > 5) return 0.5;
   return 0.0;
 }
 
@@ -32,8 +32,8 @@ function runTests() {
   console.log("Running Attendance Calendar Tests...");
 
   // 1. Boundary conditions for daily status
-  expect(getAttendanceCredit(5.9), 0.0, "hours = 5.9 -> Absent (0.0 day)");
-  expect(getAttendanceCredit(6.0), 0.5, "hours = 6.0 -> Semi Present (0.5 day)");
+  expect(getAttendanceCredit(5.0), 0.0, "hours = 5.0 -> Absent (0.0 day)");
+  expect(getAttendanceCredit(5.1), 0.5, "hours = 5.1 -> Semi Present (0.5 day)");
   expect(getAttendanceCredit(7.9), 0.5, "hours = 7.9 -> Semi Present (0.5 day)");
   expect(getAttendanceCredit(8.0), 1.0, "hours = 8.0 -> Present (1.0 day)");
 

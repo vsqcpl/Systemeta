@@ -25,6 +25,8 @@ export default function DashboardPage() {
   const router = useRouter();
   const data = useAppStore((state) => state.data);
   const { t } = useTranslation();
+  const activeProjectsCount = data.projects.length;
+
   // Modal visibility state
   const [showQuickAdd, setShowQuickAdd] = useState(false);
   const showToast = useAppStore((state) => state.showToast);
@@ -219,9 +221,9 @@ export default function DashboardPage() {
         <div className="kpi-card">
           <span className="kpi-label">{t("Active Projects")}</span>
           <div className="kpi-icon"><IconBriefcase size={16} /></div>
-          <span className="kpi-value">{data.kpis.activeProjects}</span>
+          <span className="kpi-value">{activeProjectsCount}</span>
           <div className="kpi-sparkline">
-            <KpiSparklineChart sparkData={[18, 19, 21, 20, 22, data.kpis.activeProjects]} color="#2E86C1" />
+            <KpiSparklineChart sparkData={[18, 19, 21, 20, 22, activeProjectsCount]} color="#2E86C1" />
           </div>
           <div className="kpi-footer">
             <span className="kpi-change positive">↑ 9.1%</span>

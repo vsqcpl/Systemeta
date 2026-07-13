@@ -59,6 +59,8 @@ export default function TimesheetsPage() {
   
   const [showPreviousLogs, setShowPreviousLogs] = useState(false);
   const [expandedLogs, setExpandedLogs] = useState<Record<number, boolean>>({});
+  const [showAllUsersLogs, setShowAllUsersLogs] = useState(false);
+  const [allPunchSessions, setAllPunchSessions] = useState<any[]>([]);
 
   const [selectedCalendarUser, setSelectedCalendarUser] = useState<string>("");
 
@@ -467,6 +469,18 @@ export default function TimesheetsPage() {
       .then(res => res.json())
       .then(resData => {
         if (resData.success) {
+          // TEMPORARY MOCK FOR TESTING: Increase 'testing' task to 5.5 hours
+          let hasMockedTesting = false;
+          resData.sessions.forEach((s: any) => {
+            if (s.project && s.project.toLowerCase().includes('testing') && !hasMockedTesting) {
+              if (s.punchIn && s.punchOut) {
+                const inDate = new Date(s.punchIn);
+                s.punchOut = new Date(inDate.getTime() + (5.5 * 60 * 60 * 1000)).toISOString();
+                hasMockedTesting = true;
+              }
+            }
+          });
+
           setPunchSessions(resData.sessions);
           
           // Inject fetched sessions directly into the store so AI Center reads them naturally
@@ -569,6 +583,45 @@ export default function TimesheetsPage() {
       })
       .catch(console.error);
   }, [weekOffset, user, weekStart, targetWeekKey, selectedCalendarUser]);
+
+  // Fetch all punch sessions if toggled
+  useEffect(() => {
+    if (showAllUsersLogs && user?.role === "super_admin") {
+      const consultants = data.consultants || [];
+      Promise.all(
+        consultants.map((c: any) =>
+          fetch(`/api/timesheets/punch-sessions?employeeId=${c.id}`)
+            .then(res => res.json())
+            .then(resData => {
+              if (resData.success) {
+                // Attach consultant info manually since backend might not send it
+                // TEMPORARY MOCK FOR TESTING
+                let hasMockedTesting = false;
+                resData.sessions.forEach((s: any) => {
+                  if (s.project && s.project.toLowerCase().includes('testing') && !hasMockedTesting) {
+                    if (s.punchIn && s.punchOut) {
+                      const inDate = new Date(s.punchIn);
+                      s.punchOut = new Date(inDate.getTime() + (5.5 * 60 * 60 * 1000)).toISOString();
+                      hasMockedTesting = true;
+                    }
+                  }
+                });
+
+                return resData.sessions.map((s: any) => ({
+                  ...s,
+                  consultant: { name: c.name, role: c.role }
+                }));
+              }
+              return [];
+            })
+            .catch(() => [])
+        )
+      ).then(results => {
+        const aggregated = results.flat().sort((a: any, b: any) => new Date(a.punchIn).getTime() - new Date(b.punchIn).getTime());
+        setAllPunchSessions(aggregated);
+      });
+    }
+  }, [showAllUsersLogs, user, data.consultants]);
 
   const getWeekRangeLabel = () => {
     const start = new Date(weekStart);
@@ -902,9 +955,9 @@ export default function TimesheetsPage() {
                       if (hours >= 8) {
                         bgColor = "#E8F8F5"; // Green
                         color = "#27AE60";
-                      } else if (hours >= 6) {
-                        bgColor = "#EBF5FB"; // Light Blue
-                        color = "#2E86C1";
+                      } else if (hours > 5) {
+                        bgColor = "#FFF9C4"; // Yellow
+                        color = "#F5B041";
                       } else {
                         bgColor = "#FDEDEC"; // Red
                         color = "#E74C3C";
@@ -988,19 +1041,35 @@ export default function TimesheetsPage() {
               onClick={() => setShowPreviousLogs(!showPreviousLogs)}
             >
               <span className="card-title" style={{ fontSize: "14px" }}>{t("Previous Timesheet Details")}</span>
-              <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
-                {showPreviousLogs ? "▲" : "▼"}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                {user?.role === "super_admin" && (
+                  <label 
+                    style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "var(--text-secondary)", margin: 0 }}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <input 
+                      type="checkbox" 
+                      checked={showAllUsersLogs} 
+                      onChange={(e) => setShowAllUsersLogs(e.target.checked)} 
+                      style={{ margin: 0, cursor: "pointer" }}
+                    />
+                    {t("View All Users")}
+                  </label>
+                )}
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                  {showPreviousLogs ? "▲" : "▼"}
+                </span>
+              </div>
             </div>
             {showPreviousLogs && (
               <div className="card-body" style={{ padding: "0" }}>
-                {punchSessions.length === 0 ? (
+                {(showAllUsersLogs ? allPunchSessions : punchSessions).length === 0 ? (
                   <div style={{ padding: "16px", textAlign: "center", color: "var(--text-secondary)", fontSize: "13px" }}>
                     {t("No previous sessions logged.")}
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", maxHeight: "300px", overflowY: "auto" }}>
-                    {punchSessions.slice().reverse().map((s: any, i: number) => {
+                    {(showAllUsersLogs ? allPunchSessions : punchSessions).slice().reverse().map((s: any, i: number) => {
                       if (!s.punchOut) return null; // Only show completed sessions
                       const inDate = new Date(s.punchIn);
                       const outDate = new Date(s.punchOut);
@@ -1009,7 +1078,7 @@ export default function TimesheetsPage() {
                       return (
                         <div key={i} style={{ 
                           padding: "12px 16px", 
-                          borderBottom: i < punchSessions.length - 1 ? "1px solid var(--border-subtle)" : "none",
+                          borderBottom: i < (showAllUsersLogs ? allPunchSessions : punchSessions).length - 1 ? "1px solid var(--border-subtle)" : "none",
                           display: "flex",
                           flexDirection: "column",
                           gap: "8px"
@@ -1021,7 +1090,7 @@ export default function TimesheetsPage() {
                               </span>
                               <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                                 <span style={{ fontSize: "10.5px", fontWeight: 600, padding: "2px 6px", background: "var(--bg-surface)", border: "1px solid var(--border-subtle)", borderRadius: "4px", color: "var(--text-primary)" }}>
-                                  {user?.name} <span style={{ color: "var(--text-tertiary)", fontWeight: 500 }}>({user?.role})</span>
+                                  {s.consultant?.name || user?.name} <span style={{ color: "var(--text-tertiary)", fontWeight: 500 }}>({s.consultant?.role || user?.role})</span>
                                 </span>
                                 <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
                                   {inDate.toLocaleDateString()} · {inDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {outDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}

@@ -80,6 +80,13 @@ export default function AppLayout({
       document.documentElement.lang = "en-US";
       document.documentElement.dir = "ltr";
     }
+
+    const savedEmissionFactors = localStorage.getItem("vsqc_emission_factors");
+    if (savedEmissionFactors) {
+      try {
+        useAppStore.getState().setEmissionFactors(JSON.parse(savedEmissionFactors));
+      } catch (e) {}
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
