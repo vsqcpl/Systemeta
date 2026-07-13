@@ -25,6 +25,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const setActiveProjectId = useAppStore((state) => state.setActiveProjectId);
   const [showAddTask, setShowAddTask] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingExcel, setIsExportingExcel] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
@@ -277,6 +278,36 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
     }
   };
 
+  const handleExportExcel = async () => {
+    setIsExportingExcel(true);
+    try {
+      const res = await fetch(`/api/projects/${p.id}/export-wbs`, {
+        method: "GET",
+        credentials: "include"
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || "Failed to generate Excel file");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `WBS_${p.id}_${p.name.replace(/[^a-zA-Z0-9]/g, "_")}.xlsx`;
+      a.click();
+      window.URL.revokeObjectURL(url);
+      showToast("WBS Excel report successfully downloaded", "success");
+    } catch (err: any) {
+      console.error(err);
+      showToast(err.message || "Excel export failed", "danger");
+    } finally {
+      setIsExportingExcel(false);
+    }
+  };
+
+  const projectTasks = Object.values(data.tasks).flat().filter((t: any) => t.project === p.id);
+  const hasWbs = projectTasks.length > 0;
+
   const projectMilestones = data.milestones.filter((m) => m.project === p.id || m.projectId === p.id);
   const paidMilestonesCount = projectMilestones.filter((m) => m.status === "upcoming").length;
 
@@ -427,6 +458,20 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                 <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}><circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="4"/><path d="M4 12a8 8 0 0 1 8-8"/></svg> Exporting...</>
               ) : (
                 <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> {t("Export PDF")}</>
+              )}
+            </button>
+            <button
+              id="project-export-wbs"
+              style={{ ...exportBtnStyle, opacity: hasWbs ? 1 : 0.5, cursor: hasWbs ? "pointer" : "not-allowed" }}
+              onClick={handleExportExcel}
+              disabled={isExportingExcel || !hasWbs}
+              onMouseEnter={(e) => { if (hasWbs) (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)"; }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; }}
+            >
+              {isExportingExcel ? (
+                <><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ animation: "spin 1s linear infinite" }}><circle cx="12" cy="12" r="10" stroke="rgba(0,0,0,0.1)" strokeWidth="4"/><path d="M4 12a8 8 0 0 1 8-8"/></svg> Exporting WBS...</>
+              ) : (
+                <><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg> {t("Export WBS")}</>
               )}
             </button>
             <ActionGuard action="configure_system">

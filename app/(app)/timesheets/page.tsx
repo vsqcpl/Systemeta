@@ -956,8 +956,8 @@ export default function TimesheetsPage() {
                         bgColor = "#E8F8F5"; // Green
                         color = "#27AE60";
                       } else if (hours > 5) {
-                        bgColor = "#FFF9C4"; // Yellow
-                        color = "#F5B041";
+                        bgColor = "#EBF5FB"; // Light Blue
+                        color = "#2E86C1";
                       } else {
                         bgColor = "#FDEDEC"; // Red
                         color = "#E74C3C";

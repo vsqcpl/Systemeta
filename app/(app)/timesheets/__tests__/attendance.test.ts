@@ -46,7 +46,7 @@ function runTests() {
     { hours: 6.5 }, // Semi Present (0.5)
     { hours: 7.0 }, // Semi Present (0.5)
     { hours: 0.0 }, // Absent (0.0)
-    { hours: 5.5 }  // Absent (0.0)
+    { hours: 5.0 }  // Absent (0.0)
   ];
 
   const totalCredit = calculateTotalCredit(weekData);
