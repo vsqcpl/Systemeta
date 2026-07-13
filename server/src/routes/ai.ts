@@ -220,7 +220,7 @@ router.post("/estimate-time", requireRoles(["super_admin", "project_manager"]), 
     // RAG: Query similar historical tasks from database
     const matchedTasks = await prisma.task.findMany({
       where: {
-        title: { contains: taskName }
+        title: { contains: taskName, mode: 'insensitive' }
       },
       take: 5
     });
@@ -3313,7 +3313,8 @@ router.post("/save-wbs", requireRoles(["super_admin", "project_manager"]), async
 
     // Batch create project assignments, tasks, milestones, and subtasks
     await prisma.projectAssignment.createMany({
-      data: Array.from(assignmentsToCreate.values())
+      data: Array.from(assignmentsToCreate.values()),
+      skipDuplicates: true
     });
 
     await prisma.task.createMany({
