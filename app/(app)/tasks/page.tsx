@@ -918,6 +918,41 @@ function TaskDrawer({
 export default function TasksPage() {
   const router = useRouter();
   const [showAiCopilot, setShowAiCopilot] = useState(true);
+  const data = useAppStore((state) => state.data);
+
+  const allEligibleAssignees = React.useMemo(() => {
+    const list: { id: string; name: string; avatar: string; color: string; role?: string }[] = [];
+    
+    // 1. Add all from data.users
+    if (data.users && Array.isArray(data.users)) {
+      for (const u of data.users) {
+        const existingConsultant = data.consultants.find((c) => c.id === u.id || c.name === u.name);
+        const initials = u.name.split(" ").map((n: any) => n[0]).join("").toUpperCase().slice(0, 2);
+        list.push({
+          id: u.id,
+          name: u.name,
+          avatar: existingConsultant?.avatar || initials || "?",
+          color: existingConsultant?.color || "#64748b",
+          role: u.role
+        });
+      }
+    }
+
+    // 2. Add any other from data.consultants that are not in list
+    for (const c of data.consultants) {
+      if (!list.find((x) => x.id === c.id)) {
+        list.push({
+          id: c.id,
+          name: c.name,
+          avatar: c.avatar,
+          color: c.color,
+          role: c.role
+        });
+      }
+    }
+
+    return list;
+  }, [data.users, data.consultants]);
   const [embeddedAiView, setEmbeddedAiView] = useState<"delay-dashboard" | "assignment-dashboard" | "clash-dashboard" | null>(null);
   const [embeddedAiModal, setEmbeddedAiModal] = useState<"estimate-tasks" | null>(null);
   const [embeddedAiTaskId, setEmbeddedAiTaskId] = useState<string | null>(null);
@@ -941,7 +976,6 @@ export default function TasksPage() {
       document.body.style.overflow = "";
     };
   }, [embeddedAiView, embeddedAiModal, setSidebarCollapsed, sidebarCollapsed, prevSidebarState]);
-  const data = useAppStore((state) => state.data);
   const { t } = useTranslation();
   const { user } = useAuth();
   const visibleProjects = user ? filterProjects(data.projects, user) : [];
@@ -969,6 +1003,14 @@ export default function TasksPage() {
   const [ntTitle, setNtTitle] = useState("");
   const [ntProject, setNtProject] = useState("");
   const [ntAssignees, setNtAssignees] = useState<{ id: string; hours: string }[]>([]);
+
+  const createModalProject = data.projects.find((p) => p.id === ntProject);
+  const createModalTeamIds = createModalProject?.team || [];
+  const createModalEligibleAssignees = React.useMemo(() => {
+    return createModalTeamIds.length > 0 
+      ? allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id))
+      : allEligibleAssignees;
+  }, [createModalTeamIds, allEligibleAssignees]);
   const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
   const [ntPriority, setNtPriority] = useState<any>("medium");
   const [ntDue, setNtDue] = useState("");
@@ -1175,7 +1217,7 @@ export default function TasksPage() {
     const dateStr = new Date().toISOString().split("T")[0];
     const headers = ["Task ID", "Task Name", "Project", "Assignee", "Status", "Priority", "Due Date", "Created Date"];
     const rows = filteredAllTasks.map((t) => {
-      const c = data.consultants.find((x) => x.id === t.assignee);
+      const c = allEligibleAssignees.find((x) => x.id === t.assignee);
       return [
         t.id,
         `"${t.title}"`,
@@ -1424,7 +1466,7 @@ export default function TasksPage() {
                       key={col}
                       col={col}
                       tasks={colTasks}
-                      consultants={data.consultants}
+                      consultants={allEligibleAssignees}
                       onOpen={(task, c) => setDrawerTask({ task, col: c })}
                     />
                   );
@@ -1459,7 +1501,7 @@ export default function TasksPage() {
                   </thead>
                   <tbody>
                     {filteredAllTasks.map((task) => {
-                      const c = data.consultants.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
+                      const c = allEligibleAssignees.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
                       const proj = data.projects.find((p) => p.id === task.project);
                       const projectName = proj ? proj.name : task.project;
                       return (
@@ -1549,7 +1591,7 @@ export default function TasksPage() {
                                  {t(COL_LABELS[col])} ({colTasks.length})
                                </div>
                                {colTasks.map((task) => {
-                                 const c = data.consultants.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
+                                 const c = allEligibleAssignees.find((x) => x.id === task.assignee) || { color: "#64748b", avatar: "?", name: task.assignee };
                                  return (
                                    <div
                                      key={task.id}
@@ -1585,7 +1627,7 @@ export default function TasksPage() {
           <TaskDrawer
             task={liveTask}
             col={liveTask.col}
-            consultants={data.consultants}
+            consultants={allEligibleAssignees}
             onClose={() => setDrawerTask(null)}
             onOpenAiInline={(view, modal, taskId) => {
               setEmbeddedAiView(view);
@@ -1775,7 +1817,7 @@ export default function TasksPage() {
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val === "SELECT_ALL") {
-                          setNtAssignees(data.consultants.map(c => ({ id: c.id, hours: "" })));
+                          setNtAssignees(createModalEligibleAssignees.map(c => ({ id: c.id, hours: "" })));
                         } else if (val === "CLEAR_ALL") {
                           setNtAssignees([]);
                         } else if (val && !ntAssignees.find(a => a.id === val)) {
@@ -1787,7 +1829,7 @@ export default function TasksPage() {
                       <option value="" disabled>{t("Add an assignee...")}</option>
                       <option value="SELECT_ALL">{t("Select All")}</option>
                       <option value="CLEAR_ALL">{t("Clear All")}</option>
-                      {data.consultants.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => (
+                      {createModalEligibleAssignees.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name}
                         </option>
@@ -1797,7 +1839,7 @@ export default function TasksPage() {
                     {ntAssignees.length > 0 && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", background: "var(--bg-surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
                         {ntAssignees.map((assignee, idx) => {
-                          const c = data.consultants.find(x => x.id === assignee.id);
+                          const c = allEligibleAssignees.find(x => x.id === assignee.id);
                           return (
                             <div key={assignee.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
                               <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1 }}>
