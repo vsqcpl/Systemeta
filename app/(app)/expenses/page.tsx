@@ -475,7 +475,7 @@ export default function ExpensesPage() {
     const reimbursementStage = statusLower === "approved" ? "Payment queued" : "Hold pending approval";
 
     return {
-      title: expense.description,
+      title: expense.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, ""),
       id: expense.id.startsWith("E") ? `EXP-${expense.id.slice(1)}` : expense.id,
       employeeName,
       projectCode: expense.project,
@@ -876,7 +876,7 @@ export default function ExpensesPage() {
                         </div>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                            {e.description}
+                            {e.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, "")}
                           </div>
                           <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
@@ -1146,7 +1146,7 @@ export default function ExpensesPage() {
               {trackedExpense ? (
                 <div>
                   <div style={{ fontSize: "12px", color: "var(--text-tertiary)", marginBottom: "14px" }}>
-                    {t("Tracking:")} <strong>{trackedExpense.description}</strong> ({trackedExpense.id})
+                    {t("Tracking:")} <strong>{trackedExpense.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, "")}</strong> ({trackedExpense.id})
                   </div>
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     {getWorkflowSteps(trackedExpense.status).map((step, idx) => (

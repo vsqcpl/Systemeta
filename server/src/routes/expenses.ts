@@ -16,11 +16,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
     let expenses: any[] = [];
 
-    const canSeeAll = await checkPermission(req.user.id, req.user.role, "Approve Expenses") ||
-                      await checkPermission(req.user.id, req.user.role, "Cross-Project Visibility") ||
-                      req.user.role === "super_admin" ||
-                      req.user.role === "project_manager" ||
-                      req.user.role === "accounts";
+    const canSeeAll = req.user.role === "super_admin";
 
     if (canSeeAll) {
       expenses = await prisma.expense.findMany();
@@ -227,6 +223,10 @@ router.patch("/:id", requirePermission("Approve Expenses"), validateCsrf, async 
       return res.status(404).json({ message: "Expense not found" });
     }
 
+    if (req.user.role !== "super_admin" && expense.consultantId !== req.user.id) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
     if (expense.consultantId === req.user.id && req.user.role !== "super_admin") {
       return res.status(403).json({
         message: "Cannot approve your own expense"
@@ -280,7 +280,7 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
       return res.status(404).json({ message: "Expense not found" });
     }
 
-    if (expense.consultantId !== req.user.id && !["super_admin", "project_manager"].includes(req.user.role)) {
+    if (expense.consultantId !== req.user.id && req.user.role !== "super_admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 

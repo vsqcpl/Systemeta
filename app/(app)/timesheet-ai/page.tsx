@@ -380,7 +380,7 @@ export default function TimesheetAIPage() {
       return {
         id: idx + 1,
         realId: e.id,
-        type: e.description,
+        type: e.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, ""),
         amount: e.amount,
         category: categoryMap[e.category] || "Billable",
         icon: iconMap[e.category] || "📄",
@@ -1163,7 +1163,7 @@ export default function TimesheetAIPage() {
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "8px", marginBottom: "4px" }}>
                               <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", wordBreak: "break-word", overflowWrap: "break-word" }}>
-                                {exp.description}
+                                {exp.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, "")}
                               </div>
                               <div style={{ fontSize: "13px", fontWeight: 700, color: "var(--text-primary)", flexShrink: 0 }}>
                                 ₹{exp.amount.toLocaleString("en-IN")}

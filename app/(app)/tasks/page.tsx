@@ -107,7 +107,8 @@ function TaskCard({
   
   const isAssignee = task.assignee === user?.id;
   const isManager = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
-  const canMove = (isAssignee || isManager) && !(!isManager && col === "done");
+  const isSeniorConsultant = user?.role === "senior_consultant" || user?.role === "Senior Consultant";
+  const canMove = (isAssignee || isManager || isSeniorConsultant) && !(!isManager && col === "done");
 
   const attributesAndListeners = useDraggable({
     id: task.id,
@@ -166,7 +167,6 @@ function TaskCard({
         <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", marginBottom: "8px", lineHeight: 1.4 }}>
           {task.title}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "10px" }}>{task.id}</div>
         {task.progress !== undefined && (
           <div style={{ marginBottom: "10px" }}>
             <div className="progress-bar" style={{ height: "4px" }}>
@@ -291,6 +291,7 @@ function TaskDrawer({
   const [rejectReason, setRejectReason] = React.useState("");
   const [rejectAssignee, setRejectAssignee] = React.useState(task.assignee);
   const [rejectEfficiency, setRejectEfficiency] = React.useState("5");
+  const [rejectDue, setRejectDue] = React.useState(task.dueDate || "");
 
   const handleSatisfiedYes = () => {
     moveTask(task.id, "done", new Date().toISOString().split("T")[0]);
@@ -315,6 +316,14 @@ function TaskDrawer({
       sessionStorage.setItem(`efficiency_penalty_${c.name}`, (currentPenalty + parseInt(rejectEfficiency, 10)).toString());
     }
 
+    if (rejectDue && rejectDue !== task.dueDate) {
+      const today = new Date().toISOString().split("T")[0];
+      if (rejectDue < today) {
+        showToast("New due date cannot be set in the past", "danger");
+        return;
+      }
+    }
+
     // 2. Local State Optimistic Update: Move to inprogress & update assignee
     useAppStore.setState((state) => {
       const newTasks = { ...state.data.tasks };
@@ -325,7 +334,7 @@ function TaskDrawer({
         const list = newTasks[column as keyof typeof newTasks];
         const idx = list.findIndex(t => t.id === task.id);
         if (idx !== -1) {
-          foundTask = { ...list[idx], assignee: rejectAssignee };
+          foundTask = { ...list[idx], assignee: rejectAssignee, dueDate: rejectDue };
           newTasks[column as keyof typeof newTasks] = list.filter(t => t.id !== task.id);
           break;
         }
@@ -348,7 +357,8 @@ function TaskDrawer({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         status: "inprogress",
-        assigneeId: rejectAssignee
+        assigneeId: rejectAssignee,
+        dueDate: rejectDue
       }),
     })
       .then((res) => {
@@ -468,6 +478,31 @@ function TaskDrawer({
                         <option key={cons.id} value={cons.id}>{cons.name}</option>
                       ))}
                     </select>
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("Reduce Efficiency (Current Assignee: {name})").replace("{name}", c.name)}</label>
+                    <input 
+                      type="number"
+                      className="input" 
+                      value={rejectEfficiency}
+                      onChange={(e) => setRejectEfficiency(e.target.value)}
+                      min="0"
+                      max="100"
+                      style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("New Due Date")}</label>
+                    <input 
+                      type="date"
+                      className="input" 
+                      value={rejectDue}
+                      onChange={(e) => setRejectDue(e.target.value)}
+                      min={new Date().toISOString().split("T")[0]}
+                      style={{ width: "100%", fontSize: "12px", padding: "6px" }}
+                    />
                   </div>
 
                   <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", marginTop: "8px" }}>
