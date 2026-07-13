@@ -109,6 +109,8 @@ export interface TimesheetEntry {
   task: string;
   hours: number;
   billable: boolean;
+  punchInTime?: string;
+  punchOutTime?: string;
 }
 
 export interface Timesheet {
