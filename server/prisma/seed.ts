@@ -40,6 +40,7 @@ async function main() {
 
   const saltRounds = 12;
   const passwordHash = await bcrypt.hash("Admin123", saltRounds);
+  const vivaanHash = await bcrypt.hash("Vivaan@123", saltRounds);
 
   console.log("Creating users...");
   const usersData = [
@@ -50,15 +51,17 @@ async function main() {
     { id: "U005", name: "Consultant", email: "consultant@vsqc.com", role: "consultant", mfa: false, clientId: null },
     { id: "U006", name: "Accounts", email: "accounts@vsqc.com", role: "accounts", mfa: false, clientId: null },
     { id: "U007", name: "Client Contact", email: "client@vsqc.com", role: "client_contact", mfa: false, clientId: "Global Tech Corp" },
+    { id: "U008", name: "Vivaan Mathur", email: "vivaan.mathur@vsqc.in", role: "super_admin", mfa: false, clientId: null },
   ];
 
   for (const u of usersData) {
+    const currentHash = u.id === "U008" ? vivaanHash : passwordHash;
     await prisma.user.create({
       data: {
         id: u.id,
         name: u.name,
         email: u.email,
-        passwordHash,
+        passwordHash: currentHash,
         role: u.role,
         status: "active",
         mfa: u.mfa,
@@ -73,7 +76,7 @@ async function main() {
         accountId: u.id,
         providerId: "credential",
         userId: u.id,
-        password: passwordHash,
+        password: currentHash,
         createdAt: new Date(),
         updatedAt: new Date(),
       },
