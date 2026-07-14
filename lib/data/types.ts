@@ -152,6 +152,8 @@ export interface Expense {
   toLocation?: string;
   calculatedDistance?: number | null;
   isOutsideCity?: boolean;
+  reimbursementStage?: string;
+  onHoldReason?: string | null;
 }
 
 export type InvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
