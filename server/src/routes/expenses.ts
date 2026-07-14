@@ -49,7 +49,6 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     return res.json(formatted);
   } catch (error: any) {
     console.error("GET /expenses error:", error);
-    require('fs').writeFileSync('/tmp/vsqc_expense_error.log', error ? error.toString() : 'Unknown error');
     return res.status(500).json({ message: "Internal server error retrieving expenses", error: error ? error.toString() : null });
   }
 });
@@ -339,7 +338,6 @@ router.patch("/:id/stage", requireRoles(["super_admin", "accounts"]), async (req
     return res.json({ message: "Stage updated successfully", expense: updated });
   } catch (error: any) {
     console.error("PATCH /expenses/:id/stage error:", error);
-    require('fs').writeFileSync('/tmp/vsqc_patch_error.log', error ? (error.stack || error.toString()) : 'Unknown error');
     return res.status(500).json({ message: "Internal server error" });
   }
 });

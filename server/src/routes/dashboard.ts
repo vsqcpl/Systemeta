@@ -18,12 +18,16 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       return res.json(cachedData);
     }
 
-    // Dynamically regenerate insights to reflect the latest DB state
-    try {
-      await generateDynamicInsights();
-    } catch (genErr) {
-      console.error("Failed to dynamically generate insights:", genErr);
-    }
+    // AI insights are fetched from the database (non-blocking) to prevent loading latency.
+    // If the database has no insights yet, trigger generation in the background.
+    prisma.aIInsight.count().then((count) => {
+      if (count === 0) {
+        generateDynamicInsights().catch((err) => {
+          console.error("Failed to generate initial insights in background:", err);
+        });
+      }
+    }).catch(() => {});
+
 
     let projectWhere: any = { status: "active" };
     let taskWhere: any = {
