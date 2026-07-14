@@ -1049,10 +1049,13 @@ export default function TasksPage() {
   const createModalProject = data.projects.find((p) => p.id === ntProject);
   const createModalTeamIds = createModalProject?.team || [];
   const createModalEligibleAssignees = React.useMemo(() => {
+    if (user?.role === "super_admin" || user?.role === "project_manager") {
+      return allEligibleAssignees;
+    }
     return createModalTeamIds.length > 0 
       ? allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id))
       : allEligibleAssignees;
-  }, [createModalTeamIds, allEligibleAssignees]);
+  }, [createModalTeamIds, allEligibleAssignees, user?.role]);
   const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
   const [ntPriority, setNtPriority] = useState<any>("medium");
   const [ntDue, setNtDue] = useState("");

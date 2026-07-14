@@ -186,15 +186,17 @@ export default function Sidebar() {
     >
       <div className="sidebar-inner">
         {/* Top Header Row — logo & toggle */}
-        <div className="sidebar-header-row">
+        <div className="sidebar-header-row" style={{ height: isExpanded ? '48px' : 'auto', marginTop: '8px' }}>
           <Link
             href="/dashboard"
-            className="sidebar-logo"
-            id="sidebar-logo"
+            className={`brand-logo-container ${isExpanded ? 'expanded' : 'collapsed'}`}
+            style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: "12px" }}
             title="Executive Dashboard"
-            style={{ textDecoration: "none" }}
           >
-            SM
+            <div className="sidebar-logo" style={{ background: "transparent", minWidth: "44px", width: "44px", height: "44px", padding: 0 }}>
+              <img src="/logo.png" alt="Logo" style={{ width: "44px", height: "44px", borderRadius: "10px", objectFit: "cover" }} />
+            </div>
+            {isExpanded && <img src="/systemata.jpg" alt="Systemata" style={{ height: "34px", objectFit: "contain", transform: "translateY(2px)" }} />}
           </Link>
 
           <button

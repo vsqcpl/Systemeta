@@ -91,12 +91,11 @@ export default function LoginPage() {
 
       <div className="login-card">
         {/* Logo */}
-        <div className="login-logo-wrap">
-          <div className="login-logo-mark">SM</div>
-          <div>
-            <div className="login-logo-name">Systemeta</div>
-            <div className="login-logo-sub">Enterprise Operations Suite</div>
+        <div className="brand-logo-container" style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "24px", justifyContent: "center" }}>
+          <div className="sidebar-logo" style={{ background: "transparent", minWidth: "44px", width: "44px", height: "44px", padding: 0 }}>
+            <img src="/logo.png" alt="Logo" style={{ width: "44px", height: "44px", borderRadius: "10px", objectFit: "cover" }} />
           </div>
+          <img src="/systemata.jpg" alt="Systemata" style={{ height: "34px", objectFit: "contain", transform: "translateY(2px)" }} />
         </div>
 
         <div className="login-divider"></div>

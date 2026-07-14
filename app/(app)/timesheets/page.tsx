@@ -469,17 +469,7 @@ export default function TimesheetsPage() {
       .then(res => res.json())
       .then(resData => {
         if (resData.success) {
-          // TEMPORARY MOCK FOR TESTING: Increase 'testing' task to 5.5 hours
-          let hasMockedTesting = false;
-          resData.sessions.forEach((s: any) => {
-            if (s.project && s.project.toLowerCase().includes('testing') && !hasMockedTesting) {
-              if (s.punchIn && s.punchOut) {
-                const inDate = new Date(s.punchIn);
-                s.punchOut = new Date(inDate.getTime() + (5.5 * 60 * 60 * 1000)).toISOString();
-                hasMockedTesting = true;
-              }
-            }
-          });
+          // MOCK REMOVED
 
           setPunchSessions(resData.sessions);
           
@@ -595,17 +585,7 @@ export default function TimesheetsPage() {
             .then(resData => {
               if (resData.success) {
                 // Attach consultant info manually since backend might not send it
-                // TEMPORARY MOCK FOR TESTING
-                let hasMockedTesting = false;
-                resData.sessions.forEach((s: any) => {
-                  if (s.project && s.project.toLowerCase().includes('testing') && !hasMockedTesting) {
-                    if (s.punchIn && s.punchOut) {
-                      const inDate = new Date(s.punchIn);
-                      s.punchOut = new Date(inDate.getTime() + (5.5 * 60 * 60 * 1000)).toISOString();
-                      hasMockedTesting = true;
-                    }
-                  }
-                });
+                // Attach consultant info manually since backend might not send it
 
                 return resData.sessions.map((s: any) => ({
                   ...s,

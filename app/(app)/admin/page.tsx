@@ -894,7 +894,7 @@ function AdminPageContent() {
       {/* Loading state indicator */}
       {loadingData ? (
         <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "200px" }}>
-          <div className="loading-logo" style={{ animation: "pulse 1.5s infinite", fontSize: "28px" }}>SM</div>
+          <img src="/logo.png" alt="Loading" className="loading-logo" style={{ background: "transparent", border: "none", boxShadow: "none", width: "50px", height: "50px", borderRadius: "14px", objectFit: "cover", animation: "pulse 1.5s infinite" }} />
           <div style={{ fontSize: "13px", color: "var(--text-secondary)", marginTop: "12px" }}>Loading records...</div>
         </div>
       ) : (

@@ -89,33 +89,10 @@ export default function SelectModulePage() {
       {/* Top bar */}
       <div className="ms-topbar">
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <div
-            style={{
-              width: "34px",
-              height: "34px",
-              minWidth: "34px",
-              background: "var(--brand-100)",
-              borderRadius: "10px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              color: "var(--brand-700)",
-              fontWeight: 800,
-              fontSize: "13px",
-              letterSpacing: "-0.5px",
-              boxShadow: "0 4px 12px rgba(14, 165, 233, 0.25)",
-            }}
-          >
-            SM
+          <div className="sidebar-logo" style={{ background: "transparent", minWidth: "34px", width: "34px", height: "34px", padding: 0 }}>
+            <img src="/logo.png" alt="Logo" style={{ width: "34px", height: "34px", borderRadius: "8px", objectFit: "cover" }} />
           </div>
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: 800, color: "var(--text-primary)", letterSpacing: "-0.3px" }}>
-              Systemeta
-            </div>
-            <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
-              Enterprise Operations Suite
-            </div>
-          </div>
+          <img src="/systemata.jpg" alt="Systemata" style={{ height: "26px", objectFit: "contain", transform: "translateY(2px)" }} />
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>

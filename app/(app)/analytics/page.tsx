@@ -664,17 +664,61 @@ export default function AnalyticsPage() {
         );
       })()}
 
-      {/* Productivity vs Bill Rate Bubble Chart */}
-      <div className="card" style={{ marginBottom: "24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <span className="card-title">{t("Productivity vs. Bill Rate Analysis")}</span>
-          <span className="badge badge-brand" style={{ fontSize: "11px" }}>
-            {t("Bubble = Allocation Level")}
-          </span>
-        </div>
-        <div className="card-body">
-          <div className="chart-container" style={{ height: "280px" }}>
-            <TrendScatterChart customConsultants={consultantMetrics} />
+      {/* Productivity Insights Panel */}
+      <div className="card" style={{ marginBottom: "24px", padding: "20px" }}>
+        <span className="card-title" style={{ marginBottom: "16px", display: "block" }}>{t("Performance Insights")}</span>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
+          <div style={{ padding: "16px", background: "var(--bg-success, rgba(34,197,94,0.1))", borderRadius: "8px", border: "1px solid var(--border-success, rgba(34,197,94,0.2))" }}>
+            <h4 style={{ margin: "0 0 8px 0", color: "var(--text-success, #166534)", fontSize: "14px" }}>Highest Productivity</h4>
+            {(() => {
+              const top = [...consultantMetrics].sort((a, b) => b.weeklyUtilization - a.weeklyUtilization)[0];
+              return top ? (
+                <div>
+                  <strong style={{ fontSize: "18px", color: "var(--text-primary)" }}>{top.name}</strong>
+                  <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>{top.weeklyUtilization}% Productivity</div>
+                </div>
+              ) : <div style={{ color: "var(--text-secondary)" }}>No data available</div>;
+            })()}
+          </div>
+          
+          <div style={{ padding: "16px", background: "var(--bg-danger, rgba(239,68,68,0.1))", borderRadius: "8px", border: "1px solid var(--border-danger, rgba(239,68,68,0.2))" }}>
+            <h4 style={{ margin: "0 0 8px 0", color: "var(--text-danger, #991b1b)", fontSize: "14px" }}>Lowest Productivity</h4>
+            {(() => {
+              const lowest = [...consultantMetrics].sort((a, b) => a.weeklyUtilization - b.weeklyUtilization)[0];
+              return lowest ? (
+                <div>
+                  <strong style={{ fontSize: "18px", color: "var(--text-primary)" }}>{lowest.name}</strong>
+                  <div style={{ color: "var(--text-secondary)", fontSize: "13px" }}>{lowest.weeklyUtilization}% Productivity</div>
+                </div>
+              ) : <div style={{ color: "var(--text-secondary)" }}>No data available</div>;
+            })()}
+          </div>
+
+          <div style={{ padding: "16px", background: "rgba(16, 185, 129, 0.05)", borderRadius: "8px", border: "1px solid rgba(16, 185, 129, 0.15)", display: "flex", flexDirection: "column", justifyContent: "center" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "8px" }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1.45.62 2.84 1.5 3.5.76.75 1.23 1.51 1.41 2.5"/></svg>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#10b981" }}>AI Insight</span>
+            </div>
+            {(() => {
+              const sorted = [...consultantMetrics].sort((a, b) => a.weeklyUtilization - b.weeklyUtilization);
+              const lowest = sorted[0];
+              const highest = sorted[sorted.length - 1];
+              if (!lowest || !highest) return <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>Insufficient data for insights.</div>;
+              
+              if (lowest.weeklyUtilization === 0) {
+                return (
+                  <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                    "{lowest.name}" has no logged hours this week. Consider a follow-up to ensure timesheets are up to date.
+                  </div>
+                );
+              }
+              
+              return (
+                <div style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.5 }}>
+                  Resource allocation gap detected: <strong>{highest.name}</strong> is operating at {highest.weeklyUtilization}% while <strong>{lowest.name}</strong> is at {lowest.weeklyUtilization}%. Rebalancing tasks could improve overall team output.
+                </div>
+              );
+            })()}
           </div>
         </div>
       </div>

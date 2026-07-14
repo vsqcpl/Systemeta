@@ -161,7 +161,7 @@ export default function AppLayout({
   if (!mounted || (!resolvedModule && !activeModule)) {
     return (
       <div className="loading-screen">
-        <div className="loading-logo">SM</div>
+        <img src="/logo.png" alt="Loading" className="loading-logo" style={{ background: "transparent", border: "none", boxShadow: "none", width: "50px", height: "50px", borderRadius: "14px", objectFit: "cover" }} />
         <div className="loading-text">Loading workspace...</div>
         <div className="loading-bar">
           <div className="loading-bar-fill"></div>

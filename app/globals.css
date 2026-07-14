@@ -533,8 +533,19 @@ body {
   border-right-color: rgba(255, 255, 255, 0.06);
 }
 
+[data-theme="dark"] .brand-logo-container {
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+[data-theme="dark"] .brand-logo-container img {
+  filter: invert(1) hue-rotate(180deg) brightness(1.2);
+  mix-blend-mode: screen;
+}
+
 [data-theme="dark"] .sidebar-logo {
-  background: #1e3a5f;
+  background: transparent;
   color: #d6e8f5;
 }
 

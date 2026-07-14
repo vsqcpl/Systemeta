@@ -2811,7 +2811,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         leaveRes,
         expensesRes,
         billingRes,
-        usersRes
+        usersRes,
+        punchSessionsRes
       ] = await Promise.all([
         fetch("/api/dashboard"),
         fetch("/api/projects"),
@@ -2820,7 +2821,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         fetch("/api/leave"),
         fetch("/api/expenses"),
         fetch("/api/billing"),
-        fetch("/api/users").catch(() => null)
+        fetch("/api/users").catch(() => null),
+        fetch("/api/timesheets/punch-sessions?employeeId=all").catch(() => null)
       ]);
 
       const handleResponse = async (res: Response, fallback: any) => {
@@ -2837,11 +2839,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
         dashboard,
         projects,
         tasks,
-        timesheets,
+        baseTimesheets,
         leaveRequests,
         expenses,
         billing,
-        usersList
+        usersList,
+        punchSessionsData
       ] = await Promise.all([
         handleResponse(dashboardRes, {
           kpis: {
@@ -2865,8 +2868,52 @@ export const useAppStore = create<AppStore>((set, get) => ({
         handleResponse(leaveRes, []),
         handleResponse(expensesRes, []),
         handleResponse(billingRes, { invoices: [], milestones: [] }),
-        usersRes && usersRes.ok ? usersRes.json() : Promise.resolve([])
+        usersRes && usersRes.ok ? usersRes.json() : Promise.resolve([]),
+        punchSessionsRes && punchSessionsRes.ok ? punchSessionsRes.json() : Promise.resolve({ success: false, sessions: [] })
       ]);
+
+      const timesheets = [...baseTimesheets];
+      if (punchSessionsData && punchSessionsData.success && punchSessionsData.sessions) {
+        const allTasksList = [
+          ...(tasks.todo || []),
+          ...(tasks.inprogress || []),
+          ...(tasks.review || []),
+          ...(tasks.done || []),
+        ];
+        punchSessionsData.sessions.forEach((s: any) => {
+          const targetUser = s.consultantId;
+          const weekStart = new Date(s.date);
+          weekStart.setDate(weekStart.getDate() - (weekStart.getDay() === 0 ? 6 : weekStart.getDay() - 1));
+          const targetWeekKey = weekStart.toISOString().substring(0, 10);
+          
+          let userTimesheet = timesheets.find(t => t.consultant === targetUser && t.week === targetWeekKey);
+          if (!userTimesheet) {
+            userTimesheet = {
+              id: `ts-${Date.now()}-${Math.random()}`,
+              consultant: targetUser,
+              week: targetWeekKey,
+              entries: []
+            };
+            timesheets.push(userTimesheet);
+          }
+          
+          const taskObj = allTasksList.find((t: any) => t.title === s.project);
+          const exists = userTimesheet.entries.find((e: any) => e.id === s.id);
+          if (!exists) {
+            userTimesheet.entries.push({
+              id: s.id,
+              timesheetId: userTimesheet.id,
+              day: new Date(s.date).getDay() === 0 ? 6 : new Date(s.date).getDay() - 1,
+              project: taskObj ? taskObj.project : "Internal",
+              task: s.project,
+              hours: s.punchOut ? parseFloat(((new Date(s.punchOut).getTime() - new Date(s.punchIn).getTime()) / 3600000).toFixed(2)) : 0,
+              billable: true,
+              punchInTime: s.punchIn,
+              punchOutTime: s.punchOut
+            });
+          }
+        });
+      }
 
       const users = (usersList || []).map(mapUserToUser);
       const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, timesheets));

@@ -390,12 +390,17 @@ export default function TimesheetAIPage() {
 
   // 3. Dynamic Efficiency Tasks mapping
   const efficiencyTasks = useMemo(() => {
-    const allTasksList = [
+    const ongoingTasks = [
       ...(data.tasks.todo || []),
       ...(data.tasks.inprogress || []),
       ...(data.tasks.review || []),
+    ].map(t => ({ ...t, taskState: 'ongoing' }));
+    
+    const doneTasks = [
       ...(data.tasks.done || []),
-    ];
+    ].map(t => ({ ...t, taskState: 'done' }));
+
+    const allTasksList = [...ongoingTasks, ...doneTasks];
     
     if (allTasksList.length === 0) return [];
     
@@ -423,6 +428,7 @@ export default function TimesheetAIPage() {
         planned,
         actual,
         status,
+        taskState: t.taskState,
       };
     });
   }, [data.tasks, data.timesheets]);
@@ -448,15 +454,21 @@ export default function TimesheetAIPage() {
 
   // Card 1 state
   const [selectedTaskName, setSelectedTaskName] = useState<string | null>(null);
+  const [taskFilter, setTaskFilter] = useState<'all' | 'ongoing' | 'done'>('all');
+
+  const filteredEfficiencyTasks = useMemo(() => {
+    if (taskFilter === 'all') return efficiencyTasks;
+    return efficiencyTasks.filter(t => t.taskState === taskFilter);
+  }, [efficiencyTasks, taskFilter]);
 
   const selectedTask = useMemo(() => {
-    if (efficiencyTasks.length === 0) return null;
+    if (filteredEfficiencyTasks.length === 0) return null;
     if (selectedTaskName) {
-      const found = efficiencyTasks.find(t => t.task === selectedTaskName);
+      const found = filteredEfficiencyTasks.find(t => t.task === selectedTaskName);
       if (found) return found;
     }
-    return efficiencyTasks[0];
-  }, [efficiencyTasks, selectedTaskName]);
+    return filteredEfficiencyTasks[0];
+  }, [filteredEfficiencyTasks, selectedTaskName]);
 
   // Card 2 state
   const [selectedConsultant, setSelectedConsultant] = useState<any>(null);
@@ -592,17 +604,34 @@ export default function TimesheetAIPage() {
 
                 {/* Task selector */}
                 <div style={{ marginBottom: "14px" }}>
-                  <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Select Task</label>
-                  <select
-                    className="select"
-                    value={selectedTask.task}
-                    onChange={(e) => setSelectedTaskName(e.target.value)}
-                    style={{ width: "100%", fontSize: "12.5px" }}
-                  >
-                    {efficiencyTasks.map((t, i) => (
-                      <option key={`${t.task}-${t.project}-${i}`} value={t.task}>{t.task} ({t.project})</option>
-                    ))}
-                  </select>
+                  <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ flex: 1 }}>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Filter</label>
+                      <select
+                        className="select"
+                        value={taskFilter}
+                        onChange={(e) => setTaskFilter(e.target.value as any)}
+                        style={{ width: "100%", fontSize: "12.5px" }}
+                      >
+                        <option value="all">Both</option>
+                        <option value="ongoing">Ongoing</option>
+                        <option value="done">Done</option>
+                      </select>
+                    </div>
+                    <div style={{ flex: 2 }}>
+                      <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Select Task</label>
+                      <select
+                        className="select"
+                        value={selectedTask?.task || ""}
+                        onChange={(e) => setSelectedTaskName(e.target.value)}
+                        style={{ width: "100%", fontSize: "12.5px" }}
+                      >
+                        {filteredEfficiencyTasks.map((t, i) => (
+                          <option key={`${t.task}-${t.project}-${i}`} value={t.task}>{t.task} ({t.project})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
                 </div>
 
 
@@ -613,7 +642,7 @@ export default function TimesheetAIPage() {
                     <span style={{ color: "#e11d48" }}>● Over Budget</span>
                     <span style={{ color: "#059669" }}>● Under Budget</span>
                   </div>
-                  {efficiencyTasks.map((t, i) => (
+                  {filteredEfficiencyTasks.map((t, i) => (
                     <div
                       key={`${t.task}-${t.project}-${i}`}
                       onClick={() => setSelectedTaskName(t.task)}
@@ -703,6 +732,8 @@ export default function TimesheetAIPage() {
                           if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
                             totalHours += (outTime - inTime) / (1000 * 60 * 60);
                           }
+                        } else if (entry.hours) {
+                          totalHours += entry.hours;
                         }
                       });
                     }
@@ -830,6 +861,8 @@ export default function TimesheetAIPage() {
                                   if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
                                     actualHours += (outTime - inTime) / (1000 * 60 * 60);
                                   }
+                                } else if (entry.hours) {
+                                  actualHours += entry.hours;
                                 }
                               }
                             });
@@ -902,9 +935,13 @@ export default function TimesheetAIPage() {
                           isAssigned = true;
                         }
                         return isAssigned;
-                      }).map((t: any, i: number) => (
-                        <option key={`${t.id}-${i}`} value={t.title}>{t.title} ({t.project})</option>
-                      ));
+                      }).map((t: any, i: number) => {
+                        const projObj = data.projects?.find((p: any) => p.id === t.projectId || p.id === t.project);
+                        const projectName = projObj ? projObj.name : t.project;
+                        return (
+                          <option key={`${t.id}-${i}`} value={t.title}>{t.title} ({projectName})</option>
+                        );
+                      });
                     })()}
                   </select>
                 </div>
@@ -952,18 +989,14 @@ export default function TimesheetAIPage() {
                       userTimesheets.forEach((ts: any) => {
                         if (ts.entries && Array.isArray(ts.entries)) {
                           ts.entries.forEach((entry: any) => {
-                            let matchesTask = false;
-                            if (selectedDashboardTask !== "All Tasks") {
-                              const taskObj = getFlatTasksLocal(data.tasks).find((t: any) => t.id === selectedDashboardTask);
-                              matchesTask = taskObj ? (entry.task === taskObj.title || entry.task === taskObj.id) : (entry.task === selectedDashboardTask);
-                              if (!matchesTask && entry.project !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
-                            }
                             if (entry.punchInTime && entry.punchOutTime) {
                               const inTime = new Date(entry.punchInTime).getTime();
                               const outTime = new Date(entry.punchOutTime).getTime();
                               if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
                                 totalHours += (outTime - inTime) / (1000 * 60 * 60);
                               }
+                            } else if (entry.hours) {
+                              totalHours += entry.hours;
                             }
                           });
                         }
@@ -991,7 +1024,6 @@ export default function TimesheetAIPage() {
                         let totalActualHours = 0;
 
                         allTasks.forEach((task: any) => {
-                          if (selectedDashboardTask !== "All Tasks" && task.title !== selectedDashboardTask && task.id !== selectedDashboardTask) return;
                           let isAssigned = false;
                           let assignedUsersArray: any[] = [];
                           
@@ -1037,6 +1069,8 @@ export default function TimesheetAIPage() {
                                       if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
                                         actualHours += (outTime - inTime) / (1000 * 60 * 60);
                                       }
+                                    } else if (entry.hours) {
+                                      actualHours += entry.hours;
                                     }
                                   }
                                 });
