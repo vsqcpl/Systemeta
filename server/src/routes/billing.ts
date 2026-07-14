@@ -283,7 +283,7 @@ router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]),
             transactionId: transactionId?.trim() || null,
             remarks: remarks?.trim() || null,
             proofUrl: proofUrl?.trim() || null,
-            recordedBy: req.user.name,
+            recordedBy: req.user?.name || req.user?.email || "System",
           },
         });
 
@@ -302,8 +302,27 @@ router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]),
       payment = txResult.payment;
       updatedInvoice = txResult.invoice;
     } catch (txError: any) {
-      console.error("Payment transaction failed:", txError?.message || txError);
-      return res.status(500).json({ message: "Failed to record payment — database error" });
+      console.error("Payment transaction failed:", JSON.stringify({
+        message: txError.message,
+        code: txError.code,
+        meta: txError.meta,
+        stack: txError.stack,
+        original: txError
+      }, null, 2));
+      
+      const isPrismaError = txError.code && txError.code.startsWith('P');
+      const details = isPrismaError 
+        ? `Database Error (${txError.code}): ${txError.meta?.cause || txError.message}` 
+        : txError.message || "Unknown error";
+
+      return res.status(500).json({ 
+        message: "Failed to record payment — database error",
+        errorDetails: {
+          code: txError.code,
+          meta: txError.meta,
+          details: details
+        }
+      });
     }
 
     // --- Audit log outside transaction so it never rolls back the payment ---

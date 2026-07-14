@@ -88,7 +88,7 @@ export default function SelectModulePage() {
 
       {/* Top bar */}
       <div className="ms-topbar">
-        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+        <div className="brand-logo-container" style={{ display: "flex", alignItems: "center", gap: "12px", background: "transparent", boxShadow: "none", padding: 0 }}>
           <div className="sidebar-logo" style={{ background: "transparent", minWidth: "34px", width: "34px", height: "34px", padding: 0 }}>
             <img src="/logo.png" alt="Logo" style={{ width: "34px", height: "34px", borderRadius: "8px", objectFit: "cover" }} />
           </div>

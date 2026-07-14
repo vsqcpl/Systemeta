@@ -1,0 +1,115 @@
+                    {consultants.map((c) => {
+                      const userTimesheets = data.timesheets ? data.timesheets.filter((ts: any) => ts.consultant === c.id) : [];
+                      let totalHours = 0;
+                      userTimesheets.forEach((ts: any) => {
+                        if (ts.entries && Array.isArray(ts.entries)) {
+                          ts.entries.forEach((entry: any) => {
+                            if (entry.punchInTime && entry.punchOutTime) {
+                              const inTime = new Date(entry.punchInTime).getTime();
+                              const outTime = new Date(entry.punchOutTime).getTime();
+                              if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+                                totalHours += (outTime - inTime) / (1000 * 60 * 60);
+                              }
+                            } else if (entry.hours) {
+                              totalHours += entry.hours;
+                            }
+                          });
+                        }
+                      });
+                      const capacity = userTimesheets.length * 40;
+                      let rowUtil: number | "N/A" = "N/A";
+                      if (userTimesheets.length > 0 && capacity > 0) {
+                        rowUtil = Math.min(100, Math.round((totalHours / capacity) * 100));
+                      }
+
+                      let rowEff: number | "N/A" = "N/A";
+                      if (data.tasks) {
+                        const getFlatTasksLocal = (tasksState: any) => {
+                          if (!tasksState) return [];
+                          if (Array.isArray(tasksState)) return tasksState;
+                          const flat: any[] = [];
+                          if (Array.isArray(tasksState.todo)) flat.push(...tasksState.todo);
+                          if (Array.isArray(tasksState.inprogress)) flat.push(...tasksState.inprogress);
+                          if (Array.isArray(tasksState.review)) flat.push(...tasksState.review);
+                          if (Array.isArray(tasksState.done)) flat.push(...tasksState.done);
+                          return flat;
+                        };
+                        const allTasks = getFlatTasksLocal(data.tasks);
+                        let totalPlannedHours = 0;
+                        let totalActualHours = 0;
+
+                        allTasks.forEach((task: any) => {
+                          let isAssigned = false;
+                          let assignedUsersArray: any[] = [];
+                          
+                          if (task.assignedUsers && Array.isArray(task.assignedUsers)) {
+                            assignedUsersArray = task.assignedUsers;
+                            isAssigned = assignedUsersArray.some((u: any) => u.userId === c.id || u.name === c.name);
+                          } else if (Array.isArray(task.assignee)) {
+                            isAssigned = task.assignee.includes(c.id) || task.assignee.includes(c.name);
+                          } else if (typeof task.assignee === 'string') {
+                            isAssigned = task.assignee === c.id || task.assignee === c.name || task.assignee.includes(c.name);
+                          }
+                          if (task.assigneeId && c.id && task.assigneeId === c.id) {
+                            isAssigned = true;
+                          }
+
+                          if (isAssigned) {
+                            let plannedHours = 0;
+                            if (assignedUsersArray.length > 0) {
+                              const userAssignment = assignedUsersArray.find((u: any) => u.userId === c.id || u.name === c.name);
+                              if (userAssignment && typeof userAssignment.hours === 'number') {
+                                plannedHours = userAssignment.hours;
+                              } else {
+                                plannedHours = (task.estimate || 0) / assignedUsersArray.length;
+                              }
+                            } else {
+                              let numAssignees = 1;
+                              if (typeof task.assignee === 'string' && task.assignee.includes(',')) {
+                                numAssignees = task.assignee.split(',').filter(Boolean).length || 1;
+                              } else if (Array.isArray(task.assignee)) {
+                                numAssignees = task.assignee.length || 1;
+                              }
+                              plannedHours = (task.estimate || 0) / numAssignees;
+                            }
+                            
+                            let actualHours = 0;
+                            userTimesheets.forEach((ts: any) => {
+                              if (ts.entries && Array.isArray(ts.entries)) {
+                                ts.entries.forEach((entry: any) => {
+                                  if (entry.task === task.title || entry.task === task.id) {
+                                    if (entry.punchInTime && entry.punchOutTime) {
+                                      const inTime = new Date(entry.punchInTime).getTime();
+                                      const outTime = new Date(entry.punchOutTime).getTime();
+                                      if (!isNaN(inTime) && !isNaN(outTime) && outTime >= inTime) {
+                                        actualHours += (outTime - inTime) / (1000 * 60 * 60);
+                                      }
+                                    } else if (entry.hours) {
+                                      actualHours += entry.hours;
+                                    }
+                                  }
+                                });
+                              }
+                            });
+
+                            totalPlannedHours += plannedHours;
+                            totalActualHours += actualHours;
+                          }
+                        });
+
+                        if (totalActualHours > 0 && totalPlannedHours > 0) {
+                          rowEff = Math.round((totalPlannedHours / totalActualHours) * 100);
+                        }
+                      }
+
+                      let rowProd: number | "N/A" = "N/A";
+                      if (typeof rowUtil === "number" && typeof rowEff === "number") {
+                        rowProd = Math.round((rowUtil + rowEff) / 2);
+                      } else if (typeof rowUtil === "number") {
+                        rowProd = rowUtil;
+                      } else if (typeof rowEff === "number") {
+                        rowProd = rowEff;
+                      }
+                      
+                      return (
+                        <div

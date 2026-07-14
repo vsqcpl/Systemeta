@@ -539,7 +539,7 @@ body {
   box-shadow: none;
 }
 
-[data-theme="dark"] .brand-logo-container img {
+[data-theme="dark"] .brand-logo-container img:not([src="/logo.png"]) {
   filter: invert(1) hue-rotate(180deg) brightness(1.2);
   mix-blend-mode: screen;
 }

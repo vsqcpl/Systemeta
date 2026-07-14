@@ -96,14 +96,21 @@ router.post("/", requirePermission("Create Projects"), async (req: Authenticated
       return res.status(400).json({ message: "All fields are required" });
     }
 
-    // Generate unique ID using max existing ID to avoid collisions on deletion
-    const lastProject = await prisma.project.findFirst({ orderBy: { id: "desc" } });
-    const lastNum = lastProject ? parseInt(lastProject.id.replace("P", "") || "0", 10) : 0;
-    const nextId = "P" + String(lastNum + 1).padStart(3, "0");
+    // Generate unique code using max existing code
+    const allProjects = await prisma.project.findMany({ select: { code: true } });
+    let maxNum = 0;
+    allProjects.forEach(p => {
+      if (p.code && p.code.startsWith("P")) {
+        const num = parseInt(p.code.replace("P", ""), 10);
+        if (!isNaN(num) && num > maxNum) maxNum = num;
+      }
+    });
+    const nextCode = "P" + String(maxNum + 1).padStart(3, "0");
 
     const newProject = await prisma.$transaction(async (tx) => {
       const project = await tx.project.create({
         data: {
+          code: nextCode,
           name,
           client,
           status: "active",

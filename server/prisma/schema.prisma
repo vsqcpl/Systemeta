@@ -84,6 +84,7 @@ model Verification {
 
 model Project {
   id          String              @id @default(uuid())
+  code        String?             @unique
   name        String
   client      String
   status      String              // e.g. active, planning, completed

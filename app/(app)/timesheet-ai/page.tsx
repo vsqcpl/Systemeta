@@ -721,11 +721,6 @@ export default function TimesheetAIPage() {
                     if (ts.entries && Array.isArray(ts.entries)) {
                       ts.entries.forEach((entry: any) => {
                         let matchesTask = false;
-                        if (selectedDashboardTask !== "All Tasks") {
-                          const taskObj = getFlatTasksLocal(data.tasks).find((t: any) => t.id === selectedDashboardTask);
-                          matchesTask = taskObj ? (entry.task === taskObj.title || entry.task === taskObj.id) : (entry.task === selectedDashboardTask);
-                          if (!matchesTask && entry.project !== selectedDashboardTask && entry.projectId !== selectedDashboardTask) return;
-                        }
                         if (entry.punchInTime && entry.punchOutTime) {
                           const inTime = new Date(entry.punchInTime).getTime();
                           const outTime = new Date(entry.punchOutTime).getTime();
@@ -815,7 +810,6 @@ export default function TimesheetAIPage() {
                     let totalActualHours = 0;
 
                     allTasks.forEach((task: any) => {
-                      if (selectedDashboardTask !== "All Tasks" && task.title !== selectedDashboardTask && task.id !== selectedDashboardTask) return;
                       let isAssigned = false;
                       let assignedUsersArray: any[] = [];
                       
