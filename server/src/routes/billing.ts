@@ -36,9 +36,12 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     const [invoices, milestones] = await Promise.all([
       prisma.invoice.findMany({
         where: whereClause,
-        include: { payments: true },
+        include: { payments: true, project: true },
       }),
-      prisma.milestone.findMany({ where: whereClause }),
+      prisma.milestone.findMany({ 
+        where: whereClause,
+        include: { project: true },
+      }),
     ]);
 
     return res.json({
@@ -48,7 +51,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 
         return {
           id: i.id,
-          project: i.projectId,
+          project: (i as any).project?.name || i.projectId,
           client: i.client,
           amount: i.amount,
           status: i.status,
@@ -62,7 +65,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       }),
       milestones: milestones.map((m) => ({
         id: m.id,
-        project: m.projectId,
+        project: (m as any).project?.name || m.projectId,
         title: m.title,
         date: m.date,
         status: m.status,
@@ -96,15 +99,45 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       return res.status(404).json({ message: "Project not found" });
     }
 
-    const invoice = await prisma.invoice.create({
-      data: {
-        projectId: project,
-        client,
-        amount: parsedAmount,
-        status: "draft",
-        issued,
-        due: due || null,
-      },
+    // Generate sequential Invoice No
+    const year = new Date().getFullYear();
+    const invoicePrefix = `INV-${year}-`;
+
+    const invoice = await prisma.$transaction(async (tx) => {
+      // Find the latest invoice for this year
+      const lastInvoice = await tx.invoice.findFirst({
+        where: {
+          invoiceNo: {
+            startsWith: invoicePrefix,
+          },
+        },
+        orderBy: {
+          invoiceNo: "desc",
+        },
+      });
+
+      let nextNumber = 1;
+      if (lastInvoice && lastInvoice.invoiceNo) {
+        const lastParts = lastInvoice.invoiceNo.split("-");
+        const lastSequence = parseInt(lastParts[lastParts.length - 1], 10);
+        if (!isNaN(lastSequence)) {
+          nextNumber = lastSequence + 1;
+        }
+      }
+
+      const invoiceNo = `${invoicePrefix}${String(nextNumber).padStart(3, "0")}`;
+
+      return await tx.invoice.create({
+        data: {
+          projectId: project,
+          client,
+          amount: parsedAmount,
+          status: "draft",
+          issued,
+          due: due || null,
+          invoiceNo,
+        },
+      });
     });
 
     // Log Activity (non-critical — don't let failure block response)
@@ -112,7 +145,7 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       data: {
         userId: req.user.id,
         action: "Generated invoice",
-        subject: `${invoice.id} – ${client} ₹${(parsedAmount / 100000).toFixed(2)}L`,
+        subject: `${invoice.invoiceNo || invoice.id} – ${client} ₹${(parsedAmount / 100000).toFixed(2)}L`,
         projectId: project,
         type: "invoice",
       },
@@ -123,7 +156,7 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       userEmail: req.user.email,
       action: "INVOICE_GENERATED",
       resource: `invoice:${invoice.id}`,
-      detail: `Generated invoice ${invoice.id} for client ${client} with amount ₹${parsedAmount.toLocaleString()}`,
+      detail: `Generated invoice ${invoice.invoiceNo || invoice.id} for client ${client} with amount ₹${parsedAmount.toLocaleString()}`,
       ip: req.ip || "127.0.0.1",
     }).catch((e) => console.error("Audit log failed:", e));
 
@@ -131,6 +164,7 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
 
     return res.status(201).json({
       id: invoice.id,
+      invoiceNo: invoice.invoiceNo,
       project: invoice.projectId,
       client: invoice.client,
       amount: invoice.amount,
@@ -144,6 +178,42 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
   } catch (error: any) {
     console.error("POST /billing/invoices error:", error?.message || error);
     return res.status(500).json({ message: "Internal server error generating invoice" });
+  }
+});
+
+// GET /api/billing/invoices/:id/download-data - Fetch invoice and branding for PDF generation
+router.get("/invoices/:id/download-data", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        project: {
+          select: { name: true },
+        },
+      },
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ message: "Invoice not found" });
+    }
+
+    const branding = await prisma.companyBranding.findFirst();
+
+    // Log Audit for PDF download
+    logAuditEvent({
+      userEmail: req.user.email,
+      action: "INVOICE_PDF_DOWNLOADED",
+      resource: `invoice:${invoice.id}`,
+      detail: `Downloaded PDF data for invoice ${invoice.invoiceNo || invoice.id}`,
+      ip: req.ip || "127.0.0.1",
+    }).catch((e) => console.error("Audit log failed:", e));
+
+    return res.status(200).json({ invoice, branding: branding || {} });
+  } catch (error: any) {
+    console.error("GET /billing/invoices/:id/download-data error:", error?.message || error);
+    return res.status(500).json({ message: "Failed to fetch invoice download data" });
   }
 });
 
@@ -304,23 +374,29 @@ router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]),
     } catch (txError: any) {
       console.error("Payment transaction failed:", JSON.stringify({
         message: txError.message,
-        code: txError.code,
+        code: txError.code || txError.errorCode,
         meta: txError.meta,
+        clientVersion: txError.clientVersion,
         stack: txError.stack,
         original: txError
       }, null, 2));
-      
-      const isPrismaError = txError.code && txError.code.startsWith('P');
-      const details = isPrismaError 
-        ? `Database Error (${txError.code}): ${txError.meta?.cause || txError.message}` 
-        : txError.message || "Unknown error";
+
+      // Detailed Postgres Error Extraction for Logs
+      if (txError.meta) {
+        console.error("[Postgres Error Details] Target:", txError.meta?.target);
+        console.error("[Postgres Error Details] Cause:", txError.meta?.cause);
+        console.error("[Postgres Error Details] Details:", txError.meta?.details);
+      }
+      if (txError.code) {
+        console.error(`[Prisma Error Code] ${txError.code}`);
+      }
 
       return res.status(500).json({ 
         message: "Failed to record payment — database error",
         errorDetails: {
           code: txError.code,
           meta: txError.meta,
-          details: details
+          details: txError.meta?.cause || txError.message || "Unknown error"
         }
       });
     }

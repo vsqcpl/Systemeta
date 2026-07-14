@@ -112,6 +112,7 @@ export default function ExpensesPage() {
   const darkMode = useAppStore((state) => state.darkMode);
   const { t } = useTranslation();
   const { user } = useAuth();
+  const isAccountsOrAdmin = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "accounts" || user?.role === "Accounts";
   const showToast = useAppStore((state) => state.showToast);
   const approveExpense = useAppStore((state) => state.approveExpense);
   const rejectExpense = useAppStore((state) => state.rejectExpense);
@@ -147,6 +148,49 @@ export default function ExpensesPage() {
   const [selectedExpense, setSelectedExpense] = useState<any>(null);
   const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<string | null>(null);
+  
+  const [expenseStage, setExpenseStage] = useState("");
+  const [expenseOnHoldReason, setExpenseOnHoldReason] = useState("");
+  const [isUpdatingStage, setIsUpdatingStage] = useState(false);
+
+  // Sync state when selectedExpense changes
+  useEffect(() => {
+    if (selectedExpense) {
+      setExpenseStage(selectedExpense.reimbursementStage || "Pending");
+      setExpenseOnHoldReason(selectedExpense.onHoldReason || "");
+    }
+  }, [selectedExpense]);
+
+  const handleUpdateExpenseStage = async () => {
+    if (!selectedExpense) return;
+    setIsUpdatingStage(true);
+    try {
+      const res = await fetch(`/api/expenses/${selectedExpense.id}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: expenseStage, reason: expenseOnHoldReason }),
+      });
+      if (res.ok) {
+        showToast("Expense stage updated successfully", "success");
+        // Update local state
+        const updated = await res.json();
+        useAppStore.setState((s: any) => ({
+          data: {
+            ...s.data,
+            expenses: s.data.expenses.map((e: any) => e.id === selectedExpense.id ? { ...e, reimbursementStage: expenseStage, onHoldReason: expenseOnHoldReason } : e)
+          }
+        }));
+        setSelectedExpense({ ...selectedExpense, reimbursementStage: expenseStage, onHoldReason: expenseOnHoldReason });
+      } else {
+        const err = await res.json();
+        showToast(err.message || "Failed to update stage", "danger");
+      }
+    } catch (e) {
+      showToast("Error updating stage", "danger");
+    } finally {
+      setIsUpdatingStage(false);
+    }
+  };
 
   // Form State
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1505,6 +1549,52 @@ export default function ExpensesPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Reimbursement Stage Edit (Accounts/Admin only) */}
+              {isAccountsOrAdmin && (
+                <div style={{ background: "var(--surface-50)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-subtle)", marginBottom: "16px" }}>
+                  <h3 style={{ fontSize: "13px", fontWeight: 700, margin: "0 0 12px 0", color: "var(--text-primary)" }}>{t("Reimbursement Stage")}</h3>
+                  <div className="form-group" style={{ marginBottom: expenseStage === "On Hold" ? "12px" : "16px" }}>
+                    <select
+                      className="select"
+                      value={expenseStage}
+                      onChange={(e) => setExpenseStage(e.target.value)}
+                      style={{ width: "100%", padding: "8px 12px", fontSize: "13px" }}
+                    >
+                      <option value="Pending">{t("Pending")}</option>
+                      <option value="Payment Queued">{t("Payment Queued")}</option>
+                      <option value="Paid">{t("Paid")}</option>
+                      <option value="On Hold">{t("On Hold")}</option>
+                    </select>
+                  </div>
+                  
+                  {expenseStage === "On Hold" && (
+                    <div className="form-group" style={{ marginBottom: "16px" }}>
+                      <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "6px", display: "block" }}>{t("Reason for Hold")}</label>
+                      <textarea
+                        className="input-field"
+                        value={expenseOnHoldReason}
+                        onChange={(e) => setExpenseOnHoldReason(e.target.value)}
+                        placeholder="E.g., Missing original receipts"
+                        rows={2}
+                        style={{ width: "100%", resize: "vertical", fontSize: "13px" }}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <button 
+                      className="btn btn-primary btn-sm" 
+                      onClick={handleUpdateExpenseStage}
+                      disabled={isUpdatingStage}
+                      style={{ display: "flex", alignItems: "center", gap: "6px" }}
+                    >
+                      {isUpdatingStage && <span className="spinner" style={{ width: "12px", height: "12px", border: "2px solid #fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />}
+                      {isUpdatingStage ? t("Updating...") : t("Update Stage")}
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Additional Information */}
               <div>

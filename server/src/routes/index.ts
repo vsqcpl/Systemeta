@@ -13,6 +13,7 @@ import notificationRoutes from "./notifications.js";
 import overridesRoutes from "./overrides.js";
 import clientManagerRoutes from "./clientManager.js";
 import aiRoutes from "./ai.js";
+import brandingRoutes from "./branding.js";
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use("/notifications", notificationRoutes);
 router.use("/overrides", overridesRoutes);
 router.use("/client-manager", clientManagerRoutes);
 router.use("/ai", aiRoutes);
+router.use("/branding", brandingRoutes);
 
 export default router;

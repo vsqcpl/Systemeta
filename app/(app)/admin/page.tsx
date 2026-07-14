@@ -190,9 +190,28 @@ function AdminPageContent() {
     }
   };
 
+  const fetchBranding = async () => {
+    try {
+      const res = await fetch("/api/branding");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.companyName) {
+          setBrandingLogoUrl(data.logoUrl || "");
+          setBrandingCompanyName(data.companyName || "");
+          setBrandingAddress(data.address || "");
+          setBrandingTaxId(data.taxId || "");
+          setBrandingBankDetails(data.bankDetails || "");
+        }
+      }
+    } catch (e) {
+      console.error("Failed to fetch branding", e);
+    }
+  };
+
   useEffect(() => {
     fetchAdminData();
     fetchOverrides();
+    fetchBranding();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -254,6 +273,13 @@ function AdminPageContent() {
   const [intJira, setIntJira] = useState(false);
   const [intSap, setIntSap] = useState(false);
   const [isSavingIntegrations, setIsSavingIntegrations] = useState(false);
+
+  // Branding settings state
+  const [brandingLogoUrl, setBrandingLogoUrl] = useState("");
+  const [brandingCompanyName, setBrandingCompanyName] = useState("");
+  const [brandingAddress, setBrandingAddress] = useState("");
+  const [brandingTaxId, setBrandingTaxId] = useState("");
+  const [brandingBankDetails, setBrandingBankDetails] = useState("");
 
   // Master save
   const [isSavingAll, setIsSavingAll] = useState(false);
@@ -818,6 +844,25 @@ function AdminPageContent() {
     
     // Save emission factors
     setStoreEmissionFactors(adminEmissionFactors);
+
+    // Save branding
+    try {
+      if (brandingCompanyName.trim()) {
+        await fetch("/api/branding", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            logoUrl: brandingLogoUrl,
+            companyName: brandingCompanyName,
+            address: brandingAddress,
+            taxId: brandingTaxId,
+            bankDetails: brandingBankDetails,
+          }),
+        });
+      }
+    } catch (e) {
+      console.error("Failed to save branding", e);
+    }
 
     try { localStorage.setItem("vsqc_notif_settings", JSON.stringify({ email: notifEmail, slack: notifSlack, aiAlerts: notifAiAlerts, weeklyDigest: notifWeeklyDigest })); } catch (_) {}
     try { localStorage.setItem("vsqc_security_settings", JSON.stringify({ forceMfa: secForceMfa, sessionTimeout: secSessionTimeout, passwordPolicy: secPasswordPolicy, ipWhitelist: secIpWhitelist })); } catch (_) {}
@@ -1633,6 +1678,37 @@ function AdminPageContent() {
                     </div>
                   </div>
                 </div>
+
+                {/* Company Branding Settings */}
+                {isSuperAdmin && (
+                  <div className="card" style={{ overflow: "visible" }}>
+                    <div className="card-header" style={{ marginBottom: 0 }}>
+                      <span className="card-title">{t("Company Branding (For Invoices & PDFs)")}</span>
+                    </div>
+                    <div className="card-body" style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                      <div>
+                        <label style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Company Name <span style={{color: "var(--danger)"}}>*</span></label>
+                        <input type="text" className="input-field" value={brandingCompanyName} onChange={(e) => setBrandingCompanyName(e.target.value)} placeholder="Acme Corp" />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Logo URL</label>
+                        <input type="text" className="input-field" value={brandingLogoUrl} onChange={(e) => setBrandingLogoUrl(e.target.value)} placeholder="https://example.com/logo.png" />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Company Address</label>
+                        <textarea className="input-field" value={brandingAddress} onChange={(e) => setBrandingAddress(e.target.value)} placeholder="123 Business Rd, Tech City" rows={2} style={{ resize: "vertical" }} />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Tax ID / GSTIN</label>
+                        <input type="text" className="input-field" value={brandingTaxId} onChange={(e) => setBrandingTaxId(e.target.value)} placeholder="Tax ID" />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "12px", color: "var(--text-secondary)", marginBottom: "4px", display: "block" }}>Bank Details (Footer)</label>
+                        <textarea className="input-field" value={brandingBankDetails} onChange={(e) => setBrandingBankDetails(e.target.value)} placeholder="Bank Name, Account #, IFSC/SWIFT" rows={2} style={{ resize: "vertical" }} />
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Carbon Footprint Emission Factors */}
                 {isSuperAdmin && (

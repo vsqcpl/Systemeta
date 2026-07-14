@@ -53,7 +53,47 @@ export const INITIAL_VSQC_DATA: VSQCData = {
   leaveRequests: [],
 
   // ── Expenses ──────────────────────────────────────────────────
-  expenses: [],
+  expenses: [
+    {
+      id: "exp-001",
+      consultant: "consultant-1",
+      project: "proj-1",
+      category: "Travel",
+      description: "Flight to client site",
+      amount: 15000,
+      currency: "INR",
+      date: "2026-06-15",
+      status: "approved",
+      reimbursementStage: "Pending",
+      receipt: "receipt_001.pdf"
+    },
+    {
+      id: "exp-002",
+      consultant: "consultant-2",
+      project: "proj-2",
+      category: "Accommodation",
+      description: "Hotel stay for 2 nights",
+      amount: 8500,
+      currency: "INR",
+      date: "2026-06-20",
+      status: "approved",
+      reimbursementStage: "Payment Queued",
+      receipt: "hotel_bill.pdf"
+    },
+    {
+      id: "exp-003",
+      consultant: "consultant-1",
+      project: "proj-1",
+      category: "Meals",
+      description: "Team lunch",
+      amount: 3200,
+      currency: "INR",
+      date: "2026-06-25",
+      status: "pending",
+      reimbursementStage: "Pending",
+      receipt: null
+    }
+  ],
 
   // ── Invoices ──────────────────────────────────────────────────
   invoices: [],

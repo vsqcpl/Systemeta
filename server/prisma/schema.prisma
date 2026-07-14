@@ -249,6 +249,8 @@ model Expense {
   currency     String
   date         String
   status       String   @default("pending") // e.g. pending, approved, rejected
+  reimbursementStage String @default("Pending") // Pending, Payment Queued, Paid, On Hold
+  onHoldReason       String?
   receipt      String?
   modeOfTransport    String?
   fromLocation       String?
@@ -258,6 +260,7 @@ model Expense {
 
 model Invoice {
   id        String   @id @default(uuid())
+  invoiceNo String?  @unique
   projectId String
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   client    String
@@ -460,5 +463,15 @@ model Escalation {
   assignedTo  String?
   resolvedAt  DateTime?
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model CompanyBranding {
+  id          String   @id @default(uuid())
+  logoUrl     String?
+  companyName String
+  address     String?
+  taxId       String?
+  bankDetails String?
   updatedAt   DateTime @updatedAt
 }

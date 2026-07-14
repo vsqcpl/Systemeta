@@ -26,8 +26,6 @@ export default function BillingPage() {
     ? data.invoices
     : data.invoices.filter((inv) => visibleProjectIds.includes(inv.project));
 
-  const [statusFilter, setStatusFilter] = useState("All Status");
-  const [activeTab, setActiveTab] = useState<"invoices" | "milestones">("invoices");
 
   const visibleMilestones = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "accounts" || user?.role === "Accounts"
     ? data.milestones
@@ -70,6 +68,15 @@ export default function BillingPage() {
   // Payment Modals State
   const [showPaymentModal, setShowPaymentModal] = useState<string | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"invoices" | "milestones" | "expenses">("invoices");
+  const [selectedExpense, setSelectedExpense] = useState<any>(null);
+  const [expenseStage, setExpenseStage] = useState("");
+  const [expenseOnHoldReason, setExpenseOnHoldReason] = useState("");
+  const [isUpdatingStage, setIsUpdatingStage] = useState(false);
+  const [statusFilter, setStatusFilter] = useState("All Status");
+
+  const isAccountsOrAdmin = user && ["super_admin", "accounts"].includes(user.role);
+
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentDate, setPaymentDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [paymentMethod, setPaymentMethod] = useState("Bank Transfer");
@@ -221,6 +228,31 @@ export default function BillingPage() {
     link.click();
     document.body.removeChild(link);
     showToast("CSV exported successfully", "success");
+  };
+
+  const handleUpdateExpenseStage = async () => {
+    if (!selectedExpense) return;
+    setIsUpdatingStage(true);
+    try {
+      const res = await fetch(`/api/expenses/${selectedExpense.id}/stage`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stage: expenseStage, reason: expenseOnHoldReason }),
+      });
+      if (res.ok) {
+        showToast("Expense stage updated successfully", "success");
+        // Refresh local data by triggering a store fetch
+        useAppStore.getState().fetchInitialData();
+        setSelectedExpense({ ...selectedExpense, reimbursementStage: expenseStage, onHoldReason: expenseOnHoldReason });
+      } else {
+        const err = await res.json();
+        showToast(err.message || "Failed to update stage", "danger");
+      }
+    } catch (e) {
+      showToast("Error updating stage", "danger");
+    } finally {
+      setIsUpdatingStage(false);
+    }
   };
 
   const handleDownloadInvoice = async (inv: any) => {
@@ -514,16 +546,24 @@ export default function BillingPage() {
       <div style={{ display: "flex", gap: "24px", borderBottom: "1px solid var(--border-default)", marginBottom: "20px" }}>
         <button 
           onClick={() => setActiveTab("invoices")} 
-          style={{ padding: "8px 0", borderBottom: activeTab === "invoices" ? "2px solid var(--brand-500)" : "2px solid transparent", background: "none", border: "none", cursor: "pointer", fontWeight: activeTab === "invoices" ? 600 : 400, color: activeTab === "invoices" ? "var(--brand-600)" : "var(--text-secondary)", fontSize: "14px" }}
+          style={{ padding: "8px 0", borderBottom: activeTab === "invoices" ? "2px solid var(--brand-500)" : "2px solid transparent", background: "none", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer", fontWeight: activeTab === "invoices" ? 600 : 400, color: activeTab === "invoices" ? "var(--brand-600)" : "var(--text-secondary)", fontSize: "14px" }}
         >
           {t("Invoices")}
         </button>
         <button 
           onClick={() => setActiveTab("milestones")} 
-          style={{ padding: "8px 0", borderBottom: activeTab === "milestones" ? "2px solid var(--brand-500)" : "2px solid transparent", background: "none", border: "none", cursor: "pointer", fontWeight: activeTab === "milestones" ? 600 : 400, color: activeTab === "milestones" ? "var(--brand-600)" : "var(--text-secondary)", fontSize: "14px" }}
+          style={{ padding: "8px 0", borderBottom: activeTab === "milestones" ? "2px solid var(--brand-500)" : "2px solid transparent", background: "none", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer", fontWeight: activeTab === "milestones" ? 600 : 400, color: activeTab === "milestones" ? "var(--brand-600)" : "var(--text-secondary)", fontSize: "14px" }}
         >
           {t("Milestones")}
         </button>
+        {isAccountsOrAdmin && (
+          <button 
+            onClick={() => setActiveTab("expenses")} 
+            style={{ padding: "8px 0", borderBottom: activeTab === "expenses" ? "2px solid var(--brand-500)" : "2px solid transparent", background: "none", borderTop: "none", borderLeft: "none", borderRight: "none", cursor: "pointer", fontWeight: activeTab === "expenses" ? 600 : 400, color: activeTab === "expenses" ? "var(--brand-600)" : "var(--text-secondary)", fontSize: "14px" }}
+          >
+            {t("Expenses & Travel")}
+          </button>
+        )}
       </div>
 
       {/* Invoice Register Table Card */}
@@ -653,6 +693,106 @@ export default function BillingPage() {
                     </tr>
                   );
                 })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      )}
+
+      {/* Expenses Table Card */}
+      {activeTab === "expenses" && isAccountsOrAdmin && (
+      <div className="card">
+        <div className="card-header" style={{ marginBottom: 0 }}>
+          <span className="card-title">{t("Expenses & Travel Reimbursements")}</span>
+          <div>
+            <select
+              className="select"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{ fontSize: "12px", padding: "4px 8px" }}
+            >
+              <option value="All Status">{t("All Stages")}</option>
+              <option value="Pending">{t("Pending")}</option>
+              <option value="Payment Queued">{t("Payment Queued")}</option>
+              <option value="Paid">{t("Paid")}</option>
+              <option value="On Hold">{t("On Hold")}</option>
+            </select>
+          </div>
+        </div>
+        <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
+          <table>
+            <thead>
+              <tr>
+                <th>{t("Expense ID")}</th>
+                <th>{t("Employee")}</th>
+                <th>{t("Project")}</th>
+                <th>{t("Amount")}</th>
+                <th>{t("Submitted Date")}</th>
+                <th>{t("Approval Status")}</th>
+                <th>{t("Reimbursement Stage")}</th>
+                <th>{t("Receipt")}</th>
+                <th style={{ textAlign: "right" }}>{t("Action")}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(!data.expenses || data.expenses.length === 0) ? (
+                <tr>
+                  <td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "var(--text-tertiary)", fontSize: "13px" }}>
+                    {t("No expenses found")}
+                  </td>
+                </tr>
+              ) : (
+                data.expenses
+                  .filter((e: any) => statusFilter === "All Status" || (e.reimbursementStage || "Pending") === statusFilter)
+                  .map((exp: any) => {
+                    const stageColorMap: Record<string, string> = {
+                      "Pending": "var(--warning-600)",
+                      "Payment Queued": "var(--brand-600)",
+                      "Paid": "var(--success-600)",
+                      "On Hold": "var(--danger-600)",
+                    };
+                    const color = stageColorMap[exp.reimbursementStage || "Pending"] || "var(--text-secondary)";
+                    
+                    return (
+                      <tr 
+                        key={exp.id} 
+                        style={{ cursor: "pointer" }} 
+                        onClick={() => {
+                          setSelectedExpense(exp);
+                          setExpenseStage(exp.reimbursementStage || "Pending");
+                          setExpenseOnHoldReason(exp.onHoldReason || "");
+                        }}
+                      >
+                        <td style={{ fontWeight: 600, fontFamily: "monospace", color: "var(--text-primary)" }}>{exp.id.slice(0, 8)}</td>
+                        <td style={{ fontSize: "13px" }}>
+                          {data.users?.find((u: any) => u.id === exp.consultant)?.name || exp.consultant}
+                        </td>
+                        <td>
+                          <span className="badge badge-brand" style={{ fontSize: "10.5px" }}>
+                            {data.projects?.find((p: any) => p.id === exp.project)?.name || exp.project}
+                          </span>
+                        </td>
+                        <td style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>{formatCurrency(exp.amount)}</td>
+                        <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{exp.date}</td>
+                        <td>
+                          <span className={`badge ${exp.status === 'approved' ? 'badge-success' : exp.status === 'rejected' ? 'badge-danger' : 'badge-warning'}`} style={{ fontSize: "11px" }}>
+                            {t(exp.status.charAt(0).toUpperCase() + exp.status.slice(1))}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: "13px", fontWeight: 600, color }}>{exp.reimbursementStage || "Pending"}</td>
+                        <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{exp.receipt ? "Y" : "N"}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <button 
+                            className="btn btn-secondary btn-sm" 
+                            style={{ padding: "4px 8px", fontSize: "12px", pointerEvents: "none" }}
+                          >
+                            {isAccountsOrAdmin ? t("Review") : t("View")}
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
               )}
             </tbody>
           </table>
@@ -1007,6 +1147,99 @@ export default function BillingPage() {
           </div>
         );
       })()}
+
+      {/* Expense Stage Update Modal */}
+      {selectedExpense && (
+        <div className="modal-backdrop" onClick={() => setSelectedExpense(null)}>
+          <div className="modal-content" style={{ maxWidth: "500px", padding: 0 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: "1px solid var(--border-subtle)", padding: "20px 24px" }}>
+              <h2 style={{ fontSize: "18px", fontWeight: 700, margin: 0, color: "var(--text-primary)" }}>{t("Expense Claim Details")}</h2>
+              <button
+                className="topbar-btn"
+                onClick={() => setSelectedExpense(null)}
+                style={{ width: "30px", height: "30px", padding: 0, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "50%", background: "transparent", border: "none", color: "var(--text-secondary)", cursor: "pointer" }}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div style={{ padding: "24px" }}>
+              <div style={{ display: "flex", gap: "12px", flexDirection: "column", marginBottom: "24px", background: "var(--surface-50)", padding: "16px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{t("Amount")}</span>
+                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{formatCurrency(selectedExpense.amount)}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{t("Employee")}</span>
+                  <span style={{ color: "var(--text-primary)" }}>{data.users?.find((u: any) => u.id === selectedExpense.consultant)?.name || selectedExpense.consultant}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{t("Project")}</span>
+                  <span style={{ color: "var(--text-primary)" }}>{data.projects?.find((p: any) => p.id === selectedExpense.project)?.name || selectedExpense.project}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{t("Category")}</span>
+                  <span style={{ color: "var(--text-primary)" }}>{selectedExpense.category}</span>
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px" }}>
+                  <span style={{ color: "var(--text-secondary)" }}>{t("Description")}</span>
+                  <span style={{ color: "var(--text-primary)", textAlign: "right", maxWidth: "200px" }}>{selectedExpense.description}</span>
+                </div>
+              </div>
+
+              {isAccountsOrAdmin && (
+                <>
+                  <div className="form-group" style={{ marginBottom: expenseStage === "On Hold" ? "16px" : "24px" }}>
+                    <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px", display: "block" }}>{t("Reimbursement Stage")}</label>
+                    <select
+                      className="select"
+                      value={expenseStage}
+                      onChange={(e) => setExpenseStage(e.target.value)}
+                      style={{ width: "100%", padding: "10px", fontSize: "14px" }}
+                    >
+                      <option value="Pending">{t("Pending")}</option>
+                      <option value="Payment Queued">{t("Payment Queued")}</option>
+                      <option value="Paid">{t("Paid")}</option>
+                      <option value="On Hold">{t("On Hold")}</option>
+                    </select>
+                  </div>
+                  
+                  {expenseStage === "On Hold" && (
+                    <div className="form-group" style={{ marginBottom: "24px" }}>
+                      <label style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-secondary)", marginBottom: "8px", display: "block" }}>{t("Reason for Hold")}</label>
+                      <textarea
+                        className="input-field"
+                        value={expenseOnHoldReason}
+                        onChange={(e) => setExpenseOnHoldReason(e.target.value)}
+                        placeholder="E.g., Missing original receipts"
+                        rows={3}
+                        style={{ width: "100%", resize: "vertical" }}
+                      />
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", borderTop: "1px solid var(--border-subtle)", paddingTop: "20px", marginTop: "10px" }}>
+                    <button className="btn btn-secondary" onClick={() => setSelectedExpense(null)}>
+                      {t("Cancel")}
+                    </button>
+                    <button 
+                      className="btn btn-primary" 
+                      onClick={handleUpdateExpenseStage}
+                      disabled={isUpdatingStage}
+                      style={{ display: "flex", alignItems: "center", gap: "8px" }}
+                    >
+                      {isUpdatingStage && <span className="spinner" style={{ width: "14px", height: "14px", borderWidth: "2px", borderStyle: "solid", borderColor: "#fff", borderTopColor: "transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />}
+                      {isUpdatingStage ? t("Updating...") : t("Update Stage")}
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

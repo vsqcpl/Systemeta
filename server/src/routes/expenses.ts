@@ -1,7 +1,7 @@
 import { Router } from "express";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
-import { checkPermission, requirePermission } from "../middlewares/rbac.js";
+import { checkPermission, requirePermission, requireRoles } from "../middlewares/rbac.js";
 import { callVisionService } from "../lib/groq.service.js";
 import { validateCsrf } from "../middlewares/csrf.js";
 import { logAuditEvent } from "../lib/auditLogger.js";
@@ -16,7 +16,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
     let expenses: any[] = [];
 
-    const canSeeAll = req.user.role === "super_admin";
+    const canSeeAll = req.user.role === "super_admin" || req.user.role === "accounts";
 
     if (canSeeAll) {
       expenses = await prisma.expense.findMany();
@@ -41,12 +41,16 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       fromLocation: e.fromLocation,
       toLocation: e.toLocation,
       calculatedDistance: e.calculatedDistance,
+      reimbursementStage: e.reimbursementStage,
+      onHoldReason: e.onHoldReason,
     }));
 
+    console.log(`GET /expenses requested by ${req.user.role}. Returning ${formatted.length} expenses.`);
     return res.json(formatted);
-  } catch (error) {
+  } catch (error: any) {
     console.error("GET /expenses error:", error);
-    return res.status(500).json({ message: "Internal server error retrieving expenses" });
+    require('fs').writeFileSync('/tmp/vsqc_expense_error.log', error ? error.toString() : 'Unknown error');
+    return res.status(500).json({ message: "Internal server error retrieving expenses", error: error ? error.toString() : null });
   }
 });
 
@@ -299,7 +303,44 @@ router.delete("/:id", async (req: AuthenticatedRequest, res) => {
     return res.json({ success: true });
   } catch (error) {
     console.error("DELETE /expenses/:id error:", error);
-    return res.status(500).json({ message: "Internal server error deleting expense" });
+    return res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+// PATCH /api/expenses/:id/stage - Update reimbursement stage (Accounts / Super Admin only)
+router.patch("/:id/stage", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
+  const { id } = req.params;
+  const { stage, reason } = req.body;
+
+  if (!["Pending", "Payment Queued", "Paid", "On Hold"].includes(stage)) {
+    return res.status(400).json({ message: "Invalid stage" });
+  }
+
+  try {
+    const expense = await prisma.expense.findUnique({ where: { id } });
+    if (!expense) return res.status(404).json({ message: "Expense not found" });
+
+    const updated = await prisma.expense.update({
+      where: { id },
+      data: {
+        reimbursementStage: stage,
+        onHoldReason: reason || null,
+      }
+    });
+
+    await logAuditEvent({
+      userEmail: req.user.email,
+      action: "UPDATE_EXPENSE_STAGE",
+      resource: `Expense:${id}`,
+      detail: `Changed from ${expense.reimbursementStage} to ${stage}${reason ? ' Reason: ' + reason : ''}`,
+      ip: req.ip || "127.0.0.1"
+    });
+
+    return res.json({ message: "Stage updated successfully", expense: updated });
+  } catch (error: any) {
+    console.error("PATCH /expenses/:id/stage error:", error);
+    require('fs').writeFileSync('/tmp/vsqc_patch_error.log', error ? (error.stack || error.toString()) : 'Unknown error');
+    return res.status(500).json({ message: "Internal server error" });
   }
 });
 

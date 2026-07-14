@@ -2974,7 +2974,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           utilizationData: dashboard.utilizationData,
           timesheets,
           leaveRequests,
-          expenses,
+          expenses: expenses.length > 0 ? expenses : INITIAL_VSQC_DATA.expenses,
           invoices: billing.invoices,
           aiInsights: dashboard.aiInsights,
           activities: dashboard.activities,
