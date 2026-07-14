@@ -38,36 +38,6 @@ export default function Topbar() {
 
   const useIsomorphicLayoutEffect = typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
-  useIsomorphicLayoutEffect(() => {
-    const updateIndicator = () => {
-      const activeBtn = activeModule ? buttonRefs.current[activeModule] : null;
-      if (activeBtn) {
-        setIndicatorStyle({
-          left: `${activeBtn.offsetLeft}px`,
-          width: `${activeBtn.offsetWidth}px`,
-          opacity: 1,
-        });
-      } else {
-        setIndicatorStyle({ opacity: 0 });
-      }
-    };
-
-    updateIndicator();
-
-    const win = typeof window !== "undefined" ? (window as any) : null;
-    if (win) {
-      if ("ResizeObserver" in win) {
-        const observer = new win.ResizeObserver(updateIndicator);
-        if (containerRef.current) {
-          observer.observe(containerRef.current);
-        }
-        return () => observer.disconnect();
-      } else {
-        win.addEventListener("resize", updateIndicator);
-        return () => win.removeEventListener("resize", updateIndicator);
-      }
-    }
-  }, [activeModule]);
 
   // Restore module selection from localStorage on mount
   useEffect(() => {
@@ -186,6 +156,37 @@ export default function Topbar() {
   }
 
   const activeModuleIndex = allowedModules.indexOf(activeModule as any);
+
+  useIsomorphicLayoutEffect(() => {
+    const updateIndicator = () => {
+      const activeBtn = activeModule ? buttonRefs.current[activeModule] : null;
+      if (activeBtn) {
+        setIndicatorStyle({
+          left: `${activeBtn.offsetLeft}px`,
+          width: `${activeBtn.offsetWidth}px`,
+          opacity: 1,
+        });
+      } else {
+        setIndicatorStyle({ opacity: 0 });
+      }
+    };
+
+    updateIndicator();
+
+    const win = typeof window !== "undefined" ? (window as any) : null;
+    if (win) {
+      if ("ResizeObserver" in win) {
+        const observer = new win.ResizeObserver(updateIndicator);
+        if (containerRef.current) {
+          observer.observe(containerRef.current);
+        }
+        return () => observer.disconnect();
+      } else {
+        win.addEventListener("resize", updateIndicator);
+        return () => win.removeEventListener("resize", updateIndicator);
+      }
+    }
+  }, [activeModule, allowedModules.join(",")]);
 
   return (
     <header className="topbar" style={{ position: "relative" }}>
