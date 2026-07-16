@@ -1,4 +1,4 @@
--- ==============================================================================
+
 -- VSQC PLATFORM - POSTGRESQL SCHEMA FOR CRM & CLIENT MANAGER MODULES
 -- ==============================================================================
 -- This schema satisfies all requested enterprise database requirements including
