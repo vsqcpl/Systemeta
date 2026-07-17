@@ -26,7 +26,7 @@ import {
 export default function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { canAccess, role } = usePermission();
 
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
@@ -251,28 +251,68 @@ export default function Sidebar() {
         </div>
 
         {/* User profile row pinned to bottom */}
-        <div
-          className="sidebar-user"
-          onClick={() => {
-            if (role !== "client_contact") router.push("/select-module");
-          }}
-          title={role !== "client_contact" ? "Switch module" : undefined}
-          id="sidebar-user"
-          style={{ cursor: role !== "client_contact" ? "pointer" : "default" }}
-        >
+        <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid var(--border-color)", padding: "12px 8px 4px" }}>
           <div
-            className="sidebar-user-avatar"
-            style={{
-              background: "var(--brand-100, #dbeafe)",
-              color: "var(--brand-700, #1e4976)",
+            className="sidebar-user"
+            onClick={() => {
+              if (role !== "client_contact") router.push("/select-module");
             }}
+            title={role !== "client_contact" ? "Switch module" : undefined}
+            id="sidebar-user"
+            style={{ cursor: role !== "client_contact" ? "pointer" : "default", borderTop: "none", padding: 0 }}
           >
-            {initials}
+            <div
+              className="sidebar-user-avatar"
+              style={{
+                background: "var(--brand-100, #dbeafe)",
+                color: "var(--brand-700, #1e4976)",
+              }}
+            >
+              {initials}
+            </div>
+            <div className="sidebar-user-info">
+              <span className="sidebar-user-name">{user ? user.name : "Tom Keller"}</span>
+              <span className="sidebar-user-role">{displayRole}</span>
+            </div>
           </div>
-          <div className="sidebar-user-info">
-            <span className="sidebar-user-name">{user ? user.name : "Tom Keller"}</span>
-            <span className="sidebar-user-role">{displayRole}</span>
-          </div>
+
+          {/* Sign Out Button */}
+          <button
+            onClick={() => {
+              logout().then(() => {
+                router.replace("/login");
+              });
+            }}
+            className="sidebar-nav-item"
+            style={{
+              width: "100%",
+              justifyContent: sidebarCollapsed ? "center" : "flex-start",
+              color: "#ef4444",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: "8px 12px",
+              marginTop: "4px",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              borderRadius: "8px",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "rgba(239, 68, 68, 0.08)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+            title={t("Sign Out")}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+              <polyline points="16 17 21 12 16 7" />
+              <line x1="21" y1="12" x2="9" y2="12" />
+            </svg>
+            {!sidebarCollapsed && <span className="sidebar-nav-label sidebar-label" style={{ fontWeight: 600 }}>{t("Sign Out")}</span>}
+          </button>
         </div>
       </div>
     </aside>

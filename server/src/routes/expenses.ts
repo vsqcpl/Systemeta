@@ -226,7 +226,8 @@ router.patch("/:id", requirePermission("Approve Expenses"), validateCsrf, async 
       return res.status(404).json({ message: "Expense not found" });
     }
 
-    if (req.user.role !== "super_admin" && expense.consultantId !== req.user.id) {
+    const isApprover = ["super_admin", "project_manager", "accounts"].includes(req.user.role);
+    if (!isApprover && expense.consultantId !== req.user.id) {
       return res.status(403).json({ message: "Forbidden" });
     }
 

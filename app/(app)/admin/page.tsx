@@ -201,6 +201,7 @@ function AdminPageContent() {
           setBrandingAddress(data.address || "");
           setBrandingTaxId(data.taxId || "");
           setBrandingBankDetails(data.bankDetails || "");
+          setMaintenanceEnabled(data.maintenanceMode || false);
         }
       }
     } catch (e) {
@@ -894,10 +895,23 @@ function AdminPageContent() {
           <button
             className="btn btn-sm"
             style={{ backgroundColor: maintenanceEnabled ? "#C0392B" : "#1E293B", color: "#ffffff", transition: "background-color 150ms ease" }}
-            onClick={() => {
+            onClick={async () => {
               const nextState = !maintenanceEnabled;
-              setMaintenanceEnabled(nextState);
-              showToast(nextState ? "Platform set to Maintenance Mode" : "Platform taken out of Maintenance Mode", nextState ? "warning" : "info");
+              try {
+                const res = await fetch("/api/branding/maintenance", {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ enabled: nextState }),
+                });
+                if (res.ok) {
+                  setMaintenanceEnabled(nextState);
+                  showToast(nextState ? "Platform set to Maintenance Mode" : "Platform taken out of Maintenance Mode", nextState ? "warning" : "info");
+                } else {
+                  showToast("Failed to update Maintenance Mode status", "danger");
+                }
+              } catch (e) {
+                showToast("Error updating Maintenance Mode status", "danger");
+              }
             }}
           >
             {t("Maintenance Mode")}

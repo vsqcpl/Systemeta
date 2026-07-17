@@ -18,7 +18,7 @@ async function requireClientManager(req: Request, res: Response, next: Function)
   if (req.method === "GET") {
     return next();
   }
-  if (role === "client_manager") {
+  if (role === "client_manager" || role === "super_admin") {
     return next();
   }
   // Check if they have the active "CRM Access" override

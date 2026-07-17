@@ -56,4 +56,43 @@ router.put("/", requireRoles(["super_admin", "accounts"]), async (req: Authentic
   }
 });
 
+// PATCH /api/branding/maintenance - Toggle maintenance mode
+router.patch("/maintenance", requireRoles(["super_admin"]), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { enabled } = req.body;
+
+    if (typeof enabled !== "boolean") {
+      return res.status(400).json({ message: "enabled must be a boolean" });
+    }
+
+    const existing = await prisma.companyBranding.findFirst();
+    let branding;
+
+    if (existing) {
+      branding = await prisma.companyBranding.update({
+        where: { id: existing.id },
+        data: { maintenanceMode: enabled },
+      });
+    } else {
+      branding = await prisma.companyBranding.create({
+        data: { companyName: "Systemeta", maintenanceMode: enabled },
+      });
+    }
+
+    // Log Audit
+    logAuditEvent({
+      userEmail: req.user.email,
+      action: enabled ? "MAINTENANCE_ENABLED" : "MAINTENANCE_DISABLED",
+      resource: `system`,
+      detail: enabled ? `Enabled global maintenance mode` : `Disabled global maintenance mode`,
+      ip: req.ip || "127.0.0.1",
+    }).catch((e) => console.error("Audit log failed:", e));
+
+    return res.status(200).json(branding);
+  } catch (error: any) {
+    console.error("PATCH /branding/maintenance error:", error?.message || error);
+    return res.status(500).json({ message: "Failed to update maintenance settings" });
+  }
+});
+
 export default router;

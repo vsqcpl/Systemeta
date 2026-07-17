@@ -513,7 +513,7 @@ export default function ExpensesPage() {
     const consultantObj = data.consultants.find((c: any) => c.id === expense.consultant);
     const employeeName = consultantObj ? consultantObj.name : expense.consultant || "Unknown";
     
-    const statusLower = expense.status.toLowerCase();
+    const statusLower = (expense.status || "").toLowerCase();
     const displayStatus = statusLower === "approved" ? "Approved" : statusLower === "rejected" ? "Rejected" : "Pending";
     const approvalStatus = statusLower === "approved" ? "Approved" : statusLower === "rejected" ? "Rejected" : "Awaiting Manager Review";
     const reimbursementStage = statusLower === "approved" ? "Payment queued" : "Hold pending approval";

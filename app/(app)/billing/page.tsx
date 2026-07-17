@@ -367,7 +367,7 @@ export default function BillingPage() {
   };
 
   const filteredInvoices = visibleInvoices.filter((inv) => {
-    return statusFilter === "All Status" || inv.status.toLowerCase() === statusFilter.toLowerCase();
+    return statusFilter === "All Status" || (inv.status && inv.status.toLowerCase() === statusFilter.toLowerCase());
   });
 
   const totalOutstanding = visibleInvoices.reduce((s, i) => s + (i.outstandingAmount ?? i.amount), 0);

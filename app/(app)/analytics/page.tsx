@@ -603,6 +603,14 @@ export default function AnalyticsPage() {
         })}
       </div>
 
+      {/* Performance Trend Chart */}
+      <div className="card" style={{ marginBottom: "24px", padding: "20px" }}>
+        <span className="card-title" style={{ marginBottom: "16px", display: "block" }}>{t("Performance vs Productivity Trend")}</span>
+        <div style={{ height: "350px", position: "relative" }}>
+          <TrendScatterChart customConsultants={consultantMetrics} />
+        </div>
+      </div>
+
       {/* Expanded Consultant Performance Details Sub-Card */}
       {expandedConsultantId && (() => {
         const c = consultantMetrics.find(x => x.id === expandedConsultantId);

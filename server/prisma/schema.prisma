@@ -467,11 +467,12 @@ model Escalation {
 }
 
 model CompanyBranding {
-  id          String   @id @default(uuid())
-  logoUrl     String?
-  companyName String
-  address     String?
-  taxId       String?
-  bankDetails String?
-  updatedAt   DateTime @updatedAt
+  id              String   @id @default(uuid())
+  logoUrl         String?
+  companyName     String
+  address         String?
+  taxId           String?
+  bankDetails     String?
+  maintenanceMode Boolean  @default(false)
+  updatedAt       DateTime @updatedAt
 }
