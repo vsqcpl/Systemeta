@@ -24,8 +24,8 @@ export default function RequirementsPage() {
   const clients = data.clients || [];
 
   const filtered = requirements.filter((r) =>
-    r.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    r.reqNumber.toLowerCase().includes(searchTerm.toLowerCase())
+    (r.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (r.reqNumber || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleCreate = (e: React.FormEvent) => {
@@ -99,7 +99,7 @@ export default function RequirementsPage() {
                   const client = clients.find(cl => cl.id === r.clientId);
                   return (
                     <tr key={r.id}>
-                      <td style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{r.reqNumber}</td>
+                      <td style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{r.reqNumber || `REQ-${r.id.slice(0, 4).toUpperCase()}`}</td>
                       <td style={{ fontWeight: 500 }}>{r.title}</td>
                       <td>{client ? client.companyName : "-"}</td>
                       <td>

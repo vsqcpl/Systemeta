@@ -4199,7 +4199,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           clientId: followUpData.clientId,
-          description: followUpData.description,
+          description: followUpData.description || followUpData.title || "",
           dueDate: followUpData.dueDate,
           priority: followUpData.priority,
           status: followUpData.status || "open",

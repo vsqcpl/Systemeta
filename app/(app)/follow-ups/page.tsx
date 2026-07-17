@@ -24,7 +24,7 @@ export default function FollowUpsPage() {
   const clients = data.clients || [];
 
   const filtered = followUps.filter((f) =>
-    f.title.toLowerCase().includes(searchTerm.toLowerCase())
+    (f.title || f.description || "").toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const handleCreate = (e: React.FormEvent) => {
@@ -93,7 +93,7 @@ export default function FollowUpsPage() {
                   const client = clients.find(cl => cl.id === f.clientId);
                   return (
                     <tr key={f.id}>
-                      <td style={{ fontWeight: 600 }}>{f.title}</td>
+                      <td style={{ fontWeight: 600 }}>{f.title || f.description || "No Action Item"}</td>
                       <td>{client ? client.companyName : "-"}</td>
                       <td>
                         <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
