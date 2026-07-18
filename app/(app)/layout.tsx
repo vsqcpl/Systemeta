@@ -43,9 +43,7 @@ export default function AppLayout({
         const res = await fetch("/api/branding");
         if (res.ok) {
           const data = await res.json();
-          if (data.maintenanceMode) {
-            setMaintenanceActive(true);
-          }
+          setMaintenanceActive(!!data.maintenanceMode);
         }
       } catch (e) {
         console.error("Failed to check maintenance mode status", e);

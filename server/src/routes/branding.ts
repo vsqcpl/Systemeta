@@ -1,5 +1,5 @@
 import express, { Router, Response } from "express";
-import { AuthenticatedRequest } from "../middlewares/auth.js";
+import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireRoles } from "../middlewares/rbac.js";
 import prisma from "../lib/prisma.js";
 import { logAuditEvent } from "../lib/auditLogger.js";
@@ -18,9 +18,10 @@ router.get("/", async (req: AuthenticatedRequest, res: Response) => {
 });
 
 // PUT /api/branding - Update company branding
-router.put("/", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res: Response) => {
+router.put("/", authMiddleware, requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { logoUrl, companyName, address, taxId, bankDetails } = req.body;
+
 
     if (!companyName) {
       return res.status(400).json({ message: "Company Name is required" });
@@ -57,7 +58,7 @@ router.put("/", requireRoles(["super_admin", "accounts"]), async (req: Authentic
 });
 
 // PATCH /api/branding/maintenance - Toggle maintenance mode
-router.patch("/maintenance", requireRoles(["super_admin"]), async (req: AuthenticatedRequest, res: Response) => {
+router.patch("/maintenance", authMiddleware, requireRoles(["super_admin"]), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { enabled } = req.body;
 
