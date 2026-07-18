@@ -61,9 +61,7 @@ function getThemeHelpers(isDark: boolean) {
 // ─── Deterministic score formula (unchanged from original) ────────────────────
 
 function getDeterministicScore(utilization: number, name: string) {
-  const charSum    = name.split("").reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  const baseFactor = (charSum % 15) + 35; // 35–49
-  return Math.min(100, Math.round(utilization * 0.5 + baseFactor));
+  return Math.min(100, Math.round(utilization));
 }
 
 // ─── Main page ────────────────────────────────────────────────────────────────
@@ -301,7 +299,7 @@ export default function AnalyticsPage() {
         });
 
         if (totalActualTaskHours > 0 && totalPlannedHours > 0) {
-          calculatedEfficiency = Math.round((totalPlannedHours / totalActualTaskHours) * 100);
+          calculatedEfficiency = Math.min(100, Math.round((totalPlannedHours / totalActualTaskHours) * 100));
         }
       }
 
@@ -309,9 +307,9 @@ export default function AnalyticsPage() {
       let productivity = utilization; // Default to utilization if no efficiency data
       if (calculatedEfficiency !== null) {
         // Average the global utilization and efficiency to perfectly sync with Performance Metrics Dashboard
-        productivity = Math.round((globalUtilization + calculatedEfficiency) / 2);
+        productivity = Math.min(100, Math.round((globalUtilization + calculatedEfficiency) / 2));
       } else if (utilization === 0) {
-        productivity = c.utilization || 0; // ultimate fallback to base data
+        productivity = Math.min(100, c.utilization || 0); // ultimate fallback to base data
       }
 
       const score = getDeterministicScore(productivity, c.name);

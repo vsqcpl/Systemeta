@@ -869,18 +869,18 @@ export default function TimesheetAIPage() {
                     });
 
                     if (totalActualHours > 0 && totalPlannedHours > 0) {
-                      calculatedEfficiency = Math.round((totalPlannedHours / totalActualHours) * 100);
+                      calculatedEfficiency = Math.min(100, Math.round((totalPlannedHours / totalActualHours) * 100));
                     }
                   }
 
                   // --- Productivity Metric Calculation ---
                   let calculatedProductivity: number | "N/A" = "N/A";
                   if (typeof calculatedUtilization === "number" && typeof calculatedEfficiency === "number") {
-                    calculatedProductivity = Math.round((calculatedUtilization + calculatedEfficiency) / 2);
+                    calculatedProductivity = Math.min(100, Math.round((calculatedUtilization + calculatedEfficiency) / 2));
                   } else if (typeof calculatedUtilization === "number") {
-                    calculatedProductivity = calculatedUtilization;
+                    calculatedProductivity = Math.min(100, calculatedUtilization);
                   } else if (typeof calculatedEfficiency === "number") {
-                    calculatedProductivity = calculatedEfficiency;
+                    calculatedProductivity = Math.min(100, calculatedEfficiency);
                   }
                   // ----------------------------------------------------------------------------------------------------
                   
