@@ -74,12 +74,12 @@ export default function AnalyticsPage() {
   const router    = useRouter();
 
   useEffect(() => {
-    if (user && (user.role === "accounts" || user.role === "client_contact")) {
+    if (user && (user.role === "accounts" || user.role === "client_contact" || user.role === "consultant" || user.role === "senior_consultant")) {
       router.replace("/dashboard");
     }
   }, [user, router]);
 
-  if (user && (user.role === "accounts" || user.role === "client_contact")) {
+  if (user && (user.role === "accounts" || user.role === "client_contact" || user.role === "consultant" || user.role === "senior_consultant")) {
     return null;
   }
 

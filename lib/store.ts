@@ -2923,7 +2923,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       const users = (usersList || []).map(mapUserToUser);
-      const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, timesheets));
+      const consultants = (usersList || [])
+        .filter((u: any) => {
+          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
+          return r === "consultant" || r === "senior consultant";
+        })
+        .map((u: any) => mapUserToConsultant(u, timesheets));
 
       // Fetch CRM data from the API (best-effort — gracefully ignore failures for non-CM roles)
       const [clientsRes, contactsRes, callsRes, meetingsRes, opportunitiesRes, requirementsRes, followUpsRes] = await Promise.all([
@@ -3729,7 +3734,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList
+              .filter((u: any) => {
+                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
+                return r === "consultant" || r === "senior consultant";
+              })
+              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3760,7 +3770,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList
+              .filter((u: any) => {
+                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
+                return r === "consultant" || r === "senior consultant";
+              })
+              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3894,7 +3909,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList
+              .filter((u: any) => {
+                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
+                return r === "consultant" || r === "senior consultant";
+              })
+              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3963,7 +3983,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       ]);
       
       const users = (usersList || []).map(mapUserToUser);
-      const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+      const consultants = (usersList || [])
+        .filter((u: any) => {
+          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
+          return r === "consultant" || r === "senior consultant";
+        })
+        .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
       
       set((state) => ({
         data: {
@@ -4450,9 +4475,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       // Re-map consultants with updated timesheets to update utilization in UI
-      const updatedConsultants = state.data.users.map((u: any) =>
-        mapUserToConsultant(u, updatedTimesheets)
-      );
+      const updatedConsultants = state.data.users
+        .filter((u: any) => {
+          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
+          return r === "consultant" || r === "senior consultant";
+        })
+        .map((u: any) => mapUserToConsultant(u, updatedTimesheets));
 
       return {
         data: {

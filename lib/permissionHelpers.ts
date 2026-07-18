@@ -203,6 +203,11 @@ export function getScreenAccess(screen: string, role: UserRole): AccessLevel {
   if (screen === "ai_co2_report" && normRole === "project_manager") {
     return "full";
   }
+
+  // Consultant Analytics (ai_efficiency_metrics) should not be accessible to consultant or senior_consultant
+  if (screen === "ai_efficiency_metrics" && (normRole === "consultant" || normRole === "senior_consultant")) {
+    return null;
+  }
   
   // CRM screens are strictly client_manager only, or allowed via override
   if (screen.startsWith("crm_") && normRole !== "client_manager") {
@@ -265,6 +270,11 @@ export function canDo(action: string, role: UserRole): boolean {
   // Timesheet AI Center action should always be allowed for project_manager by default (no permission matrix check)
   if (action === "use_ai_co2_report" && normRole === "project_manager") {
     return true;
+  }
+
+  // Consultant Analytics (view_ai_efficiency) should not be allowed for consultant or senior_consultant
+  if (action === "view_ai_efficiency" && (normRole === "consultant" || normRole === "senior_consultant")) {
+    return false;
   }
 
   // CRM actions are strictly client_manager only
