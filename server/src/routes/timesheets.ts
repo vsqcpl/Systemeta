@@ -551,7 +551,11 @@ router.get("/punch-sessions", async (req: AuthenticatedRequest, res) => {
     
     let targetConsultantId = req.user.id;
     if (employeeId && typeof employeeId === "string") {
-      if (req.user.role === "super_admin") {
+      const hasApprovePermission = await checkPermission(req.user.id, req.user.role, "Approve Timesheets");
+      const hasAiPermission = await checkPermission(req.user.id, req.user.role, "View AI Insights");
+      const isElevated = req.user.role === "super_admin" || req.user.role === "accounts" || hasApprovePermission || hasAiPermission;
+
+      if (isElevated) {
         targetConsultantId = employeeId;
       } else if (employeeId !== req.user.id) {
         return res.status(403).json({ message: "Forbidden" });
