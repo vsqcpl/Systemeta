@@ -199,6 +199,11 @@ function getMatrixPermission(permissionKey: string, role: string): boolean | nul
 export function getScreenAccess(screen: string, role: UserRole): AccessLevel {
   const normRole = normalizeRole(role);
   
+  // Timesheet AI Center (ai_co2_report) should always be accessible to project_manager by default (no permission matrix check)
+  if (screen === "ai_co2_report" && normRole === "project_manager") {
+    return "full";
+  }
+  
   // CRM screens are strictly client_manager only, or allowed via override
   if (screen.startsWith("crm_") && normRole !== "client_manager") {
     const override = getActiveOverride("CRM Access");
@@ -256,6 +261,11 @@ export function canAccessScreen(screen: string, role: UserRole): boolean {
 /** True if the role can perform a specific action. */
 export function canDo(action: string, role: UserRole): boolean {
   const normRole = normalizeRole(role);
+
+  // Timesheet AI Center action should always be allowed for project_manager by default (no permission matrix check)
+  if (action === "use_ai_co2_report" && normRole === "project_manager") {
+    return true;
+  }
 
   // CRM actions are strictly client_manager only
   const crmActions = [

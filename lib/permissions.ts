@@ -54,7 +54,7 @@ export const SCREEN_ACCESS: Record<string, Record<UserRole, AccessLevel>> = {
   ai_assignment_suggest:    { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_resource_optimization: { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_efficiency_metrics:    { [SA]:"full",[CM]:null,   [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
-  ai_co2_report:            { [SA]:"full",[CM]:"full", [PM]:null,  [SC]:null,  [CON]:null,  [ACC]:"full",[CC]:null     },
+  ai_co2_report:            { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:null,  [CON]:null,  [ACC]:"full",[CC]:null     },
   ai_milestone_insights:    { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:null,  [CON]:null,  [ACC]:"view",[CC]:null     },
   ai_schedule_clashes:      { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_wbs_generation:        { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
@@ -124,7 +124,7 @@ export const ACTION_PERMISSIONS: Record<string, UserRole[]> = {
   use_ai_weekly_summary:     [SA, CM, PM, SC, CON],
   use_ai_assignment_suggest: [SA, CM, PM, SC, CON],
   view_ai_efficiency:        [SA, CM, PM, SC, CON],
-  use_ai_co2_report:         [SA, CM, ACC],
+  use_ai_co2_report:         [SA, CM, PM, ACC],
   view_ai_milestone_insights:[SA, CM, PM, ACC],
 
   // ── Resource ──────────────────────────────────────────────────────────────
