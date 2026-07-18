@@ -19,6 +19,7 @@ export default function ClientProfilePage() {
   const { t } = useTranslation();
   const data = useAppStore((state) => state.data);
   const deactivateClient = useAppStore((state) => state.deactivateClient);
+  const activateClient = useAppStore((state) => state.activateClient);
 
   const client = data.clients?.find(c => c.id === clientId);
 
@@ -64,14 +65,20 @@ export default function ClientProfilePage() {
           </div>
         </div>
         <div style={{ display: "flex", gap: "8px" }}>
-          <span className={`badge ${client.status === 'Active' ? 'badge-success' : 'badge-neutral'}`} style={{ height: "fit-content", padding: "6px 12px" }}>
+          <span className={`badge ${client.status === 'Active' ? 'badge-success' : client.status === 'Inactive' ? 'badge-danger' : 'badge-neutral'}`} style={{ height: "fit-content", padding: "6px 12px" }}>
             {client.status}
           </span>
-          {client.status === 'Active' && (
+          {client.status === 'Active' ? (
             <button className="btn btn-outline" onClick={() => {
               if (confirm("Deactivate this client?")) deactivateClient(client.id);
             }}>
               {t("Deactivate")}
+            </button>
+          ) : (
+            <button className="btn btn-primary" onClick={() => {
+              if (confirm("Activate this client?")) activateClient(client.id);
+            }}>
+              {t("Activate")}
             </button>
           )}
         </div>

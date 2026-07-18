@@ -383,6 +383,7 @@ interface AppStore {
   addClient: (client: Omit<Client, "id" | "createdAt">) => void;
   updateClient: (id: string, updates: Partial<Client>) => void;
   deactivateClient: (id: string) => void;
+  activateClient: (id: string) => void;
   addContact: (contact: Omit<ClientContact, "id">) => void;
   addCall: (call: Omit<ClientCall, "id">) => void;
   addMeeting: (meeting: Omit<ClientMeeting, "id">) => void;
@@ -4064,14 +4065,57 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   })),
 
-  deactivateClient: (id) => set((state) => ({
-    data: {
-      ...state.data,
-      clients: state.data.clients.map(c => 
-        c.id === id ? { ...c, status: 'Inactive' } : c
-      )
+  deactivateClient: async (id) => {
+    try {
+      const client = useAppStore.getState().data.clients.find(c => c.id === id);
+      if (client) {
+        await fetch(`/api/client-manager/clients/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: client.companyName,
+            status: "Inactive"
+          })
+        });
+      }
+    } catch (e) {
+      console.error(e);
     }
-  })),
+    set((state) => ({
+      data: {
+        ...state.data,
+        clients: state.data.clients.map(c => 
+          c.id === id ? { ...c, status: 'Inactive' } : c
+        )
+      }
+    }));
+  },
+
+  activateClient: async (id) => {
+    try {
+      const client = useAppStore.getState().data.clients.find(c => c.id === id);
+      if (client) {
+        await fetch(`/api/client-manager/clients/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: client.companyName,
+            status: "Active"
+          })
+        });
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    set((state) => ({
+      data: {
+        ...state.data,
+        clients: state.data.clients.map(c => 
+          c.id === id ? { ...c, status: 'Active' } : c
+        )
+      }
+    }));
+  },
 
   addContact: async (contactData) => {
     try {

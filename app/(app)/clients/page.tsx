@@ -108,7 +108,7 @@ export default function ClientsPage() {
                     <td>{client.industry || "-"}</td>
                     <td>{client.accountOwner || "-"}</td>
                     <td>
-                      <span className={`badge ${client.status === 'Active' ? 'badge-success' : 'badge-neutral'}`}>
+                      <span className={`badge ${client.status === 'Active' ? 'badge-success' : client.status === 'Inactive' ? 'badge-danger' : 'badge-neutral'}`}>
                         {client.status}
                       </span>
                     </td>
