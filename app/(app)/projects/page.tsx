@@ -11,6 +11,7 @@ import { ProjectBudgetChart } from "@/components/charts/ChartComponents";
 import { Project, ProjectStatus, ProjectPriority } from "@/lib/data/types";
 import { FolderOpen, MoreHorizontal, FolderPlus } from "lucide-react";
 import AIPageComponent from "@/components/layout/AIPageComponent";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 export default function ProjectsPage() {
   const router = useRouter();
@@ -839,19 +840,14 @@ export default function ProjectsPage() {
                       {t("Client")}
                     </label>
                     {clientNames.length > 0 ? (
-                      <select
+                      <SearchableSelect
                         className="login-input"
                         value={npClient}
-                        onChange={(e) => setNpClient(e.target.value)}
+                        onChange={(val) => setNpClient(val)}
                         required
-                      >
-                        <option value="">{t("-- Select Client --")}</option>
-                        {clientNames.map((cName) => (
-                          <option key={cName} value={cName}>
-                            {cName}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder={t("-- Select Client --")}
+                        options={clientNames.map((cName) => ({ label: cName, value: cName }))}
+                      />
                     ) : (
                       <input
                         className="login-input"
@@ -914,18 +910,14 @@ export default function ProjectsPage() {
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       {t("Manager")}
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={npManager}
-                      onChange={(e) => setNpManager(e.target.value)}
+                      onChange={(val) => setNpManager(val)}
                       required
-                    >
-                      {managerNames.map((name) => (
-                        <option key={name} value={name}>
-                          {name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder={t("Select Manager")}
+                      options={managerNames.map((name) => ({ label: name, value: name }))}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>

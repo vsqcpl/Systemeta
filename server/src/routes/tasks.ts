@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { randomUUID } from "crypto";
 import prisma from "../lib/prisma.js";
 import { authMiddleware, AuthenticatedRequest } from "../middlewares/auth.js";
 import { requireRoles } from "../middlewares/rbac.js";
@@ -114,6 +115,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
     const newTask = await prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
+          id: randomUUID(),
           title,
           projectId: project,
           assigneeId: assignee,

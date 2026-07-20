@@ -77,7 +77,7 @@ export default function SelectModulePage() {
 
   // Determine which cards to show based on role
   const showTimesheet = user?.role !== "client_contact" && user?.role !== "Client Contact";
-  const showCRM = user?.role === "client_manager" || user?.role === "Client Manager";
+  const showCRM = user?.role === "client_manager" || user?.role === "Client Manager" || user?.role === "super_admin";
   const showProjects = user?.role !== "client_contact" && user?.role !== "Client Contact";
 
   return (

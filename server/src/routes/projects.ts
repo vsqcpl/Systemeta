@@ -92,7 +92,7 @@ router.post("/", requirePermission("Create Projects"), async (req: Authenticated
   try {
     const { name, client, type, budget, dueDate, manager, priority } = req.body;
 
-    if (!name || !client || !budget || !dueDate || !manager || !priority) {
+    if (!name || !client || budget === undefined || budget === null || !dueDate || !manager || !priority) {
       return res.status(400).json({ message: "All fields are required" });
     }
 

@@ -323,6 +323,7 @@ interface AppStore {
   projectFilterType: string;
   projectSearch: string;
   toast: ToastState | null;
+  isChangePasswordModalOpen: boolean;
 
   // --- Punch Clock State ---
   punchedIn: boolean;
@@ -347,6 +348,7 @@ interface AppStore {
   setProjectSearch: (search: string) => void;
   showToast: (message: string, type?: 'info' | 'success' | 'warning' | 'danger') => void;
   clearToast: () => void;
+  setChangePasswordModalOpen: (open: boolean) => void;
 
   // --- Punch Clock Actions ---
   togglePunch: () => void;
@@ -2804,6 +2806,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // --- UI State Defaults ---
   user: null,
   setUser: (user) => set({ user }),
+  isChangePasswordModalOpen: false,
+  setChangePasswordModalOpen: (open: boolean) => set({ isChangePasswordModalOpen: open }),
 
   // --- Permission Override Defaults ---
   permissionOverrides: [],

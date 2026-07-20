@@ -210,7 +210,7 @@ export function getScreenAccess(screen: string, role: UserRole): AccessLevel {
   }
   
   // CRM screens are strictly client_manager only, or allowed via override
-  if (screen.startsWith("crm_") && normRole !== "client_manager") {
+  if (screen.startsWith("crm_") && normRole !== "client_manager" && normRole !== "super_admin") {
     const override = getActiveOverride("CRM Access");
     if (override !== true) {
       return null;
@@ -291,7 +291,7 @@ export function canDo(action: string, role: UserRole): boolean {
     "view_client_analytics"
   ];
   // CRM actions are strictly client_manager only, or allowed via override
-  if (crmActions.includes(action) && normRole !== "client_manager") {
+  if (crmActions.includes(action) && normRole !== "client_manager" && normRole !== "super_admin") {
     const override = getActiveOverride("CRM Access");
     if (override !== true) {
       return false;

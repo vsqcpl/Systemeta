@@ -5,6 +5,7 @@ import { useAppStore, useTranslation } from "@/lib/store";
 import ModalPortal from "@/components/ui/ModalPortal";
 import { IconClock, IconClose, IconSearch, IconCheck } from "@/components/ui/Icons";
 import { MeetingPlatform } from "@/lib/data/types";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 // Platform icons as inline SVG components
 const GoogleMeetIcon = () => (
@@ -382,17 +383,14 @@ export default function MeetingsPage() {
                     {/* Client */}
                     <div className="login-field">
                       <label className="login-label">{t("Client")} *</label>
-                      <select
+                      <SearchableSelect
                         className="login-input"
                         value={clientId}
-                        onChange={(e) => setClientId(e.target.value)}
+                        onChange={(val) => setClientId(val)}
                         required
-                      >
-                        <option value="">— Select Client —</option>
-                        {clients.map((c) => (
-                          <option key={c.id} value={c.id}>{c.companyName}</option>
-                        ))}
-                      </select>
+                        placeholder="— Select Client —"
+                        options={clients.map((c) => ({ label: c.companyName, value: c.id }))}
+                      />
                     </div>
 
                     {/* Date + Time */}

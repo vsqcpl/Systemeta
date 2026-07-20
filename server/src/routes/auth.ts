@@ -165,6 +165,10 @@ router.post("/change-password", authMiddleware, async (req: AuthenticatedRequest
       return res.status(400).json({ message: "Invalid current password" });
     }
 
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ message: "New password must be different from current password" });
+    }
+
     // Password strength check
     const passwordPattern = /^(?=.*[A-Z])(?=.*[0-9])/;
     if (newPassword.length < 8 || !passwordPattern.test(newPassword)) {

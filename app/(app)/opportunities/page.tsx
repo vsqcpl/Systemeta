@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useAppStore, useTranslation } from "@/lib/store";
 import ModalPortal from "@/components/ui/ModalPortal";
 import { IconChart, IconClose, IconSearch, IconBriefcase, IconCalendar } from "@/components/ui/Icons";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 export default function OpportunitiesPage() {
   const data = useAppStore((state) => state.data);
@@ -172,10 +173,14 @@ export default function OpportunitiesPage() {
                   </div>
                   <div className="login-field">
                     <label className="login-label">{t("Client")}*</label>
-                    <select className="login-input" value={clientId} onChange={(e) => setClientId(e.target.value)} required>
-                      <option value="">{t("-- Select Client --")}</option>
-                      {clients.map(c => <option key={c.id} value={c.id}>{c.companyName}</option>)}
-                    </select>
+                    <SearchableSelect 
+                      className="login-input" 
+                      value={clientId} 
+                      onChange={(val) => setClientId(val)} 
+                      required
+                      placeholder={t("-- Select Client --")}
+                      options={clients.map(c => ({ label: c.companyName, value: c.id }))}
+                    />
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     <div className="login-field">

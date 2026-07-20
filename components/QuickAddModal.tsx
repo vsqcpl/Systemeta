@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { useAppStore } from "@/lib/store";
 import ModalPortal from "@/components/ui/ModalPortal";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   IconBriefcase,
   IconCheck,
@@ -291,19 +292,14 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       Client
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={npClient}
-                      onChange={(e) => setNpClient(e.target.value)}
+                      onChange={(val) => setNpClient(val)}
                       required
-                    >
-                      <option value="" disabled>Select Client</option>
-                      {Array.from(new Set(data.projects.map((p) => p.client))).map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Client"
+                      options={Array.from(new Set(data.projects.map((p) => p.client))).map((c) => ({ label: c, value: c }))}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
@@ -421,35 +417,27 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       Project
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={ntProject}
-                      onChange={(e) => setNtProject(e.target.value)}
+                      onChange={(val) => setNtProject(val)}
                       required
-                    >
-                      {data.projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.id})
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Project"
+                      options={data.projects.map((p) => ({ label: `${p.name} (${p.id})`, value: p.id }))}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       Assignee
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={ntAssignee}
-                      onChange={(e) => setNtAssignee(e.target.value)}
+                      onChange={(val) => setNtAssignee(val)}
                       required
-                    >
-                      {data.consultants.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Assignee"
+                      options={data.consultants.map((c) => ({ label: c.name, value: c.id }))}
+                    />
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -560,18 +548,14 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       Project
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={tsProject}
-                      onChange={(e) => setTsProject(e.target.value)}
+                      onChange={(val) => setTsProject(val)}
                       required
-                    >
-                      {data.projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Project"
+                      options={data.projects.map((p) => ({ label: p.name, value: p.id }))}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
@@ -657,35 +641,27 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       Consultant
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={expConsultant}
-                      onChange={(e) => setExpConsultant(e.target.value)}
+                      onChange={(val) => setExpConsultant(val)}
                       required
-                    >
-                      {data.consultants.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Consultant"
+                      options={data.consultants.map((c) => ({ label: c.name, value: c.id }))}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       Project
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={expProject}
-                      onChange={(e) => setExpProject(e.target.value)}
+                      onChange={(val) => setExpProject(val)}
                       required
-                    >
-                      {data.projects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder="Select Project"
+                      options={data.projects.map((p) => ({ label: p.name, value: p.id }))}
+                    />
                   </div>
                 </div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>

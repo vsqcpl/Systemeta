@@ -13,6 +13,7 @@ import { ROLES } from "@/lib/roles";
 import ActionGuard from "@/components/guards/ActionGuard";
 import { canUseAiFeature } from "@/lib/featureFlags";
 import AIPageComponent from "@/components/layout/AIPageComponent";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 export default function ProjectDashboardPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
@@ -392,11 +393,10 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
               if (canAddProjectMember && unassignedUsers.length > 0) {
                 return (
-                  <select
+                  <SearchableSelect
                     className="select"
                     value=""
-                    onChange={(e) => {
-                      const val = e.target.value;
+                    onChange={(val) => {
                       if (val) {
                         fetch(`/api/projects/${p.id}/members`, {
                           method: "POST",
@@ -421,31 +421,20 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                           });
                       }
                     }}
-                    style={{ minWidth: "140px" }}
-                  >
-                    <option value="" disabled>+ {t("Add Member")}</option>
-                    {unassignedUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name}
-                      </option>
-                    ))}
-                  </select>
+                    placeholder={`+ ${t("Add Member")}`}
+                    options={unassignedUsers.map((u) => ({ label: u.name, value: u.id }))}
+                  />
                 );
               }
               return null;
             })()}
-            <select
+            <SearchableSelect
               className="select"
               value={p.id}
-              onChange={(e) => handleSwitchProject(e.target.value)}
-              style={{ minWidth: "160px" }}
-            >
-              {visibleProjects.map((pr) => (
-                <option key={pr.id} value={pr.id}>
-                  {pr.id}: {pr.name.substring(0, 25)}...
-                </option>
-              ))}
-            </select>
+              onChange={(val) => handleSwitchProject(val)}
+              placeholder="Select Project"
+              options={visibleProjects.map((pr) => ({ label: `${pr.id}: ${pr.name.substring(0, 25)}...`, value: pr.id }))}
+            />
             <button
               id="project-export-pdf"
               style={exportBtnStyle}

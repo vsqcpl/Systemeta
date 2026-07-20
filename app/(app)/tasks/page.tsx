@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/Icons";
 import { Sparkles } from "lucide-react";
 import AIPageComponent from "@/components/layout/AIPageComponent";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   DndContext,
   DragEndEvent,
@@ -281,6 +282,8 @@ function TaskDrawer({
   const deleteTaskComments = useAppStore((state) => state.deleteTaskComments);
   const data = useAppStore((state) => state.data);
   const { user } = useAuth();
+  const projects = useAppStore((state) => state.data.projects);
+  const projectName = projects.find((p) => p.id === task.project)?.name || task.project;
 
   const isManager = user?.role?.toLowerCase() === "super_admin" || user?.role?.toLowerCase() === "project_manager";
   const [showReviewModal, setShowReviewModal] = React.useState(col === "review" && isManager);
@@ -475,16 +478,13 @@ function TaskDrawer({
 
                   <div>
                     <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>{t("New Assignee")}</label>
-                    <select 
-                      className="select" 
+                    <SearchableSelect
+                      className="select"
                       value={rejectAssignee}
-                      onChange={(e) => setRejectAssignee(e.target.value)}
-                      style={{ width: "100%", fontSize: "12px", padding: "6px" }}
-                    >
-                      {consultants.map(cons => (
-                        <option key={cons.id} value={cons.id}>{cons.name}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setRejectAssignee(val)}
+                      placeholder="Select Assignee"
+                      options={consultants.map(cons => ({ label: cons.name, value: cons.id }))}
+                    />
                   </div>
 
                   <div>
@@ -524,7 +524,7 @@ function TaskDrawer({
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <span className={`badge ${COL_BADGE[col]}`}>{t(COL_LABELS[col])}</span>
-            <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{task.id}</span>
+            <span style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{projectName}</span>
           </div>
           <button className="btn btn-ghost btn-icon btn-sm" onClick={onClose}><IconClose size={13} /></button>
         </div>
@@ -567,23 +567,18 @@ function TaskDrawer({
                 </div>
                 
                 {unassignedProjectUsers.length > 0 && (
-                  <select
+                  <SearchableSelect
                     className="select"
                     value=""
-                    onChange={(e) => {
-                      const newUserId = e.target.value;
+                    onChange={(newUserId) => {
                       if (newUserId) {
                         const updated = Array.from(new Set([...currentAssignees, newUserId]));
                         useAppStore.getState().updateTask(task.id, { assignees: updated });
                       }
                     }}
-                    style={{ fontSize: "11px", padding: "2px 8px", height: "auto" }}
-                  >
-                    <option value="" disabled>+ {t("Add Member")}</option>
-                    {unassignedProjectUsers.map((u: any) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
+                    placeholder={`+ ${t("Add Member")}`}
+                    options={unassignedProjectUsers.map((u: any) => ({ label: u.name, value: u.id }))}
+                  />
                 )}
               </div>
 
@@ -1353,18 +1348,15 @@ export default function TasksPage() {
               </button>
             ))}
           </div>
-          <select 
+          <SearchableSelect
             className="select"
             value={selectedProjectFilter}
-            onChange={(e) => setSelectedProjectFilter(e.target.value)}
-          >
-            <option value="all">{t("All Projects")}</option>
-            {(user ? filterProjects(data.projects, user) : []).map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+            onChange={(val) => setSelectedProjectFilter(val)}
+            options={[
+              { label: t("All Projects"), value: "all" },
+              ...(user ? filterProjects(data.projects, user) : []).map((p) => ({ label: p.name, value: p.id }))
+            ]}
+          />
           <select className="select">
             <option>{t("All Priorities")}</option>
             <option>{t("Critical")}</option>
@@ -1839,28 +1831,23 @@ export default function TasksPage() {
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       {t("Project")}
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value={ntProject}
-                      onChange={(e) => setNtProject(e.target.value)}
+                      onChange={(val) => setNtProject(val)}
                       required
-                    >
-                      {visibleProjects.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name} ({p.id})
-                        </option>
-                      ))}
-                    </select>
+                      placeholder={t("Select Project")}
+                      options={visibleProjects.map((p) => ({ label: `${p.name} (${p.id})`, value: p.id }))}
+                    />
                   </div>
                   <div className="login-field">
                     <label className="login-label" style={{ fontSize: "13px", fontWeight: 600 }}>
                       {t("Assignees")}
                     </label>
-                    <select
+                    <SearchableSelect
                       className="login-input"
                       value=""
-                      onChange={(e) => {
-                        const val = e.target.value;
+                      onChange={(val) => {
                         if (val === "SELECT_ALL") {
                           setNtAssignees(createModalEligibleAssignees.map(c => ({ id: c.id, hours: "" })));
                         } else if (val === "CLEAR_ALL") {
@@ -1869,17 +1856,13 @@ export default function TasksPage() {
                           setNtAssignees([...ntAssignees, { id: val, hours: "" }]);
                         }
                       }}
-                      style={{ marginBottom: "8px" }}
-                    >
-                      <option value="" disabled>{t("Add an assignee...")}</option>
-                      <option value="SELECT_ALL">{t("Select All")}</option>
-                      <option value="CLEAR_ALL">{t("Clear All")}</option>
-                      {createModalEligibleAssignees.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => (
-                        <option key={c.id} value={c.id}>
-                          {c.name}
-                        </option>
-                      ))}
-                    </select>
+                      placeholder={t("Add an assignee...")}
+                      options={[
+                        { label: t("Select All"), value: "SELECT_ALL" },
+                        { label: t("Clear All"), value: "CLEAR_ALL" },
+                        ...createModalEligibleAssignees.filter(c => !ntAssignees.find(a => a.id === c.id)).map((c) => ({ label: c.name, value: c.id }))
+                      ]}
+                    />
 
                     {ntAssignees.length > 0 && (
                       <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px", background: "var(--bg-surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>

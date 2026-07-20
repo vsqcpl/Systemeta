@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import { Briefcase, Folder, Clock, SquarePen, MapPin } from "lucide-react";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 
 interface CompanyTask {
   id: number;
@@ -895,16 +896,13 @@ export default function TimesheetsPage() {
               <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span className="card-title">{t("Attendance Calendar")}</span>
                 {user?.role === "super_admin" && (
-                  <select 
+                  <SearchableSelect 
                     className="select premium-select" 
                     value={selectedCalendarUser}
-                    onChange={(e) => setSelectedCalendarUser(e.target.value)}
-                    style={{ width: "200px", height: "32px", fontSize: "12px", padding: "0 8px" }}
-                  >
-                    {data.consultants?.map((c: any) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setSelectedCalendarUser(val)}
+                    placeholder="Select User"
+                    options={data.consultants?.map((c: any) => ({ label: c.name, value: c.id })) || []}
+                  />
                 )}
               </div>
               <div className="card-body">
@@ -1224,18 +1222,13 @@ export default function TimesheetsPage() {
             
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
               <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Assigned Task")}</label>
-              <select
+              <SearchableSelect
                 className="select premium-select"
                 value={tempProjectClient}
-                onChange={(e) => setTempProjectClient(e.target.value)}
-                style={{ width: "100%", height: "38px" }}
-              >
-                {allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id).map((task: any) => (
-                  <option key={task.id} value={task.title}>
-                    {task.title}
-                  </option>
-                ))}
-              </select>
+                onChange={(val) => setTempProjectClient(val)}
+                placeholder="Select Assigned Task"
+                options={allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id).map((task: any) => ({ label: task.title, value: task.title }))}
+              />
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>

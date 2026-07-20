@@ -276,6 +276,8 @@ export default function Sidebar() {
             </div>
           </div>
 
+
+
           {/* Sign Out Button */}
           <button
             onClick={() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useRef, useEffect, useLayoutEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
 import NotificationPanel from "./NotificationPanel";
@@ -13,7 +13,12 @@ import { usePermission } from "@/hooks/usePermission";
 export default function Topbar() {
   const pathname = usePathname();
   const router = useRouter();
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  
+  const setChangePasswordModalOpen = useAppStore((state) => state.setChangePasswordModalOpen);
 
   const darkMode = useAppStore((state) => state.darkMode);
   const setDarkMode = useAppStore((state) => state.setDarkMode);
@@ -187,6 +192,21 @@ export default function Topbar() {
       }
     }
   }, [activeModule, allowedModules.join(",")]);
+
+  // Click outside listener for user menu
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setUserMenuOpen(false);
+      }
+    };
+    if (userMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [userMenuOpen]);
 
   return (
     <header className="topbar" style={{ position: "relative" }}>
@@ -370,22 +390,90 @@ export default function Topbar() {
         <div className="divider-v"></div>
 
         {/* User Card */}
-        <div
-          className="avatar avatar-lg"
-          style={{
-            background: "var(--brand-100)",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "var(--brand-700)",
-            fontSize: "11px",
-            fontWeight: "bold",
-          }}
-          onClick={() => router.push(isClientContact ? "/portal" : "/select-module")}
-          title={`${user ? user.name : "Tom Keller"} — ${userRole} (Click to switch module)`}
-        >
-          {initials}
+        <div style={{ position: "relative" }} ref={userMenuRef}>
+          <div
+            className="avatar avatar-lg"
+            style={{
+              background: "var(--brand-100)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "var(--brand-700)",
+              fontSize: "11px",
+              fontWeight: "bold",
+            }}
+            onClick={() => setUserMenuOpen(!userMenuOpen)}
+            title={`${user ? user.name : "Tom Keller"} — ${userRole}`}
+          >
+            {initials}
+          </div>
+          
+          {userMenuOpen && (
+            <div
+              style={{
+                position: "absolute",
+                top: "calc(100% + 8px)",
+                right: 0,
+                width: "200px",
+                background: "var(--bg-surface)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: "8px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                padding: "8px 0",
+                zIndex: 1000,
+                animation: "slideUp 0.2s ease-out",
+              }}
+            >
+              <div style={{ padding: "8px 16px", borderBottom: "1px solid var(--border-subtle)", marginBottom: "4px" }}>
+                <div style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>{user ? user.name : "Tom Keller"}</div>
+                <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "2px" }}>{userRole}</div>
+              </div>
+              
+              <button
+                className="dropdown-item"
+                style={{
+                  width: "100%", textAlign: "left", padding: "8px 16px", background: "none", border: "none",
+                  fontSize: "13px", color: "var(--text-primary)", cursor: "pointer"
+                }}
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  router.push(isClientContact ? "/portal" : "/select-module");
+                }}
+              >
+                {t("Switch Module")}
+              </button>
+              
+              <button
+                className="dropdown-item"
+                style={{
+                  width: "100%", textAlign: "left", padding: "8px 16px", background: "none", border: "none",
+                  fontSize: "13px", color: "var(--text-primary)", cursor: "pointer"
+                }}
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  router.push("/admin?tab=security");
+                }}
+              >
+                {t("Change Password")}
+              </button>
+              
+              <button
+                className="dropdown-item"
+                style={{
+                  width: "100%", textAlign: "left", padding: "8px 16px", background: "none", border: "none",
+                  fontSize: "13px", color: "var(--danger-600)", cursor: "pointer", marginTop: "4px",
+                  borderTop: "1px solid var(--border-subtle)"
+                }}
+                onClick={() => {
+                  setUserMenuOpen(false);
+                  logout();
+                }}
+              >
+                {t("Sign Out")}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </header>

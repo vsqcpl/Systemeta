@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { filterExpenses, filterProjects } from "@/lib/dataFilters";
 import ActionGuard from "@/components/guards/ActionGuard";
 import { ExpenseCategory } from "@/lib/data/types";
+import { SearchableSelect } from "@/components/ui/SearchableSelect";
 import {
   IconPlane,
   IconHotel,
@@ -802,19 +803,16 @@ export default function ExpensesPage() {
                   style={{ fontSize: "12.5px", padding: "6px 10px", width: "100%" }}
                 />
 
-                <select
+                <SearchableSelect
                   value={selectedProject}
-                  onChange={(e) => setSelectedProject(e.target.value)}
+                  onChange={(val) => setSelectedProject(val)}
                   className="select"
-                  style={{ fontSize: "12px", padding: "6px" }}
-                >
-                  <option value="All Projects">{t("All Projects")}</option>
-                  {visibleProjects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id}
-                    </option>
-                  ))}
-                </select>
+                  placeholder={t("All Projects")}
+                  options={[
+                    { label: t("All Projects"), value: "All Projects" },
+                    ...visibleProjects.map((p) => ({ label: p.name || p.id, value: p.id }))
+                  ]}
+                />
 
                 <select
                   value={categoryFilter}
@@ -1705,31 +1703,21 @@ export default function ExpensesPage() {
               />
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                <select
+                <SearchableSelect
                   value={newExpense.consultant}
-                  onChange={(e) => handleFormChange("consultant", e.target.value)}
+                  onChange={(val) => handleFormChange("consultant", val)}
                   className="select"
-                  style={{ padding: "10px", borderRadius: "6px" }}
-                >
-                  {(user?.role === "super_admin" ? data.consultants : data.consultants.filter((c) => c.id === user?.id)).map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Select Consultant"
+                  options={(user?.role === "super_admin" ? data.consultants : data.consultants.filter((c) => c.id === user?.id)).map((c) => ({ label: c.name, value: c.id }))}
+                />
 
-                <select
+                <SearchableSelect
                   value={newExpense.project}
-                  onChange={(e) => handleFormChange("project", e.target.value)}
+                  onChange={(val) => handleFormChange("project", val)}
                   className="select"
-                  style={{ padding: "10px", borderRadius: "6px" }}
-                >
-                  {visibleProjects.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name || p.id}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Select Project"
+                  options={visibleProjects.map((p) => ({ label: p.name || p.id, value: p.id }))}
+                />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
