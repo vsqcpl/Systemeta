@@ -7,6 +7,7 @@ import { useAppStore } from "@/lib/store";
 import { useAuth } from "@/hooks/useAuth";
 import Sidebar from "@/components/layout/Sidebar";
 import Topbar from "@/components/layout/Topbar";
+import ChangePasswordModal from "@/components/ChangePasswordModal";
 import SearchOverlay from "@/components/layout/SearchOverlay";
 import ToastContainer from "@/components/layout/ToastContainer";
 import { getScreenKey } from "@/lib/permissionHelpers";
@@ -358,6 +359,8 @@ export default function AppLayout({
           </div>
         </div>
       </div>
+      
+      <ChangePasswordModal />
 
       {/* Overlays and Toasts */}
       <SearchOverlay />

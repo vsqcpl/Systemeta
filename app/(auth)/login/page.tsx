@@ -35,6 +35,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
+    console.log("LOGIN PAGE: submitting with rememberMe =", rememberMe);
     const result = await login(email, password, rememberMe);
     setLoading(false);
     
@@ -181,8 +182,8 @@ export default function LoginPage() {
           </div>
 
           <div className="login-remember">
-            <label className="login-check-label">
-              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} /> Remember me for 30 days
+            <label className="login-check-label" htmlFor="remember-me">
+              <input type="checkbox" id="remember-me" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} /> Remember me for 30 days
             </label>
           </div>
 

@@ -143,7 +143,7 @@ function AdminPageContent() {
 
   const { t, langCode } = useTranslation();
 
-  const [activeTab, setActiveTab] = useState<"users" | "roles" | "audit" | "settings" | "security">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "roles" | "audit" | "settings">("users");
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -154,7 +154,7 @@ function AdminPageContent() {
   const tabParam = searchParams.get("tab");
 
   useEffect(() => {
-    if (tabParam && ["users", "roles", "audit", "settings", "security"].includes(tabParam)) {
+    if (tabParam && ["users", "roles", "audit", "settings"].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
@@ -929,7 +929,6 @@ function AdminPageContent() {
           { id: "roles",    label: t("Roles & Permissions") },
           { id: "audit",    label: t("Audit Log") },
           { id: "settings", label: t("System Settings") },
-          { id: "security", label: t("Security") },
         ].map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -1856,83 +1855,7 @@ function AdminPageContent() {
             </div>
           )}
 
-          {/* 5. Security Tab */}
-          {activeTab === "security" && (
-            <div style={{ animation: "fadeIn 0.3s ease-out" }}>
-              <div className="card">
-                <div className="card-header" style={{ marginBottom: "16px" }}>
-                  <span className="card-title" style={{ fontSize: "16px" }}>Change your password</span>
-                </div>
-                <div className="card-body">
-                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "20px" }}>
-                    When you change your password, we keep you logged in to this device but may log you out from your other devices.
-                  </p>
-                  
-                  <form onSubmit={async (e) => {
-                    e.preventDefault();
-                    const currentPassword = (e.currentTarget.elements.namedItem('currentPassword') as HTMLInputElement).value;
-                    const newPassword = (e.currentTarget.elements.namedItem('newPassword') as HTMLInputElement).value;
 
-                    if (!currentPassword || !newPassword) {
-                      showToast("Please fill in all fields", "warning");
-                      return;
-                    }
-
-                    try {
-                      const res = await fetch('/api/auth/change-password', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ currentPassword, newPassword }),
-                      });
-
-                      if (res.ok) {
-                        showToast("Password changed successfully", "success");
-                        (e.target as HTMLFormElement).reset();
-                      } else {
-                        const err = await res.json();
-                        showToast(err.message || "Failed to change password", "danger");
-                      }
-                    } catch (err) {
-                      showToast("Network error", "danger");
-                    }
-                  }} style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "400px" }}>
-                    
-                    <div>
-                      <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
-                        Current password
-                      </label>
-                      <input 
-                        type="password" 
-                        name="currentPassword" 
-                        className="input" 
-                        style={{ width: "100%", fontSize: "13px" }} 
-                        autoComplete="current-password"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "6px" }}>
-                        New password
-                      </label>
-                      <input 
-                        type="password" 
-                        name="newPassword" 
-                        className="input" 
-                        style={{ width: "100%", fontSize: "13px" }} 
-                        autoComplete="new-password"
-                      />
-                    </div>
-
-                    <div style={{ marginTop: "8px" }}>
-                      <button type="submit" className="btn btn-primary" style={{ padding: "8px 16px", fontSize: "13px" }}>
-                        Save changes
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
 

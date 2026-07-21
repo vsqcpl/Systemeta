@@ -31,6 +31,7 @@ export default function Sidebar() {
 
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
+  const setChangePasswordModalOpen = useAppStore((state) => state.setChangePasswordModalOpen);
   const activeModule = useAppStore((state) => state.activeModule);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const data = useAppStore((state) => state.data);
@@ -252,6 +253,7 @@ export default function Sidebar() {
 
         {/* User profile row pinned to bottom */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px", borderTop: "1px solid var(--border-color)", padding: "12px 8px 4px" }}>
+          
           <div
             className="sidebar-user"
             onClick={() => {
@@ -275,6 +277,38 @@ export default function Sidebar() {
               <span className="sidebar-user-role">{displayRole}</span>
             </div>
           </div>
+
+          {/* Security Button */}
+          <button
+            onClick={() => setChangePasswordModalOpen(true)}
+            className="sidebar-nav-item"
+            style={{
+              width: "100%",
+              justifyContent: sidebarCollapsed ? "center" : "flex-start",
+              color: "var(--text-secondary)",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              padding: "8px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "12px",
+              borderRadius: "8px",
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = "var(--bg-hover)";
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = "transparent";
+            }}
+            title={t("Security")}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            {!sidebarCollapsed && <span className="sidebar-nav-label sidebar-label" style={{ fontWeight: 600 }}>{t("Security")}</span>}
+          </button>
 
 
 

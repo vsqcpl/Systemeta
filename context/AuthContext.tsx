@@ -62,7 +62,7 @@ function authReducer(state: AuthState, action: AuthAction): AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string, rememberMe?: boolean) => Promise<{ success: boolean; message?: string }>;
+  login: (email: string, password: string, rememberMe: boolean) => Promise<{ success: boolean; message?: string }>;
   logout: () => Promise<void>;
   dispatch: React.Dispatch<AuthAction>;
 }
@@ -89,7 +89,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     rehydrate();
   }, []);
 
-  async function login(email: string, password: string, rememberMe: boolean = true) {
+  async function login(email: string, password: string, rememberMe: boolean) {
+    console.log("AUTH CONTEXT: login called with rememberMe =", rememberMe);
     dispatch({ type: "AUTH_LOADING" });
     try {
       const res = await fetch("/api/auth/login", {

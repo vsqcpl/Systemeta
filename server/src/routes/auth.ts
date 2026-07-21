@@ -29,14 +29,25 @@ router.get("/csrf-token", (req, res) => {
 router.post("/login", async (req, res) => {
   try {
     const { email, password, rememberMe } = req.body;
+    console.log("EXPRESS ROUTE: received req.body.rememberMe =", rememberMe);
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
+    // Inject a custom header so the databaseHook can read rememberMe
+    // Note: Better Auth's signInEmail Zod schema strictly strips unknown fields from the body.
+    // We cannot simply pass { isExtended: true } in the body, as it will never reach the session.create hook.
+    // Instead, we pass it via a custom header which is perfectly accessible in the hook's context.
+    if (rememberMe) {
+      req.headers["x-is-extended"] = "true";
+    } else {
+      req.headers["x-is-extended"] = "false";
+    }
+
     // Call Better Auth to sign in
     const response = await auth.api.signInEmail({
-      body: { email, password, rememberMe: rememberMe !== false },
+      body: { email, password },
       headers: fromNodeHeaders(req.headers),
       asResponse: true,
     });
@@ -83,8 +94,8 @@ router.post("/login", async (req, res) => {
 
     return res.status(response.status).json(data);
   } catch (error) {
-    console.error("Login route error:", error);
-    return res.status(500).json({ message: "Internal server error during login" });
+    console.error("Login Error:", error);
+    res.status(500).json({ message: "Internal server error during login", error: String(error) });
   }
 });
 
