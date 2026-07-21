@@ -18,6 +18,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rememberMe, setRememberMe] = useState(true);
 
   useEffect(() => {
     if (authError) setError(authError);
@@ -34,7 +35,7 @@ export default function LoginPage() {
     setError(null);
     setLoading(true);
 
-    const result = await login(email, password);
+    const result = await login(email, password, rememberMe);
     setLoading(false);
     
     if (result.success) {
@@ -181,7 +182,7 @@ export default function LoginPage() {
 
           <div className="login-remember">
             <label className="login-check-label">
-              <input type="checkbox" defaultChecked /> Remember me for 30 days
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} /> Remember me for 30 days
             </label>
           </div>
 

@@ -2838,7 +2838,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       const handleResponse = async (res: Response, fallback: any) => {
         if (res.status === 401) {
-          throw new Error("Unauthorized");
+          return fallback;
         }
         if (!res.ok) {
           return fallback;

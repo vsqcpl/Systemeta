@@ -28,7 +28,7 @@ router.get("/csrf-token", (req, res) => {
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, rememberMe } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
@@ -36,7 +36,7 @@ router.post("/login", async (req, res) => {
 
     // Call Better Auth to sign in
     const response = await auth.api.signInEmail({
-      body: { email, password },
+      body: { email, password, rememberMe: rememberMe !== false },
       headers: fromNodeHeaders(req.headers),
       asResponse: true,
     });

@@ -34,7 +34,7 @@ export const auth = betterAuth({
   },
   // Ensure sessions last long enough and cookies are secure
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
+    expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // 1 day
   },
 });
