@@ -108,7 +108,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
   try {
     const { title, project, assignee, priority, dueDate, estimate, status, tags, isMilestone, assignees } = req.body;
 
-    if (!title || !project || !assignee || !priority || !dueDate || !estimate) {
+    if (!title || !project || !assignee) {
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
@@ -119,9 +119,9 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
           title,
           projectId: project,
           assigneeId: assignee,
-          priority,
-          dueDate,
-          estimate: parseFloat(estimate),
+          priority: priority || "",
+          dueDate: dueDate || "",
+          estimate: estimate !== undefined && estimate !== "" ? parseFloat(estimate) : 0,
           status: status || "todo",
           tags: tags ? (Array.isArray(tags) ? tags.join(", ") : String(tags)) : "",
           isMilestone: isMilestone || false,
@@ -241,7 +241,7 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
           progress: progress !== undefined ? parseInt(progress) : undefined,
           actualCompletionDate: actualCompletionDate !== undefined ? actualCompletionDate : undefined,
           assigneeId: finalAssigneeId || undefined,
-          estimate: estimate !== undefined ? parseFloat(estimate) : undefined,
+          estimate: estimate !== undefined ? (estimate !== "" ? parseFloat(estimate) : 0) : undefined,
           priority: priority || undefined,
           dueDate: dueDate || undefined,
           title: title || undefined,

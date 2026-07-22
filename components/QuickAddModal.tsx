@@ -43,7 +43,7 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
   const [ntTitle, setNtTitle] = useState("");
   const [ntProject, setNtProject] = useState("");
   const [ntAssignee, setNtAssignee] = useState("");
-  const [ntPriority, setNtPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
+  const [ntPriority, setNtPriority] = useState<"low" | "medium" | "high" | "critical" | "">("");
   const [ntDue, setNtDue] = useState("");
   const [ntEstimate, setNtEstimate] = useState("");
   const [ntTags, setNtTags] = useState("");
@@ -105,15 +105,18 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ntTitle || !ntProject || !ntAssignee || !ntDue || !ntEstimate) return;
+    if (!ntTitle || !ntProject || !ntAssignee) {
+      alert("Please fill all required fields (Title, Project, Assignee).");
+      return;
+    }
 
     addTask({
       title: ntTitle,
       project: ntProject,
       assignee: ntAssignee,
-      priority: ntPriority,
-      dueDate: ntDue,
-      estimate: parseFloat(ntEstimate),
+      priority: (ntPriority || "") as any,
+      dueDate: ntDue || "",
+      estimate: ntEstimate !== "" ? parseFloat(ntEstimate) : 0,
       tags: ntTags ? ntTags.split(",").map((t) => t.trim()).filter(Boolean) : [],
       isMilestone: ntIsMilestone,
       col: ntStatus,
@@ -449,8 +452,8 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                       className="login-input"
                       value={ntPriority}
                       onChange={(e) => setNtPriority(e.target.value as any)}
-                      required
                     >
+                      <option value="">None</option>
                       <option value="low">Low</option>
                       <option value="medium">Medium</option>
                       <option value="high">High</option>
@@ -466,7 +469,6 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                       type="date"
                       value={ntDue}
                       onChange={(e) => setNtDue(e.target.value)}
-                      required
                     />
                   </div>
                 </div>
@@ -481,7 +483,6 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                       placeholder="8"
                       value={ntEstimate}
                       onChange={(e) => setNtEstimate(e.target.value)}
-                      required
                     />
                   </div>
                   <div className="login-field">

@@ -1052,7 +1052,7 @@ export default function TasksPage() {
       : allEligibleAssignees;
   }, [createModalTeamIds, allEligibleAssignees, user?.role]);
   const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
-  const [ntPriority, setNtPriority] = useState<any>("medium");
+  const [ntPriority, setNtPriority] = useState<any>("");
   const [ntDue, setNtDue] = useState("");
   const [ntEstimate, setNtEstimate] = useState("");
   const [ntTags, setNtTags] = useState("");
@@ -1192,10 +1192,8 @@ export default function TasksPage() {
 
   const handleCreateTask = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!ntTitle || !ntProject || ntAssignees.length === 0 || !ntDue || !ntEstimate) return;
-
-    if (parseFloat(ntEstimate) > 0 && totalAllocatedHours !== parseFloat(ntEstimate)) {
-      showToast("Total assignee hours must exactly match task estimated hours", "danger");
+    if (!ntTitle || !ntProject || ntAssignees.length === 0) {
+      showToast("Please fill all required fields (Title, Project, Assignees).", "danger");
       return;
     }
 
@@ -1219,9 +1217,9 @@ export default function TasksPage() {
       title: ntTitle,
       project: ntProject,
       assignee: ntAssignees.length > 0 ? ntAssignees[0].id : "",
-      priority: ntPriority,
-      dueDate: ntDue,
-      estimate: parseFloat(ntEstimate),
+      priority: (ntPriority || "") as any,
+      dueDate: ntDue || "",
+      estimate: ntEstimate !== "" ? parseFloat(ntEstimate) : 0,
       tags: ntTags ? ntTags.split(",").map(t => t.trim()).filter(Boolean) : [],
       subtasks: subtasks.filter(sub => sub.title.trim() !== ""),
       isMilestone: ntIsMilestone,
@@ -1913,8 +1911,8 @@ export default function TasksPage() {
                       className="login-input"
                       value={ntPriority}
                       onChange={(e) => setNtPriority(e.target.value as any)}
-                      required
                     >
+                      <option value="">{t("None")}</option>
                       <option value="low">{t("Low")}</option>
                       <option value="medium">{t("Medium")}</option>
                       <option value="high">{t("High")}</option>
@@ -1930,7 +1928,6 @@ export default function TasksPage() {
                       type="date"
                       value={ntDue}
                       onChange={(e) => setNtDue(e.target.value)}
-                      required
                     />
                   </div>
                 </div>
@@ -1956,7 +1953,6 @@ export default function TasksPage() {
                       placeholder="8"
                       value={ntEstimate}
                       onChange={(e) => setNtEstimate(e.target.value)}
-                      required
                     />
                   </div>
                   <div className="login-field">
@@ -2108,7 +2104,7 @@ export default function TasksPage() {
                   >
                     {t("Cancel")}
                   </button>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }} disabled={parseFloat(ntEstimate || "0") > 0 && totalAllocatedHours !== parseFloat(ntEstimate || "0")}>
+                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }}>
                     {t("Create Task")}
                   </button>
                 </div>
