@@ -311,6 +311,7 @@ interface AppStore {
   user: User | null;
   setUser: (user: User | null) => void;
   fetchInitialData: () => Promise<void>;
+  setOffices: (offices: any[]) => void;
   activeModule: 'projects' | 'timesheets' | 'crm' | null;
   sidebarCollapsed: boolean;
   darkMode: boolean;
@@ -2812,6 +2813,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // --- Permission Override Defaults ---
   permissionOverrides: [],
 
+  setOffices: (offices) => set((state) => ({ data: { ...state.data, offices } })),
+
   fetchInitialData: async () => {
     try {
       const [
@@ -2823,7 +2826,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         expensesRes,
         billingRes,
         usersRes,
-        punchSessionsRes
+        punchSessionsRes,
+        officesRes
       ] = await Promise.all([
         fetch("/api/dashboard"),
         fetch("/api/projects"),
@@ -2833,7 +2837,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         fetch("/api/expenses"),
         fetch("/api/billing"),
         fetch("/api/users").catch(() => null),
-        fetch("/api/timesheets/punch-sessions?employeeId=all").catch(() => null)
+        fetch("/api/timesheets/punch-sessions?employeeId=all").catch(() => null),
+        fetch("/api/offices").catch(() => null)
       ]);
 
       const handleResponse = async (res: Response, fallback: any) => {
@@ -2855,7 +2860,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         expenses,
         billing,
         usersList,
-        punchSessionsData
+        punchSessionsData,
+        officesList
       ] = await Promise.all([
         handleResponse(dashboardRes, {
           kpis: {
@@ -2880,7 +2886,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         handleResponse(expensesRes, []),
         handleResponse(billingRes, { invoices: [], milestones: [] }),
         usersRes && usersRes.ok ? usersRes.json() : Promise.resolve([]),
-        punchSessionsRes && punchSessionsRes.ok ? punchSessionsRes.json() : Promise.resolve({ success: false, sessions: [] })
+        punchSessionsRes && punchSessionsRes.ok ? punchSessionsRes.json() : Promise.resolve({ success: false, sessions: [] }),
+        officesRes && officesRes.ok ? officesRes.json() : Promise.resolve([])
       ]);
 
       const timesheets = [...baseTimesheets];
@@ -2997,6 +3004,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           notifications: [],
           auditLogs: [],
           users: users.length > 0 ? users : INITIAL_VSQC_DATA.users,
+          offices: officesList || [],
           clients: mappedClients,
           clientContacts: crmContacts || [],
           clientCalls: crmCalls || [],

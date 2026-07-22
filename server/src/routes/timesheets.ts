@@ -468,7 +468,7 @@ router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
 // POST /api/timesheets/punch-in
 router.post("/punch-in", async (req: AuthenticatedRequest, res) => {
   try {
-    const { project, task, location, workNotes, date } = req.body;
+    const { project, task, location, workNotes, date, locationType, officeId, siteAddress, lat, lng, workType } = req.body;
     
     // Auto-close any active sessions
     const activeSession = await prisma.punchSession.findFirst({
@@ -490,6 +490,12 @@ router.post("/punch-in", async (req: AuthenticatedRequest, res) => {
         task: task || "",
         location: location || "",
         workNotes: workNotes || "",
+        locationType: locationType || null,
+        officeId: officeId || null,
+        siteAddress: siteAddress || null,
+        lat: lat || null,
+        lng: lng || null,
+        workType: workType || null,
         date: date || new Date().toISOString().split("T")[0]
       }
     });

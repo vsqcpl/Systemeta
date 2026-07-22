@@ -221,6 +221,13 @@ model PunchSession {
   task         String?
   location     String?
   workNotes    String?
+  locationType String?   // 'office', 'home', 'site'
+  officeId     String?
+  office       Office?   @relation(fields: [officeId], references: [id], onDelete: SetNull)
+  siteAddress  String?
+  lat          Float?
+  lng          Float?
+  workType     String?   // 'task', 'other'
   date         String    // YYYY-MM-DD
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -378,6 +385,23 @@ model Contact {
   isPrimary  Boolean  @default(false)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+}
+
+model BrandingAsset {
+  id        String   @id @default(uuid())
+  type      String   // 'logo' | 'favicon'
+  url       String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Office {
+  id        String   @id @default(uuid())
+  name      String
+  address   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  punchSessions PunchSession[]
 }
 
 model Call {

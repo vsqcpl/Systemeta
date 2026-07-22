@@ -120,7 +120,7 @@ export interface Timesheet {
 }
 
 export type LeaveStatus = 'pending' | 'approved' | 'rejected';
-export type LeaveType = 'Annual Leave' | 'Sick Leave' | 'Study Leave';
+export type LeaveType = 'Annual Leave' | 'Sick Leave' | 'Study Leave' | 'Other' | (string & {});
 
 export interface LeaveRequest {
   id: string;
@@ -230,6 +230,8 @@ export interface User {
   name: string;
   email: string;
   role: string;
+  color?: string;
+  avatar?: string;
   status: 'active' | 'inactive' | 'Invited';
   lastLogin: string;
   mfa: boolean;
@@ -366,6 +368,12 @@ export interface Opportunity {
   notes: string;
 }
 
+export interface Office {
+  id: string;
+  name: string;
+  address: string;
+}
+
 export interface VSQCData {
   kpis: Kpis;
   projects: Project[];
@@ -389,6 +397,7 @@ export interface VSQCData {
   notifications: Notification[];
   auditLogs: AuditLog[];
   users: User[];
+  offices?: Office[];
   
   // CRM Modules
   clients: Client[];

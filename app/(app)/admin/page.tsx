@@ -7,6 +7,7 @@ import { Check, X, Ban, RefreshCw, KeyRound, CheckCircle, Search, FileDown, Tras
 import RouteGuard from "@/components/guards/RouteGuard";
 import { ROLES } from "@/lib/roles";
 import ActionGuard from "@/components/guards/ActionGuard";
+import OfficesManager from "@/components/ui/OfficesManager";
 
 const CURRENCIES = [
   { symbol: "₹", name: "Indian Rupee", code: "INR", label: "₹ Indian Rupee (INR)" },
@@ -143,7 +144,7 @@ function AdminPageContent() {
 
   const { t, langCode } = useTranslation();
 
-  const [activeTab, setActiveTab] = useState<"users" | "roles" | "audit" | "settings">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "roles" | "audit" | "settings" | "offices">("users");
   const [maintenanceEnabled, setMaintenanceEnabled] = useState(false);
 
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -154,7 +155,7 @@ function AdminPageContent() {
   const tabParam = searchParams.get("tab");
 
   useEffect(() => {
-    if (tabParam && ["users", "roles", "audit", "settings"].includes(tabParam)) {
+    if (tabParam && ["users", "roles", "audit", "settings", "offices"].includes(tabParam)) {
       setActiveTab(tabParam as any);
     }
   }, [tabParam]);
@@ -927,6 +928,7 @@ function AdminPageContent() {
         {[
           { id: "users",    label: t("Users") },
           { id: "roles",    label: t("Roles & Permissions") },
+          { id: "offices",  label: "Offices" },
           { id: "audit",    label: t("Audit Log") },
           { id: "settings", label: t("System Settings") },
         ].map((tab) => {
@@ -1523,7 +1525,14 @@ function AdminPageContent() {
             );
           })()}
 
-          {/* 3. Audit Log Tab */}
+          {/* 3. Offices Tab */}
+          {activeTab === "offices" && (
+            <div style={{ animation: "fadeIn 0.3s ease-out" }}>
+              <OfficesManager />
+            </div>
+          )}
+
+          {/* 4. Audit Log Tab */}
           {activeTab === "audit" && (
             <div style={{ animation: "fadeIn 0.3s ease-out" }} className="card">
               <div className="card-header" style={{ marginBottom: 0 }}>
@@ -1747,78 +1756,7 @@ function AdminPageContent() {
                   </div>
                 )}
 
-                {/* Notifications Settings */}
-                <div className="card">
-                  <div className="card-header" style={{ marginBottom: 0 }}>
-                    <span className="card-title">{t("Notifications Settings")}</span>
-                  </div>
-                  <div className="card-body">
-                    {([
-                      { label: "Email notifications",  checked: notifEmail,        setter: setNotifEmail },
-                      { label: "Slack integration",     checked: notifSlack,        setter: setNotifSlack },
-                      { label: "AI alert emails",       checked: notifAiAlerts,     setter: setNotifAiAlerts },
-                      { label: "Weekly digest",         checked: notifWeeklyDigest,  setter: setNotifWeeklyDigest },
-                    ] as { label: string; checked: boolean; setter: (v: boolean) => void }[]).map((item) => (
-                      <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                        <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t(item.label)}</div>
-                        <label className="toggle">
-                          <input type="checkbox" checked={item.checked} onChange={(e) => item.setter(e.target.checked)} />
-                          <div className="toggle-track" /><div className="toggle-thumb" />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
 
-                {/* Security Settings */}
-                <div className="card">
-                  <div className="card-header" style={{ marginBottom: 0 }}>
-                    <span className="card-title">{t("Security Settings")}</span>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t("Force MFA")}</div>
-                      <label className="toggle"><input type="checkbox" checked={secForceMfa} onChange={(e) => setSecForceMfa(e.target.checked)} /><div className="toggle-track" /><div className="toggle-thumb" /></label>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t("Session timeout (mins)")}</div>
-                      <input className="input" type="number" min="5" max="1440" value={secSessionTimeout} onChange={(e) => setSecSessionTimeout(e.target.value)} style={{ width: "100px", textAlign: "left", paddingLeft: "12px" }} />
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t("Password policy")}</div>
-                      <select className="select" value={secPasswordPolicy} onChange={(e) => setSecPasswordPolicy(e.target.value)} style={{ width: "140px", fontSize: "12.5px" }}>
-                        <option value="Strong">{t("Strong")}</option><option value="Medium">{t("Medium")}</option><option value="Basic">{t("Basic")}</option>
-                      </select>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                      <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t("IP whitelist")}</div>
-                      <label className="toggle"><input type="checkbox" checked={secIpWhitelist} onChange={(e) => setSecIpWhitelist(e.target.checked)} /><div className="toggle-track" /><div className="toggle-thumb" /></label>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Integrations Settings */}
-                <div className="card">
-                  <div className="card-header" style={{ marginBottom: 0 }}>
-                    <span className="card-title">{t("Integrations Settings")}</span>
-                  </div>
-                  <div className="card-body">
-                    {([
-                      { label: "Microsoft 365",  checked: intMs365,      setter: setIntMs365 },
-                      { label: "Salesforce CRM", checked: intSalesforce,  setter: setIntSalesforce },
-                      { label: "Jira Sync",      checked: intJira,        setter: setIntJira },
-                      { label: "SAP Integration",checked: intSap,         setter: setIntSap },
-                    ] as { label: string; checked: boolean; setter: (v: boolean) => void }[]).map((item) => (
-                      <div key={item.label} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" }}>
-                        <div style={{ fontSize: "13px", color: "var(--text-primary)" }}>{t(item.label)}</div>
-                        <label className="toggle">
-                          <input type="checkbox" checked={item.checked} onChange={(e) => item.setter(e.target.checked)} />
-                          <div className="toggle-track" /><div className="toggle-thumb" />
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
                 {/* Save & Reset Action Bar */}
                 <div style={{
                   gridColumn: "span 2",

@@ -414,7 +414,7 @@ export default function ExpensesPage() {
 
     try {
       const finalProject = newExpense.project || visibleProjects[0]?.id;
-      const finalConsultant = newExpense.consultant || (user?.role === "super_admin" ? data.consultants[0]?.id : user?.id);
+      const finalConsultant = newExpense.consultant || (user?.role === "super_admin" ? (data.users?.[0]?.id || data.consultants?.[0]?.id) : user?.id);
 
       if (!finalProject || !finalConsultant) {
         showToast("Project and Consultant are required.", "warning");
@@ -511,7 +511,7 @@ export default function ExpensesPage() {
       };
     }
 
-    const consultantObj = data.consultants.find((c: any) => c.id === expense.consultant);
+    const consultantObj = data.consultants.find((c: any) => c.id === expense.consultant) || data.users?.find((u: any) => u.id === expense.consultant);
     const employeeName = consultantObj ? consultantObj.name : expense.consultant || "Unknown";
     
     const statusLower = (expense.status || "").toLowerCase();
@@ -676,7 +676,7 @@ export default function ExpensesPage() {
       .map((e, idx) => {
         const statusText = e.status === "approved" ? "approved" : e.status === "rejected" ? "rejected" : "submitted";
         const type = e.status === "approved" ? "approve" : e.status === "rejected" ? "reject" : "submit";
-        const consultantObj = data.consultants.find((c: any) => c.id === e.consultant);
+        const consultantObj = data.consultants.find((c: any) => c.id === e.consultant) || data.users?.find((u: any) => u.id === e.consultant);
         const name = consultantObj ? consultantObj.name : e.consultant || "Someone";
         return {
           id: idx,
@@ -863,11 +863,19 @@ export default function ExpensesPage() {
                 </div>
               ) : (
                 filteredExpenses.map((e) => {
-                  const c = data.consultants.find((x) => x.id === e.consultant) || {
-                    color: "#64748b",
-                    avatar: "?",
-                    name: e.consultant,
-                  };
+                  let c: any = data.consultants.find((x) => x.id === e.consultant);
+                  if (!c) {
+                    const u = data.users?.find((x) => x.id === e.consultant);
+                    c = u ? {
+                      color: "#64748b",
+                      avatar: u.name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2),
+                      name: u.name,
+                    } : {
+                      color: "#64748b",
+                      avatar: e.consultant,
+                      name: e.consultant,
+                    };
+                  }
                   const catIcon: Record<string, React.ReactNode> = {
                     Travel: <IconPlane size={16} />,
                     Accommodation: <IconHotel size={16} />,
@@ -1708,7 +1716,7 @@ export default function ExpensesPage() {
                   onChange={(val) => handleFormChange("consultant", val)}
                   className="select"
                   placeholder="Select Consultant"
-                  options={(user?.role === "super_admin" ? data.consultants : data.consultants.filter((c) => c.id === user?.id)).map((c) => ({ label: c.name, value: c.id }))}
+                  options={(user?.role === "super_admin" ? (data.users || data.consultants) : (data.users || data.consultants).filter((c) => c.id === user?.id)).map((c) => ({ label: c.name, value: c.id }))}
                 />
 
                 <SearchableSelect

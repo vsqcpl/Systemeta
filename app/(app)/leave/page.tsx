@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { LeaveType } from "@/lib/data/types";
-import { Check, X, ChevronLeft, ChevronRight } from "lucide-react";
+import { Check, X, ChevronLeft, ChevronRight, Info } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { filterLeaveRecords } from "@/lib/dataFilters";
 import { canDo } from "@/lib/permissionHelpers";
@@ -22,7 +22,9 @@ export default function LeavePage() {
 
   const visibleConsultants = (() => {
     const role = user?.role || "";
-    const filtered = data.consultants.filter((c) => {
+    const sourceList = (role === "super_admin" || role === "Super Admin") ? (data.users || data.consultants) : data.consultants;
+
+    let filtered = sourceList.filter((c: any) => {
       if (role === "super_admin" || role === "Super Admin") return true;
       if (role === "project_manager" || role === "Project Manager") {
         if (c.id === user?.id) return true;
@@ -38,8 +40,13 @@ export default function LeavePage() {
       if (role === "accounts" || role === "Accounts") return c.id === user?.id;
       return false;
     });
-    // Fallback: if the current user exists but isn't in data.consultants yet,
-    // synthesise a minimal entry so the dropdown is never empty.
+
+    filtered = filtered.map((c: any) => ({
+      ...c,
+      color: c.color || "#6366f1",
+      avatar: c.avatar || (c.name || "").split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2),
+    }));
+
     if (filtered.length === 0 && user) {
       return [{
         id: user.id,
@@ -59,6 +66,8 @@ export default function LeavePage() {
 
   const [viewMode, setViewMode] = useState<"calendar" | "team">("calendar");
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [expandedReasons, setExpandedReasons] = useState<Record<string, boolean>>({});
+  const [customLeaveType, setCustomLeaveType] = useState("");
   const [newRequest, setNewRequest] = useState<{
     consultant: string;
     type: LeaveType;
@@ -101,12 +110,17 @@ export default function LeavePage() {
       return;
     }
 
+    if (newRequest.type === "Other" && !customLeaveType.trim()) {
+      showToast("Please specify the leave type.", "warning");
+      return;
+    }
+
     const diffTime = Math.abs(endObj.getTime() - startObj.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 
     addLeaveRequest({
       consultant: newRequest.consultant,
-      type: newRequest.type,
+      type: newRequest.type === "Other" ? customLeaveType.trim() : newRequest.type,
       start: newRequest.start,
       end: newRequest.end,
       days: diffDays,
@@ -121,6 +135,7 @@ export default function LeavePage() {
       end: "",
       reason: "",
     });
+    setCustomLeaveType("");
   };
 
   // Default to June 2026 to align with mock data range
@@ -174,7 +189,7 @@ export default function LeavePage() {
 
     // Prioritize leave type color mapping
     const match = matches[0];
-    const consultant = data.consultants.find((c) => c.id === match.consultant);
+    const consultant = data.consultants.find((c) => c.id === match.consultant) || data.users?.find((u) => u.id === match.consultant);
     const label = `${consultant?.name.split(" ")[0] || match.consultant} – ${match.type.split(" ")[0]}`;
 
     return {
@@ -221,11 +236,19 @@ export default function LeavePage() {
           </div>
           <div className="card-body">
             {visibleLeaveRequests.map((lr) => {
-              const c = data.consultants.find((x) => x.id === lr.consultant) || {
-                color: "#64748b",
-                avatar: lr.consultant,
-                name: lr.consultant,
-              };
+              let c: any = data.consultants.find((x) => x.id === lr.consultant);
+              if (!c) {
+                const u = data.users?.find((x) => x.id === lr.consultant);
+                c = u ? {
+                  color: "#64748b",
+                  avatar: u.name.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2),
+                  name: u.name,
+                } : {
+                  color: "#64748b",
+                  avatar: lr.consultant,
+                  name: lr.consultant,
+                };
+              }
               const statusBadge = (({
                 pending: "badge-warning",
                 approved: "badge-success",
@@ -273,8 +296,19 @@ export default function LeavePage() {
                         {lr.start} → {lr.end} · {lr.days} {t("days")}
                       </div>
                       {lr.reason && (
-                        <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontStyle: "italic", marginTop: "2px" }}>
-                          {t("Reason")}: {lr.reason}
+                        <div style={{ marginTop: "4px" }}>
+                          <button
+                            className="btn btn-ghost"
+                            style={{ padding: "0", fontSize: "11.5px", color: "var(--brand-600)", display: "flex", alignItems: "center", gap: "4px", height: "auto" }}
+                            onClick={() => setExpandedReasons(prev => ({ ...prev, [lr.id]: !prev[lr.id] }))}
+                          >
+                            <Info size={12} /> {expandedReasons[lr.id] ? t("Hide Reason") : t("View Reason")}
+                          </button>
+                          {expandedReasons[lr.id] && (
+                            <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontStyle: "italic", marginTop: "4px", paddingLeft: "4px", borderLeft: "2px solid var(--border-subtle)" }}>
+                              {lr.reason}
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -376,7 +410,8 @@ export default function LeavePage() {
                     else if (leaveData) {
                       if (leaveData.type === "Sick Leave") cls = "leave-sick";
                       else if (leaveData.type === "Study Leave") cls = "leave-study";
-                      else cls = "leave-annual";
+                      else if (leaveData.type === "Annual Leave") cls = "leave-annual";
+                      else cls = "leave-other";
                     }
 
                     return (
@@ -498,8 +533,10 @@ export default function LeavePage() {
                                 cellBg = isApproved ? "#ef4444" : "var(--danger-50)";
                               } else if (leave.type === "Study Leave") {
                                 cellBg = isApproved ? "#f59e0b" : "var(--warning-50)";
-                              } else {
+                              } else if (leave.type === "Annual Leave") {
                                 cellBg = isApproved ? "#2563eb" : "var(--brand-100)";
+                              } else {
+                                cellBg = isApproved ? "#64748b" : "#cbd5e1";
                               }
                               tooltip = `${c.name}: ${t(leave.type)} (${t(leave.status)})`;
                             } else if (isWeekend) {
@@ -726,7 +763,12 @@ export default function LeavePage() {
                 </label>
                 <select
                   value={newRequest.type}
-                  onChange={(e) => setNewRequest({ ...newRequest, type: e.target.value as LeaveType })}
+                  onChange={(e) => {
+                    setNewRequest({ ...newRequest, type: e.target.value as LeaveType });
+                    if (e.target.value !== "Other") {
+                      setCustomLeaveType("");
+                    }
+                  }}
                   style={{
                     padding: "8px 12px",
                     borderRadius: "6px",
@@ -740,8 +782,32 @@ export default function LeavePage() {
                   <option value="Annual Leave">{t("Annual Leave")}</option>
                   <option value="Sick Leave">{t("Sick Leave")}</option>
                   <option value="Study Leave">{t("Study Leave")}</option>
+                  <option value="Other">{t("Other")}</option>
                 </select>
               </div>
+
+              {newRequest.type === "Other" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "4px", animation: "fadeIn 0.3s ease" }}>
+                  <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                    {t("Specify Leave Type")}
+                  </label>
+                  <input
+                    type="text"
+                    value={customLeaveType}
+                    onChange={(e) => setCustomLeaveType(e.target.value)}
+                    placeholder={t("e.g. Marriage Leave")}
+                    style={{
+                      padding: "8px 12px",
+                      borderRadius: "6px",
+                      border: "1px solid var(--border-default)",
+                      background: "var(--bg-surface)",
+                      color: "var(--text-primary)",
+                      fontSize: "13px",
+                    }}
+                    required
+                  />
+                </div>
+              )}
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                 <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>

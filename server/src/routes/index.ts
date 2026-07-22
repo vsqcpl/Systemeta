@@ -14,6 +14,7 @@ import overridesRoutes from "./overrides.js";
 import clientManagerRoutes from "./clientManager.js";
 import aiRoutes from "./ai.js";
 import brandingRoutes from "./branding.js";
+import officeRoutes from "./offices.js";
 
 const router = Router();
 
@@ -32,5 +33,6 @@ router.use("/overrides", overridesRoutes);
 router.use("/client-manager", clientManagerRoutes);
 router.use("/ai", aiRoutes);
 router.use("/branding", brandingRoutes);
+router.use("/offices", officeRoutes);
 
 export default router;

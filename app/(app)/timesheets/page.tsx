@@ -41,7 +41,14 @@ export default function TimesheetsPage() {
   const [showPunchInModal, setShowPunchInModal] = useState(false);
   const [showPunchOutModal, setShowPunchOutModal] = useState(false);
   const [tempProjectClient, setTempProjectClient] = useState("Internal Operations");
-  const [tempCurrentLocation, setTempCurrentLocation] = useState("");
+  const [tempLocationType, setTempLocationType] = useState<"office"|"home"|"site">("office");
+  const [tempOfficeId, setTempOfficeId] = useState("");
+  const [tempSiteAddress, setTempSiteAddress] = useState("");
+  const [tempLat, setTempLat] = useState<number | null>(null);
+  const [tempLng, setTempLng] = useState<number | null>(null);
+  const [tempWorkType, setTempWorkType] = useState<"task"|"other">("task");
+  const [tempOtherWork, setTempOtherWork] = useState("");
+  const [isLocating, setIsLocating] = useState(false);
   const [tempWorkNotes, setTempWorkNotes] = useState("");
   const [tempTaskCompleted, setTempTaskCompleted] = useState(false);
   const [punchSessions, setPunchSessions] = useState<any[]>([]);
@@ -158,7 +165,11 @@ export default function TimesheetsPage() {
   const handlePunchAction = () => {
     if (!punchedIn) {
       setTempProjectClient(projectClient); // default to current
-      setTempCurrentLocation(currentLocation);
+      setTempLocationType("office");
+      setTempOfficeId(data.offices && data.offices.length > 0 ? data.offices[0].id : "");
+      setTempSiteAddress("");
+      setTempWorkType("task");
+      setTempOtherWork("");
       setShowPunchInModal(true);
     } else {
       setTempWorkNotes("");
@@ -167,8 +178,9 @@ export default function TimesheetsPage() {
   };
 
   const submitPunchIn = async () => {
-    setProjectClient(tempProjectClient);
-    setCurrentLocation(tempCurrentLocation);
+    setProjectClient(tempWorkType === "task" ? tempProjectClient : "Other Work");
+    const loc = tempLocationType === "office" ? (data.offices?.find(o=>o.id===tempOfficeId)?.name || "Office") : (tempLocationType === "home" ? "Home" : tempSiteAddress);
+    setCurrentLocation(loc);
     setTimeLogged("Work In Progress");
     setWorkNotes("");
     
@@ -179,8 +191,16 @@ export default function TimesheetsPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          project: tempProjectClient,
-          location: tempCurrentLocation
+          project: tempWorkType === "task" ? tempProjectClient : "Other Work",
+          task: tempWorkType === "task" ? tempProjectClient : "",
+          workNotes: tempWorkType === "other" ? tempOtherWork : "",
+          location: tempLocationType === "office" ? (data.offices?.find(o=>o.id===tempOfficeId)?.name || "Office") : (tempLocationType === "home" ? "Home" : tempSiteAddress),
+          locationType: tempLocationType,
+          officeId: tempLocationType === "office" ? tempOfficeId : null,
+          siteAddress: tempLocationType === "site" ? tempSiteAddress : null,
+          lat: tempLocationType === "site" ? tempLat : null,
+          lng: tempLocationType === "site" ? tempLng : null,
+          workType: tempWorkType
         })
       });
       const resData = await res.json();
@@ -223,8 +243,8 @@ export default function TimesheetsPage() {
 
         setSessionRecord({
           visible: true,
-          task: tempProjectClient,
-          location: tempCurrentLocation,
+          task: tempWorkType === "task" ? tempProjectClient : "Other Work",
+          location: tempLocationType === "office" ? (data.offices?.find(o=>o.id===tempOfficeId)?.name || "Office") : (tempLocationType === "home" ? "Home" : tempSiteAddress),
           startTime: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           endTime: "",
           remarks: "",
@@ -1221,26 +1241,143 @@ export default function TimesheetsPage() {
             <h3 style={{ marginTop: 0, marginBottom: "20px", color: "var(--text-primary)" }}>{t("Start Work Session")}</h3>
             
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
-              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Assigned Task")}</label>
-              <SearchableSelect
-                className="select premium-select"
-                value={tempProjectClient}
-                onChange={(val) => setTempProjectClient(val)}
-                placeholder="Select Assigned Task"
-                options={allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id).map((task: any) => ({ label: task.title, value: task.title }))}
-              />
+              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--text-secondary)" }}>Work Type</label>
+              <div style={{ display: "flex", gap: "8px", padding: "4px", background: "var(--brand-50)", borderRadius: "8px" }}>
+                <button
+                  className={`btn ${tempWorkType === "task" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setTempWorkType("task")}
+                >
+                  Working on Task
+                </button>
+                <button
+                  className={`btn ${tempWorkType === "other" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ flex: 1 }}
+                  onClick={() => setTempWorkType("other")}
+                >
+                  Other Work
+                </button>
+              </div>
             </div>
 
+            {tempWorkType === "task" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Assigned Task")}</label>
+                <SearchableSelect
+                  className="select premium-select"
+                  value={tempProjectClient}
+                  onChange={(val) => setTempProjectClient(val)}
+                  placeholder="Select Assigned Task"
+                  options={allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id).map((task: any) => ({ label: task.title, value: task.title }))}
+                />
+              </div>
+            )}
+
+            {tempWorkType === "other" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "16px" }}>
+                <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>Work Description</label>
+                <input
+                  type="text"
+                  className="input premium-input"
+                  placeholder="What are you working on?"
+                  value={tempOtherWork}
+                  onChange={(e) => setTempOtherWork(e.target.value)}
+                  style={{ width: "100%", height: "38px" }}
+                />
+              </div>
+            )}
+
             <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginBottom: "24px" }}>
-              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "#2E86C1" }}>{t("Current Location")}</label>
-              <input
-                type="text"
-                className="input premium-input"
-                placeholder={t("e.g. Mumbai Office, Client Site")}
-                value={tempCurrentLocation}
-                onChange={(e) => setTempCurrentLocation(e.target.value)}
-                style={{ width: "100%", height: "38px" }}
-              />
+              <label style={{ fontSize: "12.5px", fontWeight: 700, color: "var(--text-secondary)" }}>Work Location</label>
+              <div style={{ display: "flex", gap: "4px", padding: "4px", background: "var(--brand-50)", borderRadius: "8px", marginBottom: "8px" }}>
+                <button
+                  className={`btn ${tempLocationType === "office" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ flex: 1, padding: "4px 8px", fontSize: "12px" }}
+                  onClick={() => setTempLocationType("office")}
+                >
+                  Office
+                </button>
+                <button
+                  className={`btn ${tempLocationType === "home" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ flex: 1, padding: "4px 8px", fontSize: "12px" }}
+                  onClick={() => setTempLocationType("home")}
+                >
+                  Home
+                </button>
+                <button
+                  className={`btn ${tempLocationType === "site" ? "btn-primary" : "btn-ghost"}`}
+                  style={{ flex: 1, padding: "4px 8px", fontSize: "12px" }}
+                  onClick={() => setTempLocationType("site")}
+                >
+                  Site Location
+                </button>
+              </div>
+
+              {tempLocationType === "office" && (
+                <select
+                  className="select premium-select"
+                  value={tempOfficeId}
+                  onChange={(e) => setTempOfficeId(e.target.value)}
+                  style={{ width: "100%", height: "38px" }}
+                >
+                  <option value="" disabled>Select Office</option>
+                  {(data.offices || []).map((o: any) => (
+                    <option key={o.id} value={o.id}>{o.name}</option>
+                  ))}
+                </select>
+              )}
+
+              {tempLocationType === "site" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  <button
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setIsLocating(true);
+                      if ("geolocation" in navigator) {
+                        navigator.geolocation.getCurrentPosition(
+                          async (position) => {
+                            const lat = position.coords.latitude;
+                            const lng = position.coords.longitude;
+                            setTempLat(lat);
+                            setTempLng(lng);
+                            // Best effort reverse geocoding via OpenStreetMap (No API key needed)
+                            try {
+                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+                              const data = await res.json();
+                              if (data && data.display_name) {
+                                setTempSiteAddress(data.display_name);
+                              } else {
+                                setTempSiteAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                              }
+                            } catch (e) {
+                              setTempSiteAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+                            }
+                            setIsLocating(false);
+                          },
+                          (error) => {
+                            alert("Geolocation failed: " + error.message);
+                            setIsLocating(false);
+                          }
+                        );
+                      } else {
+                        alert("Geolocation is not supported by your browser.");
+                        setIsLocating(false);
+                      }
+                    }}
+                    disabled={isLocating}
+                  >
+                    {isLocating ? "Locating..." : "Use Current Location"}
+                  </button>
+                  <input
+                    type="text"
+                    className="input premium-input"
+                    placeholder="Or enter location manually"
+                    value={tempSiteAddress}
+                    onChange={(e) => setTempSiteAddress(e.target.value)}
+                    style={{ width: "100%", height: "38px" }}
+                  />
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>

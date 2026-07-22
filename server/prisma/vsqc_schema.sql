@@ -341,7 +341,7 @@ CREATE INDEX "TimesheetEntry_billable_idx"    ON "TimesheetEntry"("billable");
 CREATE TABLE "LeaveRequest" (
   "id"           TEXT        NOT NULL,
   "consultantId" TEXT        NOT NULL,
-  "type"         TEXT        NOT NULL CHECK ("type" IN ('Annual Leave', 'Sick Leave', 'Study Leave', 'Unpaid Leave', 'Maternity Leave', 'Paternity Leave', 'Emergency Leave')),
+  "type"         TEXT        NOT NULL,
   "start"        TEXT        NOT NULL,
   "end"          TEXT        NOT NULL,
   "days"         INTEGER     NOT NULL CHECK ("days" > 0),

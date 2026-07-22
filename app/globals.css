@@ -1831,6 +1831,7 @@ tbody tr:hover td .badge-gray {
 .leave-cal-day.leave-annual { background: rgba(2,132,199,0.12); color: var(--brand-700); }
 .leave-cal-day.leave-sick { background: var(--danger-50); color: var(--danger-600); }
 .leave-cal-day.leave-study { background: var(--warning-50); color: var(--warning-600); }
+.leave-cal-day.leave-other { background: #cbd5e1; color: #475569; }
 .leave-cal-day.other-month { color: var(--text-tertiary); opacity: 0.6; }
 
 /* ── Expense Cards ───────────────────────────────────────────── */
