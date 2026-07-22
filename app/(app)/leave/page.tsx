@@ -250,8 +250,10 @@ export default function LeavePage() {
                   name: u.name,
                 } : {
                   color: "#64748b",
-                  avatar: lr.consultant,
-                  name: lr.consultant,
+                  avatar: lr.consultantName 
+                    ? lr.consultantName.split(" ").map(n => n[0]).join("").toUpperCase().substring(0, 2)
+                    : lr.consultant.substring(0, 2).toUpperCase(),
+                  name: lr.consultantName || lr.consultant,
                 };
               }
               const statusBadge = (({

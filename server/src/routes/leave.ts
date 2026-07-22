@@ -22,16 +22,20 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
                       req.user.role === "senior_consultant";
 
     if (canSeeAll) {
-      requests = await prisma.leaveRequest.findMany();
+      requests = await prisma.leaveRequest.findMany({
+        include: { consultant: true },
+      });
     } else {
       requests = await prisma.leaveRequest.findMany({
         where: { consultantId: req.user.id },
+        include: { consultant: true },
       });
     }
 
     const formatted = requests.map((r) => ({
       id: r.id,
       consultant: r.consultantId,
+      consultantName: r.consultant?.name,
       type: r.type,
       start: r.start,
       end: r.end,

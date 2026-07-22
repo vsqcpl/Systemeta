@@ -125,6 +125,7 @@ export type LeaveType = 'Annual Leave' | 'Sick Leave' | 'Study Leave' | 'Other' 
 export interface LeaveRequest {
   id: string;
   consultant: string; // Consultant ID
+  consultantName?: string;
   type: LeaveType;
   start: string;
   end: string;
