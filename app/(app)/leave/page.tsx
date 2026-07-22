@@ -68,18 +68,21 @@ export default function LeavePage() {
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState<Record<string, boolean>>({});
   const [customLeaveType, setCustomLeaveType] = useState("");
+  const [detailsModalLeave, setDetailsModalLeave] = useState<any | null>(null);
   const [newRequest, setNewRequest] = useState<{
     consultant: string;
     type: LeaveType;
     start: string;
     end: string;
     reason: string;
+    attachment: string;
   }>(() => ({
     consultant: "",
     type: "Annual Leave",
     start: "",
     end: "",
     reason: "",
+    attachment: "",
   }));
 
   // Update default consultant when consultant list loads from the backend
@@ -125,6 +128,7 @@ export default function LeavePage() {
       end: newRequest.end,
       days: diffDays,
       reason: newRequest.reason,
+      attachment: newRequest.attachment,
     });
 
     setIsRequestModalOpen(false);
@@ -134,6 +138,7 @@ export default function LeavePage() {
       start: "",
       end: "",
       reason: "",
+      attachment: "",
     });
     setCustomLeaveType("");
   };
@@ -295,20 +300,15 @@ export default function LeavePage() {
                       <div style={{ fontSize: "11.5px", color: "var(--text-tertiary)" }}>
                         {lr.start} → {lr.end} · {lr.days} {t("days")}
                       </div>
-                      {lr.reason && (
+                      {(lr.reason || lr.attachment) && (
                         <div style={{ marginTop: "4px" }}>
                           <button
                             className="btn btn-ghost"
-                            style={{ padding: "0", fontSize: "11.5px", color: "var(--brand-600)", display: "flex", alignItems: "center", gap: "4px", height: "auto" }}
-                            onClick={() => setExpandedReasons(prev => ({ ...prev, [lr.id]: !prev[lr.id] }))}
+                            style={{ padding: "4px 8px", fontSize: "11px", color: "var(--brand-600)", display: "flex", alignItems: "center", gap: "4px", height: "auto", border: "1px solid var(--border-default)", borderRadius: "4px" }}
+                            onClick={() => setDetailsModalLeave(lr)}
                           >
-                            <Info size={12} /> {expandedReasons[lr.id] ? t("Hide Reason") : t("View Reason")}
+                            <Info size={12} /> {t("Details")}
                           </button>
-                          {expandedReasons[lr.id] && (
-                            <div style={{ fontSize: "11px", color: "var(--text-tertiary)", fontStyle: "italic", marginTop: "4px", paddingLeft: "4px", borderLeft: "2px solid var(--border-subtle)" }}>
-                              {lr.reason}
-                            </div>
-                          )}
                         </div>
                       )}
                     </div>
@@ -872,6 +872,31 @@ export default function LeavePage() {
                 />
               </div>
 
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)" }}>
+                  {t("Attachment (Optional)")}
+                </label>
+                <input
+                  type="file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewRequest({ ...newRequest, attachment: file.name });
+                    } else {
+                      setNewRequest({ ...newRequest, attachment: "" });
+                    }
+                  }}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border-default)",
+                    background: "var(--bg-surface)",
+                    color: "var(--text-primary)",
+                    fontSize: "13px",
+                  }}
+                />
+              </div>
+
               <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "10px" }}>
                 <button
                   type="button"
@@ -885,6 +910,67 @@ export default function LeavePage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {detailsModalLeave && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setDetailsModalLeave(null)}
+        >
+          <div
+            className="modal-content"
+            style={{
+              background: "var(--bg-surface)",
+              borderRadius: "12px",
+              padding: "24px",
+              width: "min(400px, 90%)",
+              boxShadow: "var(--shadow-xl)",
+              border: "1px solid var(--border-default)",
+              animation: "slideDown 0.2s cubic-bezier(0.4,0,0.2,1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 style={{ marginBottom: "16px", fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>
+              {t("Leave Details")}
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px", fontSize: "13px", color: "var(--text-primary)" }}>
+              {detailsModalLeave.reason && (
+                <div>
+                  <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{t("Reason")}:</span>
+                  <div style={{ marginTop: "4px", padding: "8px", background: "var(--bg-surface-2)", borderRadius: "6px", whiteSpace: "pre-wrap" }}>
+                    {detailsModalLeave.reason}
+                  </div>
+                </div>
+              )}
+              {detailsModalLeave.attachment && (
+                <div>
+                  <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{t("Attachment")}:</span>
+                  <div style={{ marginTop: "4px", padding: "8px", background: "var(--bg-surface-2)", borderRadius: "6px" }}>
+                    📄 {detailsModalLeave.attachment}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "20px" }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setDetailsModalLeave(null)}
+              >
+                {t("Close")}
+              </button>
+            </div>
           </div>
         </div>
       )}

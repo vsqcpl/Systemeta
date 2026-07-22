@@ -49,6 +49,8 @@ export default function TimesheetsPage() {
   const [tempWorkType, setTempWorkType] = useState<"task"|"other">("task");
   const [tempOtherWork, setTempOtherWork] = useState("");
   const [isLocating, setIsLocating] = useState(false);
+  const [locationResults, setLocationResults] = useState<any[]>([]);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [tempWorkNotes, setTempWorkNotes] = useState("");
   const [tempTaskCompleted, setTempTaskCompleted] = useState(false);
   const [punchSessions, setPunchSessions] = useState<any[]>([]);
@@ -777,7 +779,7 @@ export default function TimesheetsPage() {
           padding: 24px 28px !important;
           box-shadow: none !important;
           position: relative;
-          overflow: hidden;
+          overflow: visible;
         }
         .premium-select, .premium-input, .premium-textarea {
           border-left: 3px solid #2E86C1 !important;
@@ -947,8 +949,8 @@ export default function TimesheetsPage() {
                     }
 
                     if (isWeekend) {
-                      bgColor = "#FFF9C4"; // Yellow
-                      color = "#F5B041";
+                      bgColor = "var(--bg-surface-2)";
+                      color = "var(--text-primary)";
                     } else if (!isFuture) {
                       if (hours >= 8) {
                         bgColor = "#E8F8F5"; // Green
@@ -1328,54 +1330,66 @@ export default function TimesheetsPage() {
               )}
 
               {tempLocationType === "site" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                  <button
-                    className="btn btn-secondary"
-                    onClick={() => {
-                      setIsLocating(true);
-                      if ("geolocation" in navigator) {
-                        navigator.geolocation.getCurrentPosition(
-                          async (position) => {
-                            const lat = position.coords.latitude;
-                            const lng = position.coords.longitude;
-                            setTempLat(lat);
-                            setTempLng(lng);
-                            // Best effort reverse geocoding via OpenStreetMap (No API key needed)
-                            try {
-                              const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
-                              const data = await res.json();
-                              if (data && data.display_name) {
-                                setTempSiteAddress(data.display_name);
-                              } else {
-                                setTempSiteAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-                              }
-                            } catch (e) {
-                              setTempSiteAddress(`${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-                            }
-                            setIsLocating(false);
-                          },
-                          (error) => {
-                            alert("Geolocation failed: " + error.message);
-                            setIsLocating(false);
-                          }
-                        );
-                      } else {
-                        alert("Geolocation is not supported by your browser.");
-                        setIsLocating(false);
-                      }
-                    }}
-                    disabled={isLocating}
-                  >
-                    {isLocating ? "Locating..." : "Use Current Location"}
-                  </button>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px", position: "relative" }}>
                   <input
                     type="text"
                     className="input premium-input"
-                    placeholder="Or enter location manually"
+                    placeholder="Search OpenStreetMap for site location..."
                     value={tempSiteAddress}
-                    onChange={(e) => setTempSiteAddress(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setTempSiteAddress(val);
+                      
+                      if (searchTimeoutRef.current) {
+                        clearTimeout(searchTimeoutRef.current);
+                      }
+                      
+                      if (val.length > 2) {
+                        setIsLocating(true);
+                        searchTimeoutRef.current = setTimeout(async () => {
+                          try {
+                            const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(val)}&limit=5`);
+                            const data = await res.json();
+                            setLocationResults(data);
+                          } catch (err) {
+                            console.error(err);
+                          }
+                          setIsLocating(false);
+                        }, 600);
+                      } else {
+                        setLocationResults([]);
+                        setIsLocating(false);
+                      }
+                    }}
                     style={{ width: "100%", height: "38px" }}
                   />
+                  {isLocating && <div style={{ fontSize: "11px", color: "var(--text-secondary)", position: "absolute", right: "10px", top: "10px" }}>Searching...</div>}
+                  {locationResults.length > 0 && (
+                    <div style={{
+                      position: "absolute", top: "100%", left: 0, right: 0,
+                      background: "var(--bg-surface)", border: "1px solid var(--border-color)",
+                      borderRadius: "8px", zIndex: 10, maxHeight: "150px", overflowY: "auto",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      marginTop: "4px"
+                    }}>
+                      {locationResults.map((res: any, idx: number) => (
+                        <div
+                          key={idx}
+                          style={{ padding: "8px 12px", cursor: "pointer", fontSize: "12px", color: "var(--text-primary)", borderBottom: idx < locationResults.length - 1 ? "1px solid var(--border-color)" : "none" }}
+                          onClick={() => {
+                            setTempSiteAddress(res.display_name);
+                            setTempLat(parseFloat(res.lat));
+                            setTempLng(parseFloat(res.lon));
+                            setLocationResults([]);
+                          }}
+                          onMouseEnter={(e) => e.currentTarget.style.background = "var(--brand-50)"}
+                          onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
+                        >
+                          {res.display_name}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

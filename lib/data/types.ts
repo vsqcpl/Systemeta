@@ -131,6 +131,7 @@ export interface LeaveRequest {
   days: number;
   status: LeaveStatus;
   reason: string;
+  attachment?: string;
 }
 
 export type ExpenseCategory = 'Travel' | 'Accommodation' | 'Meals' | 'Transport' | 'Other';
