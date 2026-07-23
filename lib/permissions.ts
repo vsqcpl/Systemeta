@@ -46,6 +46,9 @@ export const SCREEN_ACCESS: Record<string, Record<UserRole, AccessLevel>> = {
   system_configuration:     { [SA]:"full",[CM]:null,   [PM]:null,  [SC]:null,  [CON]:null,  [ACC]:null,  [CC]:null     },
   audit_log:                { [SA]:"full",[CM]:null,   [PM]:null,  [SC]:null,  [CON]:null,  [ACC]:null,  [CC]:null     },
 
+  // ── User Settings (personal account — all roles) ──────────────────────────
+  user_settings:            { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"full",[CON]:"full",[ACC]:"full",[CC]:"full"  },
+
   // ── AI Insights ──────────────────────────────────────────────────────────
   ai_task_estimation:       { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },
   ai_delay_analysis:        { [SA]:"full",[CM]:"full", [PM]:"full",[SC]:"view",[CON]:"view",[ACC]:null,  [CC]:null     },

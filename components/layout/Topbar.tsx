@@ -7,7 +7,7 @@ import NotificationPanel from "./NotificationPanel";
 import { useAuth } from "@/hooks/useAuth";
 import { ROLES, UserRole } from "@/lib/roles";
 import { getModuleEntryPage } from "@/lib/redirectMap";
-import { IconBriefcase, IconClock } from "@/components/ui/Icons";
+
 import { usePermission } from "@/hooks/usePermission";
 
 export default function Topbar() {
@@ -283,7 +283,6 @@ export default function Topbar() {
                 onClick={() => handleModuleSwitch("projects")}
                 title={t("Project Management")}
               >
-                <IconBriefcase size={13} style={{ marginRight: "4px" }} />
                 <span>{t("Project Management")}</span>
               </button>
             )}
@@ -297,7 +296,6 @@ export default function Topbar() {
                 onClick={() => handleModuleSwitch("crm")}
                 title={t("CRM")}
               >
-                <IconBriefcase size={13} style={{ marginRight: "4px" }} />
                 <span>{t("CRM") || "CRM"}</span>
               </button>
             )}
@@ -311,7 +309,6 @@ export default function Topbar() {
                 onClick={() => handleModuleSwitch("timesheets")}
                 title={t("Timesheet")}
               >
-                <IconClock size={13} style={{ marginRight: "4px" }} />
                 <span>{t("Timesheet")}</span>
               </button>
             )}
@@ -444,20 +441,7 @@ export default function Topbar() {
                 {t("Switch Module")}
               </button>
               
-              <button
-                className="dropdown-item"
-                style={{
-                  width: "100%", textAlign: "left", padding: "8px 16px", background: "none", border: "none",
-                  fontSize: "13px", color: "var(--text-primary)", cursor: "pointer"
-                }}
-                onClick={() => {
-                  setUserMenuOpen(false);
-                  router.push("/admin?tab=security");
-                }}
-              >
-                {t("Change Password")}
-              </button>
-              
+
               <button
                 className="dropdown-item"
                 style={{

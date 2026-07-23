@@ -21,7 +21,19 @@ import {
   IconCpu,
   IconReportMoney,
   IconSettings,
+  IconUser,
+  IconCalendarCheck,
+  IconContactRound,
+  IconPhoneCall,
+  IconTriangleAlert,
+  IconCalendarDays,
+  IconBellDot,
+  IconFileTextLucide,
+  IconTrendingUp,
+  IconFileBarChart2,
+  IconListChecks,
 } from "@/components/ui/Icons";
+
 
 export default function Sidebar() {
   const pathname = usePathname();
@@ -31,7 +43,6 @@ export default function Sidebar() {
 
   const sidebarCollapsed = useAppStore((state) => state.sidebarCollapsed);
   const setSidebarCollapsed = useAppStore((state) => state.setSidebarCollapsed);
-  const setChangePasswordModalOpen = useAppStore((state) => state.setChangePasswordModalOpen);
   const activeModule = useAppStore((state) => state.activeModule);
   const activeProjectId = useAppStore((state) => state.activeProjectId);
   const data = useAppStore((state) => state.data);
@@ -43,11 +54,11 @@ export default function Sidebar() {
 
   // Module → allowed screen IDs
   const MODULE_SCREENS: Record<string, string[]> = {
-    projects: ["dashboard", "projects", "project", "tasks", "resources", "billing", "ai", "admin"],
+    projects: ["dashboard", "projects", "project", "tasks", "resources", "billing", "ai", "admin", "user-settings"],
     timesheets: role === "client_manager"
-      ? ["timesheets", "leave", "expenses", "timesheet-ai"]
-      : ["timesheets", "leave", "expenses", "analytics", "timesheet-ai"],
-    crm: ["crm_dashboard", "crm_clients", "crm_contacts", "crm_calls", "crm_meetings", "crm_follow_ups", "crm_requirements", "crm_opportunities", "crm_escalations", "crm_reports"],
+      ? ["timesheets", "leave", "expenses", "timesheet-ai", "user-settings"]
+      : ["timesheets", "leave", "expenses", "analytics", "timesheet-ai", "user-settings"],
+    crm: ["crm_dashboard", "crm_clients", "crm_contacts", "crm_calls", "crm_meetings", "crm_follow_ups", "crm_requirements", "crm_opportunities", "crm_escalations", "crm_reports", "user-settings"],
   };
   const allowed = activeModule ? MODULE_SCREENS[activeModule] ?? [] : [];
 
@@ -68,6 +79,7 @@ export default function Sidebar() {
     ai: ["ai_task_estimation", "ai_delay_analysis", "ai_weekly_summary", "ai_assignment_suggest"],
     "timesheet-ai": ["ai_efficiency_metrics", "ai_co2_report", "ai_milestone_insights"],
     admin: ["user_management", "system_configuration", "audit_log"],
+    "user-settings": ["user_settings"],
     crm_dashboard: ["crm_dashboard"],
     crm_clients: ["crm_clients"],
     crm_contacts: ["crm_contacts"],
@@ -101,7 +113,7 @@ export default function Sidebar() {
       items: [
         { id: "resources", label: t("Resource Planning"), icon: <IconUsers />, route: "/resources" },
         { id: "timesheets", label: t("Timesheets"), icon: <IconClock />, route: "/timesheets" },
-        { id: "leave", label: t("Leave Management"), icon: <IconUmbrella />, route: "/leave" },
+        { id: "leave", label: t("Leave Management"), icon: <IconCalendarCheck />, route: "/leave" },
       ],
     },
     {
@@ -120,24 +132,25 @@ export default function Sidebar() {
       ],
     },
     {
-      id: "system",
-      items: [
-        { id: "admin", label: t("Admin Panel"), icon: <IconSettings />, route: "/admin" },
-      ],
-    },
-    {
       id: "crm",
       items: [
         { id: "crm_dashboard", label: "CRM Dashboard", icon: <IconGrid />, route: "/cm-dashboard" },
         { id: "crm_clients", label: "Clients", icon: <IconUsers />, route: "/clients" },
-        { id: "crm_contacts", label: "Contacts", icon: <IconUsers />, route: "/contacts" },
-        { id: "crm_calls", label: "Calls", icon: <IconTarget />, route: "/calls" },
-        { id: "crm_meetings", label: "Meetings", icon: <IconClock />, route: "/meetings" },
-        { id: "crm_follow_ups", label: "Follow Ups", icon: <IconCheck />, route: "/follow-ups" },
-        { id: "crm_requirements", label: "Requirements", icon: <IconFolder />, route: "/requirements" },
-        { id: "crm_opportunities", label: "Opportunities", icon: <IconChart />, route: "/opportunities" },
-        { id: "crm_escalations", label: "Escalations", icon: <IconTarget />, route: "/escalations" },
-        { id: "crm_reports", label: "CRM Reports", icon: <IconReportMoney />, route: "/reports/cm" },
+        { id: "crm_contacts", label: "Contacts", icon: <IconContactRound />, route: "/contacts" },
+        { id: "crm_calls", label: "Calls", icon: <IconPhoneCall />, route: "/calls" },
+        { id: "crm_meetings", label: "Meetings", icon: <IconCalendarDays />, route: "/meetings" },
+        { id: "crm_follow_ups", label: "Follow Ups", icon: <IconListChecks />, route: "/follow-ups" },
+        { id: "crm_requirements", label: "Requirements", icon: <IconFileTextLucide />, route: "/requirements" },
+        { id: "crm_opportunities", label: "Opportunities", icon: <IconTrendingUp />, route: "/opportunities" },
+        { id: "crm_escalations", label: "Escalations", icon: <IconTriangleAlert />, route: "/escalations" },
+        { id: "crm_reports", label: "CRM Reports", icon: <IconFileBarChart2 />, route: "/reports/cm" },
+      ],
+    },
+    {
+      id: "system",
+      items: [
+        { id: "admin", label: t("Admin Panel"), icon: <IconSettings />, route: "/admin" },
+        { id: "user-settings", label: t("User Settings"), icon: <IconUser />, route: "/user-settings" },
       ],
     },
   ];
@@ -277,38 +290,6 @@ export default function Sidebar() {
               <span className="sidebar-user-role">{displayRole}</span>
             </div>
           </div>
-
-          {/* Security Button */}
-          <button
-            onClick={() => setChangePasswordModalOpen(true)}
-            className="sidebar-nav-item"
-            style={{
-              width: "100%",
-              justifyContent: sidebarCollapsed ? "center" : "flex-start",
-              color: "var(--text-secondary)",
-              background: "transparent",
-              border: "none",
-              cursor: "pointer",
-              padding: "8px 12px",
-              display: "flex",
-              alignItems: "center",
-              gap: "12px",
-              borderRadius: "8px",
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = "var(--bg-hover)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = "transparent";
-            }}
-            title={t("Security")}
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-            </svg>
-            {!sidebarCollapsed && <span className="sidebar-nav-label sidebar-label" style={{ fontWeight: 600 }}>{t("Security")}</span>}
-          </button>
 
 
 

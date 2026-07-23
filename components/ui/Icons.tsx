@@ -69,6 +69,16 @@ export const IconCalendar = svgIcon(
   </>
 );
 
+export const IconCalendarCheck = svgIcon(
+  <>
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+    <path d="m9 16 2 2 4-4" />
+  </>
+);
+
 export const IconUsers = svgIcon(
   <>
     <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
@@ -421,4 +431,288 @@ export const IconSearch = svgIcon(
 
 export const IconHeart = svgIcon(
   <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+);
+
+// ── Lucide Unified Icon Set ───────────────────────────────────────────────────
+
+export const IconFolders = svgIcon(
+  <>
+    <path d="M20 17a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 11.93 3H3a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2" />
+    <path d="M2 21a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v3Z" />
+  </>
+);
+
+export const IconKanbanSquare = svgIcon(
+  <>
+    <rect width="18" height="18" x="3" y="3" rx="2" strokeWidth="2" />
+    <path d="M8 7v7" />
+    <path d="M12 7v4" />
+    <path d="M16 7v9" />
+  </>
+);
+
+export const IconListTodo = svgIcon(
+  <>
+    <rect x="3" y="5" width="6" height="6" rx="1" />
+    <path d="m3 17 2 2 4-4" />
+    <path d="M13 6h8" />
+    <path d="M13 12h8" />
+    <path d="M13 18h8" />
+  </>
+);
+
+export const IconListChecks = svgIcon(
+  <>
+    <path d="m3 17 2 2 4-4" />
+    <path d="m3 7 2 2 4-4" />
+    <path d="M13 6h8" />
+    <path d="M13 12h8" />
+    <path d="M13 18h8" />
+  </>
+);
+
+export const IconSparkles = svgIcon(
+  <>
+    <path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" />
+    <path d="M5 3v4" />
+    <path d="M19 17v4" />
+    <path d="M3 5h4" />
+    <path d="M17 19h4" />
+  </>
+);
+
+export const IconShieldCheck = svgIcon(
+  <>
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    <path d="m9 12 2 2 4-4" />
+  </>
+);
+
+export const IconSettings2 = svgIcon(
+  <>
+    <path d="M20 7h-9" />
+    <path d="M14 17H5" />
+    <circle cx="17" cy="7" r="3" />
+    <circle cx="9" cy="17" r="3" />
+  </>
+);
+
+export const IconContactRound = svgIcon(
+  <>
+    <rect width="18" height="18" x="3" y="3" rx="2" />
+    <path d="M15 17a4 4 0 0 0-6 0" />
+    <circle cx="12" cy="10" r="3" />
+  </>
+);
+
+export const IconPhoneCall = svgIcon(
+  <>
+    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+    <path d="M14 2a6 6 0 0 1 6 6" />
+    <path d="M14 6a2 2 0 0 1 2 2" />
+  </>
+);
+
+export const IconBellDot = svgIcon(
+  <>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    <circle cx="18" cy="8" r="3" fill="currentColor" stroke="none" />
+  </>
+);
+
+export const IconFileTextLucide = svgIcon(
+  <>
+    <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+    <path d="M14 2v4a1 1 0 0 0 1 1h4" />
+    <path d="M10 9H8" />
+    <path d="M16 13H8" />
+    <path d="M16 17H8" />
+  </>
+);
+
+export const IconClock3 = svgIcon(
+  <>
+    <circle cx="12" cy="12" r="10" />
+    <polyline points="12 6 12 12 16.5 12" />
+  </>
+);
+
+export const IconCalendarCheck2 = svgIcon(
+  <>
+    <rect width="18" height="18" x="3" y="4" rx="2" />
+    <path d="M16 2v4" />
+    <path d="M8 2v4" />
+    <path d="M3 10h18" />
+    <path d="m9 16 2 2 4-4" />
+  </>
+);
+
+export const IconReceiptIndianRupee = svgIcon(
+  <>
+    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" />
+    <path d="M8 7h8" />
+    <path d="M8 11h8" />
+    <path d="M8 11h5a2 2 0 0 1 0 4H8" />
+    <path d="m13 15 3 4" />
+  </>
+);
+
+export const IconChartColumnIncreasing = svgIcon(
+  <>
+    <path d="M13 17V9" />
+    <path d="M18 17V5" />
+    <path d="M3 3v18h18" />
+    <path d="M8 17v-3" />
+  </>
+);
+
+// ── Additional Navigation & Enterprise Icons ────────────────────────────────
+
+export const IconFolderKanban = svgIcon(
+  <>
+    <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    <path d="M8 10v4" />
+    <path d="M12 10v2" />
+    <path d="M16 10v6" />
+  </>
+);
+
+export const IconUsersRound = svgIcon(
+  <>
+    <path d="M18 21a8 8 0 0 0-12 0" />
+    <circle cx="12" cy="10" r="5" />
+    <path d="M22 20c0-3.37-2-6.5-4-8" />
+    <path d="M6 12c-2 1.5-4 4.63-4 8" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </>
+);
+
+export const IconLayoutDashboard = svgIcon(
+  <>
+    <rect width="7" height="9" x="3" y="3" rx="1" />
+    <rect width="7" height="5" x="14" y="3" rx="1" />
+    <rect width="7" height="9" x="14" y="12" rx="1" />
+    <rect width="7" height="5" x="3" y="16" rx="1" />
+  </>
+);
+
+export const IconBarChart3 = svgIcon(
+  <>
+    <path d="M3 3v18h18" />
+    <path d="M18 17V9" />
+    <path d="M13 17V5" />
+    <path d="M8 17v-3" />
+  </>
+);
+
+export const IconClipboardCheck = svgIcon(
+  <>
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="m9 14 2 2 4-4" />
+  </>
+);
+
+export const IconWalletCards = svgIcon(
+  <>
+    <rect width="18" height="12" x="3" y="8" rx="2" />
+    <path d="M6 8V6a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2" />
+    <path d="M18 12h.01" />
+  </>
+);
+
+export const IconBrainCircuit = svgIcon(
+  <>
+    <path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z" />
+    <path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z" />
+    <path d="M12 13h4" />
+    <path d="M12 9h6" />
+    <path d="M12 17h3" />
+  </>
+);
+
+export const IconShieldCog = svgIcon(
+  <>
+    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+    <circle cx="12" cy="12" r="3" />
+  </>
+);
+
+export const IconBuilding2 = svgIcon(
+  <>
+    <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+    <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+    <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+    <path d="M10 6h4" />
+    <path d="M10 10h4" />
+    <path d="M10 14h4" />
+    <path d="M10 18h4" />
+  </>
+);
+
+export const IconPhone = svgIcon(
+  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+);
+
+export const IconCalendarDays = svgIcon(
+  <>
+    <rect width="18" height="18" x="3" y="4" rx="2" ry="2" />
+    <line x1="16" x2="16" y1="2" y2="6" />
+    <line x1="8" x2="8" y1="2" y2="6" />
+    <line x1="3" x2="21" y1="10" y2="10" />
+    <path d="M8 14h.01" />
+    <path d="M12 14h.01" />
+    <path d="M16 14h.01" />
+    <path d="M8 18h.01" />
+    <path d="M12 18h.01" />
+    <path d="M16 18h.01" />
+  </>
+);
+
+export const IconBellRing = svgIcon(
+  <>
+    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+    <path d="M4 2C2.8 3.7 2 5.7 2 8" />
+    <path d="M22 8c0-2.3-.8-4.3-2-6" />
+  </>
+);
+
+export const IconClipboardList = svgIcon(
+  <>
+    <rect width="8" height="4" x="8" y="2" rx="1" ry="1" />
+    <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2" />
+    <path d="M12 11h4" />
+    <path d="M12 16h4" />
+    <path d="M8 11h.01" />
+    <path d="M8 16h.01" />
+  </>
+);
+
+export const IconTriangleAlert = svgIcon(
+  <>
+    <path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z" />
+    <line x1="12" y1="9" x2="12" y2="13" />
+    <line x1="12" y1="17" x2="12.01" y2="17" />
+  </>
+);
+
+export const IconFileBarChart2 = svgIcon(
+  <>
+    <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z" />
+    <polyline points="14 2 14 8 20 8" />
+    <path d="M12 18v-4" />
+    <path d="M8 18v-2" />
+    <path d="M16 18v-6" />
+  </>
+);
+
+export const IconChartColumn = svgIcon(
+  <>
+    <path d="M3 3v18h18" />
+    <rect width="3" height="10" x="7" y="8" rx="1" />
+    <rect width="3" height="14" x="12" y="4" rx="1" />
+    <rect width="3" height="6" x="17" y="12" rx="1" />
+  </>
 );

@@ -134,6 +134,9 @@ const SCREEN_DEFAULT_LEVELS: Record<string, AccessLevel> = {
   crm_opportunities: "full",
   crm_escalations: "full",
   crm_reports: "full",
+
+  // User Settings — all authenticated users
+  user_settings: "full",
 };
 
 function normalizeRole(role: string): UserRole {
@@ -359,6 +362,8 @@ export function getScreenKey(path: string): string {
   if (path === "/ai") return "ai_task_estimation";
   if (path === "/admin") return "user_management";
   if (path === "/admin/users") return "user_management";
+  if (path === "/user-settings") return "user_settings";
+  if (path.startsWith("/user-settings")) return "user_settings";
   if (path === "/cm-dashboard") return "crm_dashboard";
   if (path === "/clients") return "crm_clients";
   if (path.startsWith("/clients/")) return "crm_clients";
