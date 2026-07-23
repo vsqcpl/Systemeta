@@ -475,7 +475,7 @@ export function TeamRadarChart() {
           tooltip: {
             callbacks: {
               label: (context) => {
-                if (context.dataset.label === "Remaining Capacity") return null;
+                if (context.dataset.label === "Remaining Capacity") return undefined;
                 return `Utilization: ${context.raw}%`;
               }
             }
