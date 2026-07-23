@@ -1036,27 +1036,38 @@ export default function TimesheetsPage() {
           {/* Previous Work Logs */}
           <div className="card mb-4" style={{ overflow: "hidden" }}>
             <div 
-              className="card-header" 
-              style={{ cursor: "pointer", display: "flex", justifyContent: "space-between", alignItems: "center" }} 
+              style={{ 
+                cursor: "pointer", 
+                display: "flex", 
+                justifyContent: "space-between", 
+                alignItems: "center", 
+                padding: "14px 20px",
+                minHeight: "52px",
+                boxSizing: "border-box"
+              }} 
               onClick={() => setShowPreviousLogs(!showPreviousLogs)}
             >
-              <span className="card-title" style={{ fontSize: "14px" }}>{t("Previous Timesheet Details")}</span>
+              <div style={{ display: "flex", alignItems: "center" }}>
+                <span className="card-title" style={{ fontSize: "14px", margin: 0, padding: 0, lineHeight: 1, display: "inline-flex", alignItems: "center" }}>
+                  {t("Previous Timesheet Details")}
+                </span>
+              </div>
               <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                 {user?.role === "super_admin" && (
                   <label 
-                    style={{ fontSize: "12px", display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", color: "var(--text-secondary)", margin: 0 }}
+                    style={{ fontSize: "12px", display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", color: "var(--text-secondary)", margin: 0, padding: 0, lineHeight: 1 }}
                     onClick={(e) => e.stopPropagation()}
                   >
                     <input 
                       type="checkbox" 
                       checked={showAllUsersLogs} 
                       onChange={(e) => setShowAllUsersLogs(e.target.checked)} 
-                      style={{ margin: 0, cursor: "pointer" }}
+                      style={{ margin: 0, padding: 0, cursor: "pointer", width: "14px", height: "14px", verticalAlign: "middle" }}
                     />
-                    {t("View All Users")}
+                    <span style={{ lineHeight: 1, display: "inline-flex", alignItems: "center" }}>{t("View All Users")}</span>
                   </label>
                 )}
-                <span style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                <span style={{ fontSize: "12px", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", lineHeight: 1 }}>
                   {showPreviousLogs ? "▲" : "▼"}
                 </span>
               </div>
