@@ -310,8 +310,6 @@ interface AppStore {
   // --- UI State ---
   user: User | null;
   setUser: (user: User | null) => void;
-  projectTypes: string[];
-  setProjectTypes: (types: string[]) => void;
   fetchInitialData: () => Promise<void>;
   setOffices: (offices: any[]) => void;
   activeModule: 'projects' | 'timesheets' | 'crm' | null;
@@ -2815,9 +2813,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // --- Permission Override Defaults ---
   permissionOverrides: [],
 
-  projectTypes: ["Security", "Data", "Transformation", "ERP"],
-  setProjectTypes: (types) => set({ projectTypes: types }),
-
   setOffices: (offices) => set((state) => ({ data: { ...state.data, offices } })),
 
   fetchInitialData: async () => {
@@ -2832,8 +2827,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         billingRes,
         usersRes,
         punchSessionsRes,
-        officesRes,
-        brandingRes
+        officesRes
       ] = await Promise.all([
         fetch("/api/dashboard"),
         fetch("/api/projects"),
@@ -2844,8 +2838,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         fetch("/api/billing"),
         fetch("/api/users").catch(() => null),
         fetch("/api/timesheets/punch-sessions?employeeId=all").catch(() => null),
-        fetch("/api/offices").catch(() => null),
-        fetch("/api/branding").catch(() => null)
+        fetch("/api/offices").catch(() => null)
       ]);
 
       const handleResponse = async (res: Response, fallback: any) => {
@@ -2868,8 +2861,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         billing,
         usersList,
         punchSessionsData,
-        officesList,
-        brandingData
+        officesList
       ] = await Promise.all([
         handleResponse(dashboardRes, {
           kpis: {
@@ -2895,23 +2887,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         handleResponse(billingRes, { invoices: [], milestones: [] }),
         usersRes && usersRes.ok ? usersRes.json() : Promise.resolve([]),
         punchSessionsRes && punchSessionsRes.ok ? punchSessionsRes.json() : Promise.resolve({ success: false, sessions: [] }),
-        officesRes && officesRes.ok ? officesRes.json() : Promise.resolve([]),
-        brandingRes && brandingRes.ok ? brandingRes.json() : Promise.resolve({})
+        officesRes && officesRes.ok ? officesRes.json() : Promise.resolve([])
       ]);
-
-      if (brandingData?.projectTypes) {
-        try {
-          const types = JSON.parse(brandingData.projectTypes);
-          if (Array.isArray(types) && types.length > 0) {
-            set({ projectTypes: types });
-          }
-        } catch(e) {
-          const types = brandingData.projectTypes.split(',').map((t: string) => t.trim()).filter(Boolean);
-          if (types.length > 0) {
-            set({ projectTypes: types });
-          }
-        }
-      }
 
       const timesheets = [...baseTimesheets];
       if (punchSessionsData && punchSessionsData.success && punchSessionsData.sessions) {

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAppStore, useTranslation } from "@/lib/store";
 import { TeamRadarChart } from "@/components/charts/ChartComponents";
-import { formatCurrency, calculateAverageUtilization, calculateWeeklyUtilization, getRecentWeeks } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { Consultant } from "@/lib/data/types";
 
 export default function ResourcesPage() {
@@ -53,9 +53,7 @@ export default function ResourcesPage() {
     return user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
   };
 
-  const recentWeeks = getRecentWeeks(data.timesheets, 5);
-  // fallback if no timesheets available
-  const weeks = recentWeeks.length > 0 ? recentWeeks : ["W1 Jun", "W2 Jun", "W3 Jun", "W4 Jun", "W1 Jul"].map(w => ({ weekStr: w, label: w }));
+  const weeks = ["W1 Jun", "W2 Jun", "W3 Jun", "W4 Jun", "W1 Jul"];
 
   const exportBtnStyle: React.CSSProperties = {
     display: "flex", alignItems: "center", gap: "6px",
@@ -74,13 +72,12 @@ export default function ResourcesPage() {
     const headers = ["Name", "Role", "Utilization %", "Allocated Hours", "Available Hours", "Projects Assigned"];
     const rows = data.consultants.map((c) => {
       const assignedProjects = data.projects.filter((p) => p.team.includes(c.id));
-      const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, data.timesheets) : c.utilization;
-      const allocatedHours = Math.round(util * 40 / 100);
+      const allocatedHours = Math.round(c.utilization * 40 / 100);
       const availableHours = 40 - allocatedHours;
       return [
         `"${c.name}"`,
         `"${c.role}"`,
-        util,
+        c.utilization,
         allocatedHours,
         availableHours,
         `"${assignedProjects.map((p) => p.id).join("; ")}"`,
@@ -110,25 +107,27 @@ export default function ResourcesPage() {
       t("Current Projects"),
       t("Utilization Percentage"),
       t("Availability Percentage"),
+      t("Bill Rate"),
       t("Status")
     ];
     const rows = data.consultants.map((c) => {
       const assignedProjects = data.projects.filter((p) => p.team.includes(c.id));
-      const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, data.timesheets) : c.utilization;
-      const statusStr = util > 90 
+      const statusStr = c.utilization > 90 
         ? t("Over-allocated") 
-        : util > 80 
+        : c.utilization > 80 
           ? t("Near limit") 
           : t("Available");
-      const availStr = `${100 - util}% ${t("free")}`;
+      const billRateStr = `${formatCurrency(c.billRate)}/${t("hr")}`;
+      const availStr = `${c.availability}% ${t("free")}`;
       
       return [
         `"${c.name}"`,
         `"${c.role}"`,
         `"${c.dept}"`,
         `"${assignedProjects.map((p) => p.id).join("; ")}"`,
-        `"${util}%"`,
+        `"${c.utilization}%"`,
         `"${availStr}"`,
+        `"${billRateStr}"`,
         `"${statusStr}"`
       ];
     });
@@ -202,18 +201,18 @@ export default function ResourcesPage() {
           </div>
           <div className="card-body">
             <div style={{ overflowX: "auto" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: `120px repeat(${weeks.length}, 1fr)`,
-                    gap: "8px",
-                    minWidth: "400px",
-                  }}
-                >
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "120px repeat(5, 1fr)",
+                  gap: "4px",
+                  minWidth: "400px",
+                }}
+              >
                 <div />
                 {weeks.map((w) => (
                   <div
-                    key={w.weekStr}
+                    key={w}
                     style={{
                       textAlign: "center",
                       fontSize: "11px",
@@ -222,7 +221,7 @@ export default function ResourcesPage() {
                       padding: "4px",
                     }}
                   >
-                    {w.label}
+                    {w}
                   </div>
                 ))}
 
@@ -260,36 +259,23 @@ export default function ResourcesPage() {
                       </span>
                     </div>
 
-                    {weeks.map((w, wIdx) => {
-                      const v = Math.round(recentWeeks.length > 0 
-                        ? calculateWeeklyUtilization(c.id, w.weekStr, data.timesheets)
-                        : getDeterministicUtil(c.id, wIdx));
-                      
-                      let bg = "#3b82f6"; // optimal blue
-                      if (v < 50) bg = "#93c5fd"; // underutilized light blue
-                      if (v >= 85) bg = "#f59e0b"; // near limit orange
-                      if (v >= 100) bg = "#ef4444"; // over limit red
-                      
+                    {weeks.map((_, wIdx) => {
+                      const v = getDeterministicUtil(c.id, wIdx);
+                      const opacity = v / 100;
+                      const bg = v > 90 ? "#ef4444" : v > 80 ? "#f59e0b" : "#2563eb";
                       return (
                         <div
                           key={wIdx}
                           className="heatmap-cell"
                           style={{
-                            height: "32px",
+                            height: "28px",
                             background: bg,
-                            borderRadius: "6px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: v < 50 ? "#1e3a8a" : "white",
-                            fontSize: "12px",
-                            fontWeight: 600,
+                            opacity: Math.max(0.15, opacity),
+                            borderRadius: "4px",
                             transition: "all 0.2s",
                           }}
                           title={`${c.name}: ${v}% utilization`}
-                        >
-                          {v}%
-                        </div>
+                        />
                       );
                     })}
                   </React.Fragment>
@@ -299,13 +285,13 @@ export default function ResourcesPage() {
           </div>
         </div>
 
-        {/* Overview Card */}
-        <div className="card" style={{ display: "flex", flexDirection: "column" }}>
+        {/* Radar Card */}
+        <div className="card">
           <div className="card-header" style={{ marginBottom: 0 }}>
-            <span className="card-title">{t("Team Utilization Overview")}</span>
+            <span className="card-title">{t("Team Utilization Radar")}</span>
           </div>
-          <div className="card-body" style={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-            <div className="chart-container" style={{ flexGrow: 1, minHeight: "260px" }}>
+          <div className="card-body">
+            <div className="chart-container" style={{ height: "260px" }}>
               <TeamRadarChart />
             </div>
           </div>
@@ -333,15 +319,14 @@ export default function ResourcesPage() {
                 <th>{t("Current Projects")}</th>
                 <th>{t("Utilization")}</th>
                 <th>{t("Availability")}</th>
+                <th>{t("Bill Rate")}</th>
                 <th>{t("Status")}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
               {data.consultants.map((c) => {
-                const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, data.timesheets) : c.utilization;
-                const availability = 100 - util;
-                const barColor = util > 90 ? "#ef4444" : util > 80 ? "#f59e0b" : "#10b981";
+                const barColor = c.utilization > 90 ? "#ef4444" : c.utilization > 80 ? "#f59e0b" : "#10b981";
                 const assignedProjects = data.projects.filter((p) => p.team.includes(c.id));
                 return (
                   <tr key={c.id}>
@@ -391,23 +376,26 @@ export default function ResourcesPage() {
                         <div className="progress-bar" style={{ width: "70px", height: "6px" }}>
                           <div
                             className="progress-fill"
-                            style={{ width: `${util}%`, background: barColor }}
+                            style={{ width: `${c.utilization}%`, background: barColor }}
                           />
                         </div>
                         <span style={{ fontSize: "12px", fontWeight: 700, color: barColor }}>
-                          {util}%
+                          {c.utilization}%
                         </span>
                       </div>
                     </td>
                     <td>
                       <span className="badge badge-success" style={{ fontSize: "11px" }}>
-                        {availability}% {t("free")}
+                        {c.availability}% {t("free")}
                       </span>
+                    </td>
+                    <td style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                      {formatCurrency(c.billRate)}/{t("hr")}
                     </td>
                     <td>
                       <span className="status-indicator" style={{ color: barColor, fontSize: "12px" }}>
                         <span className="status-dot-pulse" style={{ background: barColor }} />
-                        {util > 90 ? t("Over-allocated") : util > 80 ? t("Near limit") : t("Available")}
+                        {c.utilization > 90 ? t("Over-allocated") : c.utilization > 80 ? t("Near limit") : t("Available")}
                       </span>
                     </td>
                     <td style={{ position: "relative" }}>
@@ -550,10 +538,7 @@ export default function ResourcesPage() {
             </div>
             
             <div className="modal-body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-              {activeModal === 'details' && (() => {
-                const util = recentWeeks.length > 0 ? calculateAverageUtilization(selectedConsultant.id, data.timesheets) : selectedConsultant.utilization;
-                const availability = 100 - util;
-                return (
+              {activeModal === 'details' && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
                     <div className="avatar" style={{ background: selectedConsultant.color, width: "48px", height: "48px", fontSize: "18px", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>
@@ -568,17 +553,21 @@ export default function ResourcesPage() {
                   <div className="grid-2">
                     <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
                       <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Status</span>
-                      <strong style={{ fontSize: "13px", color: util > 90 ? "#ef4444" : util > 80 ? "#f59e0b" : "#10b981" }}>
-                        {util > 90 ? t("Over-allocated") : util > 80 ? t("Near limit") : t("Available")}
+                      <strong style={{ fontSize: "13px", color: selectedConsultant.utilization > 90 ? "#ef4444" : selectedConsultant.utilization > 80 ? "#f59e0b" : "#10b981" }}>
+                        {selectedConsultant.utilization > 90 ? t("Over-allocated") : selectedConsultant.utilization > 80 ? t("Near limit") : t("Available")}
                       </strong>
                     </div>
                     <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
+                      <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Bill Rate</span>
+                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{formatCurrency(selectedConsultant.billRate)}/hr</strong>
+                    </div>
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
                       <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Utilization</span>
-                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{util}%</strong>
+                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{selectedConsultant.utilization}%</strong>
                     </div>
                     <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
                       <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Availability</span>
-                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{availability}%</strong>
+                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{selectedConsultant.availability}%</strong>
                     </div>
                   </div>
                   <div>
@@ -590,8 +579,7 @@ export default function ResourcesPage() {
                     </div>
                   </div>
                 </div>
-                );
-              })()}
+              )}
 
               {activeModal === 'projects' && (() => {
                 const projects = data.projects.filter((p) => p.team.includes(selectedConsultant.id));
@@ -623,9 +611,7 @@ export default function ResourcesPage() {
                   </p>
                   <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", height: "160px", padding: "16px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
                     {weeks.map((w, idx) => {
-                      const util = recentWeeks.length > 0 
-                        ? calculateWeeklyUtilization(selectedConsultant.id, w.weekStr, data.timesheets)
-                        : getDeterministicUtil(selectedConsultant.id, idx);
+                      const util = getDeterministicUtil(selectedConsultant.id, idx);
                       const barColor = util > 90 ? "#ef4444" : util > 80 ? "#f59e0b" : "#2563eb";
                       return (
                         <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
@@ -633,7 +619,7 @@ export default function ResourcesPage() {
                           <div style={{ width: "100%", flex: 1, background: "rgba(0,0,0,0.05)", borderRadius: "4px", position: "relative", display: "flex", alignItems: "flex-end" }}>
                             <div style={{ width: "100%", height: `${util}%`, background: barColor, borderRadius: "4px", transition: "height 0.3s ease" }} />
                           </div>
-                          <div style={{ fontSize: "10px", color: "var(--text-tertiary)", textAlign: "center", whiteSpace: "nowrap" }}>{w.label}</div>
+                          <div style={{ fontSize: "10px", color: "var(--text-tertiary)", textAlign: "center", whiteSpace: "nowrap" }}>{w}</div>
                         </div>
                       );
                     })}
@@ -643,15 +629,14 @@ export default function ResourcesPage() {
 
               {activeModal === 'allocation' && (() => {
                 const projects = data.projects.filter((p) => p.team.includes(selectedConsultant.id));
-                const util = recentWeeks.length > 0 ? calculateAverageUtilization(selectedConsultant.id, data.timesheets) : selectedConsultant.utilization;
-                const allocatedHours = Math.round((util / 100) * 40);
+                const allocatedHours = Math.round((selectedConsultant.utilization / 100) * 40);
                 const availableHours = 40 - allocatedHours;
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", background: "rgba(46, 134, 193, 0.05)", borderRadius: "8px", border: "1px solid rgba(46, 134, 193, 0.15)" }}>
                       <div>
                         <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>Weekly Allocation</div>
-                        <div style={{ fontSize: "24px", color: "#2E86C1", fontWeight: "bold" }}>{util}%</div>
+                        <div style={{ fontSize: "24px", color: "#2E86C1", fontWeight: "bold" }}>{selectedConsultant.utilization}%</div>
                       </div>
                       <div style={{ textAlign: "right" }}>
                         <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>Active Projects</div>

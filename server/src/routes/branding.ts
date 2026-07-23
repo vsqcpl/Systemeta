@@ -20,7 +20,7 @@ router.get("/", async (req: AuthenticatedRequest, res: Response) => {
 // PUT /api/branding - Update company branding
 router.put("/", authMiddleware, requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { logoUrl, companyName, address, taxId, bankDetails, projectTypes } = req.body;
+    const { logoUrl, companyName, address, taxId, bankDetails } = req.body;
 
 
     if (!companyName) {
@@ -33,11 +33,11 @@ router.put("/", authMiddleware, requireRoles(["super_admin", "accounts"]), async
     if (existing) {
       branding = await prisma.companyBranding.update({
         where: { id: existing.id },
-        data: { logoUrl, companyName, address, taxId, bankDetails, projectTypes },
+        data: { logoUrl, companyName, address, taxId, bankDetails },
       });
     } else {
       branding = await prisma.companyBranding.create({
-        data: { logoUrl, companyName, address, taxId, bankDetails, projectTypes },
+        data: { logoUrl, companyName, address, taxId, bankDetails },
       });
     }
 

@@ -75,19 +75,12 @@ export default function ProjectsPage() {
   const [npDue, setNpDue] = useState("");
   const [npManager, setNpManager] = useState("Super Admin");
   const [npPriority, setNpPriority] = useState<ProjectPriority>("medium");
-  const projectTypes = useAppStore((state) => state.projectTypes);
 
   useEffect(() => {
     if (clientNames.length > 0 && !npClient) {
       setNpClient(clientNames[0]);
     }
   }, [clientNames, npClient]);
-
-  useEffect(() => {
-    if (projectTypes.length > 0 && !projectTypes.includes(npType)) {
-      setNpType(projectTypes[0]);
-    }
-  }, [projectTypes, npType]);
 
   useEffect(() => {
     const handleMessage = (e: MessageEvent) => {
@@ -99,6 +92,7 @@ export default function ProjectsPage() {
     return () => window.removeEventListener("message", handleMessage);
   }, []);
 
+  const projectTypes = Array.from(new Set(visibleProjects.map((p) => p.type)));
   const managerNames = Array.from(
     new Set([
       "Super Admin",
@@ -167,7 +161,7 @@ export default function ProjectsPage() {
     // Reset state & close modal
     setNpName("");
     setNpClient(clientNames[0] || "");
-    setNpType(projectTypes.length > 0 ? projectTypes[0] : "");
+    setNpType("Transformation");
     setNpBudget("");
     setNpDue("");
     setNpManager("Super Admin");
@@ -880,6 +874,7 @@ export default function ProjectsPage() {
                           {t(typeVal)}
                         </option>
                       ))}
+                      <option value="Other">{t("Other")}</option>
                     </select>
                   </div>
                 </div>

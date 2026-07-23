@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -499,6 +499,5 @@ model CompanyBranding {
   taxId           String?
   bankDetails     String?
   maintenanceMode Boolean  @default(false)
-  projectTypes    String?
   updatedAt       DateTime @updatedAt
 }
