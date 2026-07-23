@@ -1217,7 +1217,7 @@ export default function TasksPage() {
       title: ntTitle,
       project: ntProject,
       assignee: ntAssignees.length > 0 ? ntAssignees[0].id : "",
-      priority: (ntPriority || "") as any,
+      priority: (ntPriority || "None") as any,
       dueDate: ntDue || "",
       estimate: ntEstimate !== "" ? parseFloat(ntEstimate) : 0,
       tags: ntTags ? ntTags.split(",").map(t => t.trim()).filter(Boolean) : [],
@@ -2104,7 +2104,12 @@ export default function TasksPage() {
                   >
                     {t("Cancel")}
                   </button>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-sm" 
+                    style={{ padding: "8px 20px" }}
+                    disabled={!ntTitle || !ntProject || ntAssignees.length === 0}
+                  >
                     {t("Create Task")}
                   </button>
                 </div>

@@ -66,6 +66,8 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
   const [expCurrency, setExpCurrency] = useState("AED");
   const [expDate, setExpDate] = useState("");
 
+  const projectTypes = useAppStore((state) => state.projectTypes);
+
   // Auto-select defaults when data is loaded
   useEffect(() => {
     if (data.consultants.length > 0) {
@@ -79,6 +81,12 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
       setExpProject(data.projects[0].id);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (projectTypes.length > 0 && !projectTypes.includes(npType)) {
+      setNpType(projectTypes[0]);
+    }
+  }, [projectTypes, npType]);
 
   const handleCreateProject = (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,7 +122,7 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
       title: ntTitle,
       project: ntProject,
       assignee: ntAssignee,
-      priority: (ntPriority || "") as any,
+      priority: (ntPriority || "None") as any,
       dueDate: ntDue || "",
       estimate: ntEstimate !== "" ? parseFloat(ntEstimate) : 0,
       tags: ntTags ? ntTags.split(",").map((t) => t.trim()).filter(Boolean) : [],
@@ -173,8 +181,6 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
     onClose();
   };
 
-  const projectTypes = Array.from(new Set(data.projects.map((p) => p.type)));
-  if (!projectTypes.includes("Other")) projectTypes.push("Other");
 
   if (!open) return null;
 
@@ -534,7 +540,12 @@ export default function QuickAddModal({ open, onClose }: QuickAddModalProps) {
                   >
                     Cancel
                   </button>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-sm" 
+                    style={{ padding: "8px 20px" }}
+                    disabled={!ntTitle || !ntProject || !ntAssignee}
+                  >
                     Create Task
                   </button>
                 </div>

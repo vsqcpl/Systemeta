@@ -1,4 +1,5 @@
 import React from "react";
+import { Timesheet } from "./data/types";
 
 let currentCurrencyFormat: 'indian' | 'intl' = 'indian';
 let currentCurrencySymbol: string = '₹';
@@ -103,4 +104,62 @@ export function getTaskDateStatus(str: string): DateStatus {
     return { isOverdue: false, isDueSoon: true, label };
   }
   return { isOverdue: false, isDueSoon: false, label };
+}
+
+export function calculateAverageUtilization(consultantId: string, timesheets: Timesheet[], weeksToAverage = 4): number {
+  if (!timesheets || timesheets.length === 0) return 0;
+  
+  const consultantTimesheets = timesheets
+    .filter(ts => ts.consultant === consultantId)
+    .sort((a, b) => new Date(b.week).getTime() - new Date(a.week).getTime());
+    
+  if (consultantTimesheets.length === 0) return 0;
+  
+  const recentTimesheets = consultantTimesheets.slice(0, weeksToAverage);
+  
+  let totalHours = 0;
+  recentTimesheets.forEach(ts => {
+    if (ts.entries) {
+      ts.entries.forEach(entry => {
+        totalHours += entry.hours || 0;
+      });
+    }
+  });
+  
+  const expectedTotalHours = recentTimesheets.length * 40;
+  if (expectedTotalHours === 0) return 0;
+  
+  return Math.round((totalHours / expectedTotalHours) * 100);
+}
+
+export function calculateWeeklyUtilization(consultantId: string, weekStr: string, timesheets: Timesheet[]): number {
+  if (!timesheets) return 0;
+  const ts = timesheets.find(t => t.consultant === consultantId && t.week === weekStr);
+  if (!ts || !ts.entries) return 0;
+  
+  let totalHours = 0;
+  ts.entries.forEach(entry => {
+    totalHours += entry.hours || 0;
+  });
+  
+  return Math.round((totalHours / 40) * 100);
+}
+
+export function getRecentWeeks(timesheets: Timesheet[], numWeeks = 5): { weekStr: string, label: string }[] {
+  if (!timesheets || timesheets.length === 0) return [];
+  
+  const uniqueWeeks = Array.from(new Set(timesheets.map(t => t.week)))
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+    .slice(0, numWeeks)
+    .reverse();
+    
+  return uniqueWeeks.map(w => {
+    const d = new Date(w);
+    const month = d.toLocaleDateString("en-US", { month: "short" });
+    const date = d.getDate();
+    return {
+      weekStr: w,
+      label: `${date} ${month}`
+    };
+  });
 }

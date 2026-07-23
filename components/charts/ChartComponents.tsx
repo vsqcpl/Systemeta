@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from "react";
 import { Chart, registerables } from "chart.js";
 import { useAppStore } from "@/lib/store";
 import { Project } from "@/lib/data/types";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, calculateAverageUtilization, getRecentWeeks } from "@/lib/utils";
 
 // Register all chart elements
 Chart.register(...registerables);
@@ -415,6 +415,7 @@ export function TeamRadarChart() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const darkMode = useAppStore((state) => state.darkMode);
   const consultants = useAppStore((state) => state.data.consultants);
+  const timesheets = useAppStore((state) => state.data.timesheets || []);
   const chartInstanceRef = useRef<Chart | null>(null);
 
   const hasData = consultants && consultants.length > 0;
@@ -424,42 +425,41 @@ export function TeamRadarChart() {
     const canvas = canvasRef.current;
     const { textColor, baseFont, gridColor } = getThemeHelpers(darkMode);
 
-    const first6 = consultants.slice(0, 6);
+    const displayConsultants = consultants;
+    const recentWeeks = getRecentWeeks(timesheets, 5);
 
     if (chartInstanceRef.current) {
       chartInstanceRef.current.destroy();
     }
 
     chartInstanceRef.current = new Chart(canvas, {
-      type: "radar",
+      type: "bar",
       data: {
-        labels: first6.map((c) => c.name.split(" ")[0]),
+        labels: displayConsultants.map((c) => c.name.split(" ")[0]),
         datasets: [
           {
             label: "Utilization %",
-            data: first6.map((c) => c.utilization),
-            backgroundColor: "rgba(14, 165, 233, 0.15)",
-            borderColor: PALETTE.blue,
-            borderWidth: 2,
-            pointBackgroundColor: PALETTE.blue,
-            pointBorderColor: "#fff",
-            pointBorderWidth: 2,
-            pointRadius: 4,
+            data: displayConsultants.map((c) => recentWeeks.length > 0 ? calculateAverageUtilization(c.id, timesheets) : c.utilization),
+            backgroundColor: PALETTE.blue,
+            borderRadius: 6,
+            barThickness: 18,
           },
           {
-            label: "Target (80%)",
-            data: first6.map(() => 80),
-            backgroundColor: "transparent",
-            borderColor: PALETTE.green,
-            borderWidth: 1.5,
-            borderDash: [4, 3],
-            pointRadius: 0,
+            label: "Remaining Capacity",
+            data: displayConsultants.map((c) => {
+              const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, timesheets) : c.utilization;
+              return Math.max(0, 100 - util);
+            }),
+            backgroundColor: darkMode ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.04)",
+            borderRadius: 6,
+            barThickness: 18,
           },
         ],
       },
       options: {
         responsive: true,
         maintainAspectRatio: false,
+        indexAxis: "y",
         plugins: {
           legend: {
             position: "bottom",
@@ -469,26 +469,61 @@ export function TeamRadarChart() {
               padding: 14,
               usePointStyle: true,
               boxWidth: 8,
+              filter: (item) => item.text === "Utilization %",
             },
           },
+          tooltip: {
+            callbacks: {
+              label: (context) => {
+                if (context.dataset.label === "Remaining Capacity") return null;
+                return `Utilization: ${context.raw}%`;
+              }
+            }
+          }
         },
         scales: {
-          r: {
+          x: {
+            stacked: true,
             min: 0,
             max: 100,
             grid: { color: gridColor },
-            angleLines: { color: gridColor },
-            pointLabels: { color: textColor, font: { ...baseFont, size: 11 } },
             ticks: {
               color: textColor,
-              font: { ...baseFont, size: 9 },
-              stepSize: 20,
-              showLabelBackdrop: false,
+              font: { ...baseFont, size: 10 },
               callback: (v) => `${v}%`,
+            },
+          },
+          y: {
+            stacked: true,
+            grid: { display: false },
+            ticks: {
+              color: textColor,
+              font: { ...baseFont, size: 11 },
             },
           },
         },
       },
+      plugins: [{
+        id: 'targetLine',
+        beforeDraw: (chart) => {
+          const { ctx, chartArea: { top, bottom }, scales: { x } } = chart;
+          const xPos = x.getPixelForValue(80);
+          ctx.save();
+          ctx.beginPath();
+          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = PALETTE.green;
+          ctx.setLineDash([5, 5]);
+          ctx.moveTo(xPos, top);
+          ctx.lineTo(xPos, bottom);
+          ctx.stroke();
+          ctx.restore();
+          
+          ctx.fillStyle = PALETTE.green;
+          ctx.font = '10px Inter';
+          ctx.textAlign = 'center';
+          ctx.fillText('Target (80%)', xPos, top - 6);
+        }
+      }]
     });
 
     return () => {
