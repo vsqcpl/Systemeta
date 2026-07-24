@@ -45,19 +45,22 @@ router.post("/login", async (req, res) => {
       req.headers["x-is-extended"] = "false";
     }
 
-    // Call Better Auth to sign in
-    const response = await auth.api.signInEmail({
-      body: { email, password },
+    // Call Better Auth to sign in via handler to ensure context.request exists for hooks
+    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5000");
+    requestUrl.pathname = "/api/auth/sign-in/email";
+    
+    const request = new Request(requestUrl.href, {
+      method: "POST",
       headers: fromNodeHeaders(req.headers),
-      asResponse: true,
+      body: JSON.stringify({ email, password })
     });
 
-    // Copy Set-Cookie headers to Express response
+    const response = await auth.handler(request);
+
+    // Only copy Set-Cookie headers to Express response to avoid Vercel restricted headers errors
     response.headers.forEach((value, name) => {
       if (name.toLowerCase() === "set-cookie") {
-        res.append(name, value);
-      } else {
-        res.setHeader(name, value);
+        res.append("set-cookie", value);
       }
     });
 
@@ -102,16 +105,19 @@ router.post("/login", async (req, res) => {
 // POST /api/auth/logout
 router.post("/logout", async (req, res) => {
   try {
-    const response = await auth.api.signOut({
-      headers: fromNodeHeaders(req.headers),
-      asResponse: true,
+    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5000");
+    requestUrl.pathname = "/api/auth/sign-out";
+    
+    const request = new Request(requestUrl.href, {
+      method: "POST",
+      headers: fromNodeHeaders(req.headers)
     });
+
+    const response = await auth.handler(request);
 
     response.headers.forEach((value, name) => {
       if (name.toLowerCase() === "set-cookie") {
-        res.append(name, value);
-      } else {
-        res.setHeader(name, value);
+        res.append("set-cookie", value);
       }
     });
 
