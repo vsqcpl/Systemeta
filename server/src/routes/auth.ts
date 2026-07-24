@@ -49,9 +49,13 @@ router.post("/login", async (req, res) => {
     const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5000");
     requestUrl.pathname = "/api/auth/sign-in/email";
     
+    const headers = fromNodeHeaders(req.headers);
+    // Delete content-length because we are modifying the body length by removing rememberMe
+    headers.delete("content-length");
+
     const request = new Request(requestUrl.href, {
       method: "POST",
-      headers: fromNodeHeaders(req.headers),
+      headers,
       body: JSON.stringify({ email, password })
     });
 
