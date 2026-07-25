@@ -22,8 +22,9 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const isLocalhost = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin);
+      const isLan = /^https?:\/\/(192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+)(:\d+)?$/.test(origin);
       const isVercel = /^https?:\/\/([a-zA-Z0-9-]+\.)*vercel\.app$/.test(origin);
-      if (TRUSTED_ORIGINS.includes(origin) || isLocalhost || isVercel) {
+      if (TRUSTED_ORIGINS.includes(origin) || isLocalhost || isLan || isVercel) {
         callback(null, true);
       } else {
         callback(new Error(`Not allowed by CORS: Origin ${origin} is not in trusted list`));

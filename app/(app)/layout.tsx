@@ -212,7 +212,7 @@ export default function AppLayout({
           }
         ` }} />
         <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0, height: "100vh" }}>
-          <div className="page-content" id="page-content" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 1, height: "100%", padding: 0 }}>
+          <div className="page-content" id="page-content" style={{ flex: 1, overflowY: "auto", position: "relative", height: "100%", padding: 0 }}>
             <div className="screen">
               <RouteGuard screenKey={getScreenKey(pathname)}>
                 {children}
@@ -351,7 +351,7 @@ export default function AppLayout({
         <Topbar />
 
         {/* Content area */}
-        <div className="page-content" id="page-content" style={{ flex: 1, overflowY: "auto", position: "relative", zIndex: 1 }}>
+        <div className="page-content" id="page-content" style={{ flex: 1, overflowY: "auto", position: "relative" }}>
           <div className="screen">
             <RouteGuard screenKey={getScreenKey(pathname)}>
               {children}

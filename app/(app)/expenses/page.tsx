@@ -106,6 +106,8 @@ const EXPENSE_DETAILS_MAP: Record<string, {
   description: string;
   approvalStatus: string;
   reimbursementStage: string;
+  reviewedBy?: string;
+  reviewReason?: string;
 }> = {};
 
 export default function ExpensesPage() {
@@ -508,6 +510,8 @@ export default function ExpensesPage() {
         status: currentStatus,
         approvalStatus: currentApprovalStatus,
         reimbursementStage: currentReimbursementStage,
+        reviewedBy: "Automated Policy Engine & AI Verification",
+        reviewReason: "Standard compliance verification passed.",
       };
     }
 
@@ -519,8 +523,43 @@ export default function ExpensesPage() {
     const approvalStatus = statusLower === "approved" ? "Approved" : statusLower === "rejected" ? "Rejected" : "Awaiting Manager Review";
     const reimbursementStage = statusLower === "approved" ? "Payment queued" : "Hold pending approval";
 
+    const aiMatch = (expense.description || "").match(/\[AI Rejected:\s*([^\]]+)\]/i);
+    const policyMatch = (expense.description || "").match(/\[Policy:\s*([^\]]+)\]/i);
+
+    let reviewedBy = "Automated System / Policy Engine";
+    let reviewReason = "Claim aligns with established company reimbursement policy.";
+
+    if (statusLower === "rejected") {
+      if (aiMatch) {
+        reviewedBy = "AI Audit Verification Engine";
+        reviewReason = aiMatch[1] || "Receipt document discrepancy detected by AI.";
+      } else if (policyMatch) {
+        reviewedBy = "Automated Expense Policy Engine";
+        reviewReason = policyMatch[1] || "Exceeded standard policy spending caps or missing required data.";
+      } else {
+        reviewedBy = "Accounts Department / Management Review";
+        reviewReason = "Rejected during manual management audit against corporate expenditure rules.";
+      }
+    } else if (statusLower === "approved") {
+      if (aiMatch || policyMatch) {
+        reviewedBy = "Manual Override (Super Admin / Accounts / PM)";
+        const flagReason = aiMatch ? aiMatch[1] : (policyMatch ? policyMatch[1] : "automated alert");
+        reviewReason = `Manually approved by management as an exceptional override. (Originally flagged for: ${flagReason})`;
+      } else {
+        reviewedBy = "Automated Policy Engine & AI Verification";
+        reviewReason = "Claim strictly conforms to corporate expense thresholds and passed automated validation.";
+      }
+    } else {
+      reviewedBy = "Awaiting Manager / Accounts Review";
+      if (policyMatch) {
+        reviewReason = `Flagged for manual inspection: ${policyMatch[1]}`;
+      } else {
+        reviewReason = "Standard managerial review required prior to processing.";
+      }
+    }
+
     return {
-      title: expense.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, ""),
+      title: (expense.description || "").replace(/^\[(AI Rejected|Policy|Outside City):\s*[^\]]+\]\s*/ig, ""),
       id: expense.id.startsWith("E") ? `EXP-${expense.id.slice(1)}` : expense.id,
       employeeName,
       projectCode: expense.project,
@@ -533,6 +572,8 @@ export default function ExpensesPage() {
       description: expense.description,
       approvalStatus,
       reimbursementStage,
+      reviewedBy,
+      reviewReason,
     };
   };
 
@@ -894,11 +935,14 @@ export default function ExpensesPage() {
                   return (
                     <div
                       key={e.id}
+                      className="expense-item-row"
                       onClick={() => setSelectedTrackerId(e.id)}
                       style={{
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "space-between",
+                        flexWrap: "wrap",
+                        gap: "12px",
                         padding: "16px 0",
                         borderBottom: "1px solid var(--border-subtle)",
                         cursor: "pointer",
@@ -909,7 +953,7 @@ export default function ExpensesPage() {
                         transition: "all 0.15s ease",
                       }}
                     >
-                      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0, flex: "1 1 min-content" }}>
                         <div
                           style={{
                             background: "var(--ob-bg-elevated)",
@@ -920,15 +964,16 @@ export default function ExpensesPage() {
                             alignItems: "center",
                             justifyContent: "center",
                             color: "var(--ob-accent-blue)",
+                            flexShrink: 0,
                           }}
                         >
                           {catIconEl}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          <div style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-primary)", whiteSpace: "normal", wordBreak: "break-word" }}>
                             {e.description.replace(/^\[Policy:\s*[^\]]+\]\s*/i, "")}
                           </div>
-                          <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ fontSize: "11.5px", color: "var(--text-secondary)", marginTop: "4px", display: "flex", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
                             <span style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
                               <div
                                 style={{
@@ -1526,7 +1571,7 @@ export default function ExpensesPage() {
                     {t("Approval Information")}
                   </h3>
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "16px 24px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px 24px" }}>
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       {t("Submitted Date")}
@@ -1547,10 +1592,28 @@ export default function ExpensesPage() {
 
                   <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                     <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Reviewed By / Authority")}
+                    </div>
+                    <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--ob-blue, #2E86C1)" }}>
+                      {t(details.reviewedBy || "Automated System")}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
                       {t("Reimbursement Stage")}
                     </div>
                     <div style={{ fontSize: "13.5px", fontWeight: 600, color: "var(--text-primary)" }}>
                       {t(details.reimbursementStage)}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", gridColumn: "1 / -1", marginTop: "4px" }}>
+                    <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                      {t("Decision Reason / Grounding")}
+                    </div>
+                    <div style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)", background: "var(--bg-surface-2)", padding: "10px 14px", borderRadius: "6px", border: "1px solid var(--border-subtle)", lineHeight: "1.5" }}>
+                      {t(details.reviewReason || "No policy violations detected.")}
                     </div>
                   </div>
                 </div>
@@ -1622,34 +1685,48 @@ export default function ExpensesPage() {
             </div>
 
             {/* Modal Footer */}
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", padding: "16px 28px 28px 28px", borderTop: "1px solid var(--border-subtle)", flexShrink: 0, flexWrap: "wrap" }}>
               
               <ActionGuard action="Approve Expenses">
-                {details.status.toLowerCase() === "pending" && (
-                  <>
-                    <button className="btn btn-success btn-sm" onClick={() => {
-                      approveExpense(selectedExpense.id);
-                      setSelectedExpense(null);
-                    }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-teal)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <IconCheckCircle size={16} /> {t("Approve")}
+                <div style={{ display: "flex", gap: "8px", marginRight: "auto" }}>
+                  {details.status.toLowerCase() !== "approved" && (
+                    <button
+                      className="btn btn-success btn-sm"
+                      onClick={() => {
+                        approveExpense(selectedExpense.id);
+                        setSelectedExpense(null);
+                      }}
+                      style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-teal, #10b981)", color: "#fff", display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, border: "none", borderRadius: "6px", cursor: "pointer" }}
+                      title={details.status.toLowerCase() === "rejected" ? t("Override AI/Policy rejection and manually approve this expense claim") : t("Approve expense")}
+                    >
+                      <IconCheckCircle size={16} /> {details.status.toLowerCase() === "rejected" ? t("Approve (Manual Override)") : t("Approve")}
                     </button>
-                    <button className="btn btn-danger btn-sm" onClick={() => {
-                      rejectExpense(selectedExpense.id);
-                      setSelectedExpense(null);
-                    }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <IconClose size={16} /> {t("Reject")}
+                  )}
+                  {details.status.toLowerCase() !== "rejected" && (
+                    <button
+                      className="btn btn-danger btn-sm"
+                      onClick={() => {
+                        rejectExpense(selectedExpense.id);
+                        setSelectedExpense(null);
+                      }}
+                      style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red, #ef4444)", color: "#fff", display: "flex", alignItems: "center", gap: "6px", fontWeight: 600, border: "none", borderRadius: "6px", cursor: "pointer" }}
+                      title={details.status.toLowerCase() === "approved" ? t("Override automatic approval and reject this expense claim") : t("Reject expense")}
+                    >
+                      <IconClose size={16} /> {details.status.toLowerCase() === "approved" ? t("Reject (Manual Override)") : t("Reject")}
                     </button>
-                  </>
-                )}
+                  )}
+                </div>
               </ActionGuard>
 
-              <button className="btn btn-secondary btn-sm" onClick={() => setSelectedExpense(null)} style={{ padding: "8px 16px", fontSize: "12.5px" }}>{t("Close")}</button>
-              <button className="btn btn-danger btn-sm" onClick={() => {
-                setExpenseToDelete(selectedExpense.id);
-                setSelectedExpense(null);
-              }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
-                🗑 {t("Delete Expense")}
-              </button>
+              <div style={{ display: "flex", gap: "10px", marginLeft: "auto" }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => setSelectedExpense(null)} style={{ padding: "8px 16px", fontSize: "12.5px" }}>{t("Close")}</button>
+                <button className="btn btn-danger btn-sm" onClick={() => {
+                  setExpenseToDelete(selectedExpense.id);
+                  setSelectedExpense(null);
+                }} style={{ padding: "8px 16px", fontSize: "12.5px", background: "var(--ob-red)", display: "flex", alignItems: "center", gap: "6px" }}>
+                  🗑 {t("Delete Expense")}
+                </button>
+              </div>
             </div>
           </div>
         </div>

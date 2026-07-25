@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
@@ -51,6 +51,13 @@ export default function Sidebar() {
   const projectLinkId = activeProjectId || data.projects[0]?.id || "";
 
   const toggleSidebar = () => setSidebarCollapsed(!sidebarCollapsed);
+
+  // Automatically collapse sidebar on small viewports (< 900px) on route change
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 900) {
+      setSidebarCollapsed(true);
+    }
+  }, [pathname]);
 
   // Module → allowed screen IDs
   const MODULE_SCREENS: Record<string, string[]> = {
@@ -194,10 +201,18 @@ export default function Sidebar() {
     : "Director";
 
   return (
-    <aside
-      className={`sidebar ${isExpanded ? "expanded" : "collapsed"}`}
-      id="sidebar"
-    >
+    <>
+      {isExpanded && (
+        <div
+          className="sidebar-backdrop"
+          onClick={() => setSidebarCollapsed(true)}
+          title="Close navigation drawer"
+        />
+      )}
+      <aside
+        className={`sidebar ${isExpanded ? "expanded" : "collapsed"}`}
+        id="sidebar"
+      >
       <div className="sidebar-inner">
         {/* Top Header Row — logo & toggle */}
         <div className="sidebar-header-row" style={{ height: isExpanded ? '48px' : 'auto', marginTop: '8px' }}>
@@ -243,8 +258,12 @@ export default function Sidebar() {
                 {groupIdx > 0 && <div className="sidebar-divider" />}
                 {group.items.map((item) => {
                   const isActive =
-                    pathname === item.route ||
-                    (item.route.length > 1 && pathname.startsWith(item.route + "/"));
+                    item.id === "projects"
+                      ? pathname === "/projects"
+                      : item.id === "project"
+                      ? pathname !== "/projects" && pathname.startsWith("/projects")
+                      : pathname === item.route ||
+                        (item.route.length > 1 && pathname.startsWith(item.route + "/"));
                   return (
                     <Link
                       key={item.id}
@@ -333,5 +352,6 @@ export default function Sidebar() {
         </div>
       </div>
     </aside>
+    </>
   );
 }

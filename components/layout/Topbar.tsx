@@ -211,6 +211,18 @@ export default function Topbar() {
   return (
     <header className="topbar" style={{ position: "relative" }}>
       <div className="topbar-breadcrumb" id="breadcrumb" style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        <button
+          className="mobile-sidebar-toggle"
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          title="Toggle Navigation Menu"
+          aria-label="Toggle navigation"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12" />
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="3" y1="18" x2="21" y2="18" />
+          </svg>
+        </button>
         {showBackButton && (
           <button
             id="back-btn"
@@ -257,68 +269,67 @@ export default function Topbar() {
         <span className="breadcrumb-item active" id="bc-current">
           {getScreenLabel()}
         </span>
-
-        {/* Module Switcher - Positioned inline near the breadcrumb */}
-        {/* Module Switcher - Positioned inline near the breadcrumb */}
-        {!isClientContact && allowedModules.length > 1 && (
-          <div
-            ref={containerRef}
-            className="topbar-module-switcher"
-            id="module-switcher"
-            style={{ position: "relative" }}
-          >
-            {activeModuleIndex !== -1 && (
-              <div
-                className="switcher-indicator"
-                style={indicatorStyle}
-              />
-            )}
-            {allowedModules.includes("projects") && (
-              <button
-                ref={(el) => {
-                  buttonRefs.current["projects"] = el;
-                }}
-                id="module-btn-projects"
-                className={`switcher-btn ${activeModule === "projects" ? "active" : ""}`}
-                onClick={() => handleModuleSwitch("projects")}
-                title={t("Project Management")}
-              >
-                <span>{t("Project Management")}</span>
-              </button>
-            )}
-            {allowedModules.includes("crm") && (
-              <button
-                ref={(el) => {
-                  buttonRefs.current["crm"] = el;
-                }}
-                id="module-btn-crm"
-                className={`switcher-btn ${activeModule === "crm" ? "active" : ""}`}
-                onClick={() => handleModuleSwitch("crm")}
-                title={t("CRM")}
-              >
-                <span>{t("CRM") || "CRM"}</span>
-              </button>
-            )}
-            {allowedModules.includes("timesheets") && (
-              <button
-                ref={(el) => {
-                  buttonRefs.current["timesheets"] = el;
-                }}
-                id="module-btn-timesheets"
-                className={`switcher-btn ${activeModule === "timesheets" ? "active" : ""}`}
-                onClick={() => handleModuleSwitch("timesheets")}
-                title={t("Timesheet")}
-              >
-                <span>{t("Timesheet")}</span>
-              </button>
-            )}
-          </div>
-        )}
       </div>
+
+      {/* Module Switcher - Sibling positioning enables clean full-width wrapping on mobile without modifying desktop placement */}
+      {!isClientContact && allowedModules.length > 1 && (
+        <div
+          ref={containerRef}
+          className="topbar-module-switcher"
+          id="module-switcher"
+          style={{ position: "relative" }}
+        >
+          {activeModuleIndex !== -1 && (
+            <div
+              className="switcher-indicator"
+              style={indicatorStyle}
+            />
+          )}
+          {allowedModules.includes("projects") && (
+            <button
+              ref={(el) => {
+                buttonRefs.current["projects"] = el;
+              }}
+              id="module-btn-projects"
+              className={`switcher-btn ${activeModule === "projects" ? "active" : ""}`}
+              onClick={() => handleModuleSwitch("projects")}
+              title={t("Project Management")}
+            >
+              <span>{t("Project Management")}</span>
+            </button>
+          )}
+          {allowedModules.includes("crm") && (
+            <button
+              ref={(el) => {
+                buttonRefs.current["crm"] = el;
+              }}
+              id="module-btn-crm"
+              className={`switcher-btn ${activeModule === "crm" ? "active" : ""}`}
+              onClick={() => handleModuleSwitch("crm")}
+              title={t("CRM")}
+            >
+              <span>{t("CRM") || "CRM"}</span>
+            </button>
+          )}
+          {allowedModules.includes("timesheets") && (
+            <button
+              ref={(el) => {
+                buttonRefs.current["timesheets"] = el;
+              }}
+              id="module-btn-timesheets"
+              className={`switcher-btn ${activeModule === "timesheets" ? "active" : ""}`}
+              onClick={() => handleModuleSwitch("timesheets")}
+              title={t("Timesheet")}
+            >
+              <span>{t("Timesheet")}</span>
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="topbar-actions">
         {/* Search button */}
-        <button className="btn btn-secondary btn-sm" onClick={() => setSearchOpen(true)} style={{ gap: "8px" }}>
+        <button className="btn btn-secondary btn-sm topbar-search-trigger" onClick={() => setSearchOpen(true)} style={{ gap: "8px" }}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <circle cx="11" cy="11" r="8" />
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
@@ -326,7 +337,7 @@ export default function Topbar() {
           {t("Search")}
         </button>
 
-        <div className="divider-v"></div>
+        <div className="divider-v topbar-search-divider"></div>
 
         {/* Theme Toggle */}
         <button

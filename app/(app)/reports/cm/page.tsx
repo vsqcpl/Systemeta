@@ -33,7 +33,7 @@ export default function ClientManagerReportsPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: "24px", marginBottom: "24px" }}>
+      <div className="reports-cards-grid" style={{ display: "flex", flexWrap: "wrap", gap: "24px", marginBottom: "24px" }}>
         <div 
           className={`card ${activeReport === 'client_health' ? 'active-card' : ''}`}
           style={{ flex: 1, padding: "24px", cursor: "pointer", border: activeReport === 'client_health' ? "2px solid var(--brand-500)" : "" }}

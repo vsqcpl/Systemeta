@@ -4,6 +4,7 @@ const isProd = process.env.NODE_ENV === "production";
 const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || (isProd ? "https://vsqc-platform-backend.vercel.app" : "http://localhost:5000");
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ["192.168.1.9", "192.168.1.9:3000", "localhost", "localhost:3000", "127.0.0.1", "0.0.0.0"],
   poweredByHeader: false,
   async headers() {
     const isEnforced = process.env.CSP_ENFORCE === "true";

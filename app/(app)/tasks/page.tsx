@@ -418,7 +418,7 @@ function TaskDrawer({
       <div
         className="task-drawer open"
         style={{
-          position: "fixed", top: 0, right: 0, width: "420px", height: "100vh",
+          position: "fixed", top: 0, right: 0, width: "min(420px, 100vw)", maxWidth: "100%", height: "100vh",
           background: "var(--bg-surface)", borderLeft: "1px solid var(--border-subtle)",
           boxShadow: "var(--shadow-xl)", zIndex: 499, overflowY: "auto", padding: "24px",
         }}

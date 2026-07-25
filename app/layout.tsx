@@ -23,8 +23,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={inter.variable} suppressHydrationWarning>
-      <body className={inter.className}>
+    <html lang="en" className={inter.variable} suppressHydrationWarning data-scroll-behavior="smooth">
+      <body className={inter.className} suppressHydrationWarning>
         <ThemeInitializer />
         <AuthProvider>
           {children}
