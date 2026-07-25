@@ -283,7 +283,8 @@ function TaskDrawer({
   const data = useAppStore((state) => state.data);
   const { user } = useAuth();
   const projects = useAppStore((state) => state.data.projects);
-  const projectName = projects.find((p) => p.id === task.project)?.name || task.project;
+  const projectObj = projects.find((p) => p.id === task.project || p.name === task.project || (p.client ? `${p.name} (${p.client})` === task.project : false) || (p.name.trim().toLowerCase() === (task.project || "").trim().toLowerCase()));
+  const projectName = projectObj?.name || task.project;
 
   const isManager = user?.role?.toLowerCase() === "super_admin" || user?.role?.toLowerCase() === "project_manager";
   const [showReviewModal, setShowReviewModal] = React.useState(col === "review" && isManager);
@@ -483,7 +484,7 @@ function TaskDrawer({
                       value={rejectAssignee}
                       onChange={(val) => setRejectAssignee(val)}
                       placeholder="Select Assignee"
-                      options={consultants.map(cons => ({ label: cons.name, value: cons.id }))}
+                      options={consultants.filter((cons) => (projectObj?.team || []).some((t: string) => t === cons.id || t === cons.name)).map(cons => ({ label: cons.name, value: cons.id }))}
                     />
                   </div>
 
@@ -553,9 +554,9 @@ function TaskDrawer({
 
         {/* Multiple Assignees section */}
         {(() => {
-          const project = data.projects.find((p) => p.id === task.project);
+          const project = data.projects.find((p) => p.id === task.project || p.name === task.project || (p.client ? `${p.name} (${p.client})` === task.project : false) || (p.name.trim().toLowerCase() === (task.project || "").trim().toLowerCase()));
           const projectTeamIds = project?.team || [];
-          const eligibleUsers = (data.users || []).filter((u: any) => projectTeamIds.includes(u.id));
+          const eligibleUsers = consultants.filter((u: any) => projectTeamIds.includes(u.id) || projectTeamIds.includes(u.name));
           const currentAssignees = task.assignees && task.assignees.length > 0 ? task.assignees : [task.assignee];
           const unassignedProjectUsers = eligibleUsers.filter((u: any) => !currentAssignees.includes(u.id));
 
@@ -1041,16 +1042,12 @@ export default function TasksPage() {
   const [ntProject, setNtProject] = useState("");
   const [ntAssignees, setNtAssignees] = useState<{ id: string; hours: string }[]>([]);
 
-  const createModalProject = data.projects.find((p) => p.id === ntProject);
+  const createModalProject = data.projects.find((p) => p.id === ntProject || p.name === ntProject || (p.client ? `${p.name} (${p.client})` === ntProject : false));
   const createModalTeamIds = createModalProject?.team || [];
   const createModalEligibleAssignees = React.useMemo(() => {
-    if (user?.role === "super_admin" || user?.role === "project_manager") {
-      return allEligibleAssignees;
-    }
-    return createModalTeamIds.length > 0 
-      ? allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id))
-      : allEligibleAssignees;
-  }, [createModalTeamIds, allEligibleAssignees, user?.role]);
+    if (!ntProject || !createModalProject) return [];
+    return allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id) || createModalTeamIds.includes(c.name));
+  }, [createModalTeamIds, allEligibleAssignees, ntProject, createModalProject]);
   const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
   const [ntPriority, setNtPriority] = useState<any>("");
   const [ntDue, setNtDue] = useState("");
@@ -1157,11 +1154,10 @@ export default function TasksPage() {
   const [subtaskErrors, setSubtaskErrors] = useState<string[]>([]);
 
   React.useEffect(() => {
-    if (visibleProjects.length > 0) {
+    if (showTaskModal && !ntProject && visibleProjects.length > 0) {
       setNtProject(visibleProjects[0].id);
     }
-    // Fixed Issue 1: Do not force an initial assignee. Let it remain empty.
-  }, [data, visibleProjects, showTaskModal]);
+  }, [showTaskModal]);
 
   // Real-time validation for subtasks deadlines against main task deadline
   React.useEffect(() => {
@@ -1217,6 +1213,7 @@ export default function TasksPage() {
       title: ntTitle,
       project: ntProject,
       assignee: ntAssignees.length > 0 ? ntAssignees[0].id : "",
+      assignees: ntAssignees.map(a => a.id),
       priority: (ntPriority || "None") as any,
       dueDate: ntDue || "",
       estimate: ntEstimate !== "" ? parseFloat(ntEstimate) : 0,
@@ -1547,7 +1544,7 @@ export default function TasksPage() {
                               <span className={`priority-dot priority-${task.priority}`} />
                               <div>
                                 <div style={{ fontSize: "13px", fontWeight: 500 }}>{task.title}</div>
-                                <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{task.id}</div>
+                                {task.id.length <= 10 && <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{task.id}</div>}
                               </div>
                             </div>
                           </td>
@@ -1832,10 +1829,10 @@ export default function TasksPage() {
                     <SearchableSelect
                       className="login-input"
                       value={ntProject}
-                      onChange={(val) => setNtProject(val)}
+                      onChange={(val) => { setNtProject(val); setNtAssignees([]); }}
                       required
                       placeholder={t("Select Project")}
-                      options={visibleProjects.map((p) => ({ label: `${p.name} (${p.id})`, value: p.id }))}
+                      options={visibleProjects.map((p) => ({ label: p.client ? `${p.name} (${p.client})` : p.name, value: p.id }))}
                     />
                   </div>
                   <div className="login-field">

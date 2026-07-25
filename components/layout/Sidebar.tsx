@@ -133,7 +133,7 @@ export default function Sidebar() {
     {
       id: "intelligence",
       items: [
-        { id: "analytics", label: t("Consultant Analytics"), icon: <IconChart />, route: "/analytics" },
+        { id: "analytics", label: t("User Analytics"), icon: <IconChart />, route: "/analytics" },
         { id: "ai", label: t("AI Insights Center"), icon: <IconCpu />, route: "/ai" },
         { id: "timesheet-ai", label: t("AI Center"), icon: <IconCpu />, route: "/timesheet-ai" },
       ],

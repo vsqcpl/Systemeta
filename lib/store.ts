@@ -62,7 +62,7 @@ export const NAVIGATION_TRANSLATIONS: Record<string, Record<string, string>> = {
     leave: "Leave Management",
     expenses: "Travel & Expenses",
     billing: "Billing & Finance",
-    analytics: "Consultant Analytics",
+    analytics: "User Analytics",
     ai: "AI Center",
     admin: "Admin Panel",
     systemAdmin: "System administration",
@@ -85,7 +85,7 @@ export const NAVIGATION_TRANSLATIONS: Record<string, Record<string, string>> = {
     leave: "Leave Management",
     expenses: "Travel & Expenses",
     billing: "Billing & Finance",
-    analytics: "Consultant Analytics",
+    analytics: "User Analytics",
     ai: "AI Center",
     admin: "Admin Panel",
     systemAdmin: "System administration",
@@ -451,7 +451,7 @@ export const translations = {
     'Timesheets': 'Timesheets',
     'Leave Management': 'Leave Management',
     'Travel & Expenses': 'Travel & Expenses',
-    'Consultant Analytics': 'Consultant Analytics',
+    'User Analytics': 'User Analytics',
     'Gantt / Timeline': 'Gantt / Timeline',
     // Common / Admin
     'Search': 'Search',
@@ -509,7 +509,7 @@ export const translations = {
     'Timesheets': 'Timesheets',
     'Leave Management': 'Leave Management',
     'Travel & Expenses': 'Travel & Expenses',
-    'Consultant Analytics': 'Consultant Analytics',
+    'User Analytics': 'User Analytics',
     'Gantt / Timeline': 'Gantt / Timeline',
     // Common / Admin
     'Search': 'Search',
@@ -567,7 +567,7 @@ export const translations = {
     'Timesheets': 'समय पत्रक',
     'Leave Management': 'अवकाश प्रबंधन',
     'Travel & Expenses': 'यात्रा और व्यय',
-    'Consultant Analytics': 'सलाहकार विश्लेषिकी',
+    'User Analytics': 'उपयोगकर्ता विश्लेषिकी',
     'Gantt / Timeline': 'गैंट / समयरेखा',
     // Common / Admin
     'Search': 'खोजें',
@@ -625,7 +625,7 @@ export const translations = {
     'Timesheets': 'الجداول الزمنية',
     'Leave Management': 'إدارة الإجازات',
     'Travel & Expenses': 'السفر والمصاريف',
-    'Consultant Analytics': 'تحليلات المستشار',
+    'User Analytics': 'تحليلات المستخدم',
     'Gantt / Timeline': 'مخطط غانت / الجدول الزمني',
     // Common / Admin
     'Search': 'بحث',
@@ -681,7 +681,7 @@ export const translations = {
     'Leave Management': 'Gestion des congés',
     'Travel & Expenses': 'Déplacements et dépenses',
     'Billing & Finance': 'Facturation et finances',
-    'Consultant Analytics': 'Analyses des consultants',
+    'User Analytics': 'Analyses des utilisateurs',
     'AI Insights Center': 'Centre de perspectives IA',
     'Admin Panel': 'Panneau d\'administration',
     'Gantt / Timeline': 'Gantt / Calendrier',
@@ -739,7 +739,7 @@ export const translations = {
     'Leave Management': 'Urlaubsverwaltung',
     'Travel & Expenses': 'Reisen & Spesen',
     'Billing & Finance': 'Abrechnung und Finanzen',
-    'Consultant Analytics': 'Berateranalysen',
+    'User Analytics': 'Benutzeranalysen',
     'AI Insights Center': 'KI-Erkenntniszentrum',
     'Admin Panel': 'Verwaltungskonsole',
     'Gantt / Timeline': 'Gantt / Zeitachse',
@@ -797,7 +797,7 @@ export const translations = {
     'Leave Management': 'Gestión de permisos',
     'Travel & Expenses': 'Viajes y gastos',
     'Billing & Finance': 'Facturación y finanzas',
-    'Consultant Analytics': 'Análisis de consultores',
+    'User Analytics': 'Análisis de usuarios',
     'AI Insights Center': 'Centro de información de IA',
     'Admin Panel': 'Panel de administración',
     'Gantt / Timeline': 'Gantt / Línea de tiempo',
@@ -857,7 +857,7 @@ export const translations = {
     'Timesheets': 'Folhas de Horas',
     'Leave Management': 'Gestão de Ausências',
     'Travel & Expenses': 'Viagens e Despesas',
-    'Consultant Analytics': 'Análise de Consultores',
+    'User Analytics': 'Análise de Usuários',
     'Gantt / Timeline': 'Gantt / Cronograma',
     // Common / Admin
     'Search': 'Pesquisar',
@@ -915,7 +915,7 @@ export const translations = {
     'Timesheets': 'タイムシート',
     'Leave Management': '休暇管理',
     'Travel & Expenses': '出張と経費',
-    'Consultant Analytics': 'コンサルタント分析',
+    'User Analytics': 'ユーザー分析',
     'Gantt / Timeline': 'ガント / タイムライン',
     // Common / Admin
     'Search': '検索',
@@ -973,7 +973,7 @@ export const translations = {
     'Timesheets': '工时表',
     'Leave Management': '假期管理',
     'Travel & Expenses': '差旅与费用',
-    'Consultant Analytics': '顾问分析',
+    'User Analytics': '用户分析',
     'Gantt / Timeline': '甘特图 / 时间线',
     // Common / Admin
     'Search': '搜索',
@@ -2762,6 +2762,16 @@ const mapUserToConsultant = (user: any, timesheets?: any[]): Consultant => {
     color = "#ec4899";
     billRate = 240;
     skills = ["Data", "BI", "Python"];
+  } else if (roleName === "client_manager" || roleName === "Client Manager") {
+    dept = "Client Relations";
+    color = "#f59e0b";
+    billRate = 320;
+    skills = ["CRM", "Client Mgmt", "Sales"];
+  } else if (roleName === "client_contact" || roleName === "Client Contact") {
+    dept = "External Client";
+    color = "#8b5cf6";
+    billRate = 0;
+    skills = ["Stakeholder", "Review"];
   }
 
   const avatar = user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -2781,12 +2791,6 @@ const mapUserToConsultant = (user: any, timesheets?: any[]): Consultant => {
       });
       utilization = Math.min(100, Math.round((totalHours / (userTimesheets.length * 40)) * 100));
     }
-  }
-
-  // Fallback to a realistic, deterministic mock utilization if no timesheets/hours logged
-  if (utilization === 0) {
-    const codeSum = (user.id.charCodeAt(0) || 0) + (user.id.charCodeAt(1) || 0) * 5;
-    utilization = 60 + (codeSum % 31); // 60% to 90%
   }
 
   const availability = 100 - utilization;
@@ -2957,12 +2961,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       const users = (usersList || []).map(mapUserToUser);
-      const consultants = (usersList || [])
-        .filter((u: any) => {
-          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-          return r === "consultant" || r === "senior consultant";
-        })
-        .map((u: any) => mapUserToConsultant(u, timesheets));
+      const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, timesheets));
 
       // Fetch CRM data from the API (best-effort — gracefully ignore failures for non-CM roles)
       const [clientsRes, contactsRes, callsRes, meetingsRes, opportunitiesRes, requirementsRes, followUpsRes] = await Promise.all([
@@ -3262,8 +3261,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...newTask, status: targetCol }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to create task");
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || "Failed to create task");
+        }
         return res.json();
       })
       .then((task) => {
@@ -3769,12 +3771,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList
-              .filter((u: any) => {
-                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-                return r === "consultant" || r === "senior consultant";
-              })
-              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3805,12 +3802,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList
-              .filter((u: any) => {
-                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-                return r === "consultant" || r === "senior consultant";
-              })
-              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3944,12 +3936,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList
-              .filter((u: any) => {
-                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-                return r === "consultant" || r === "senior consultant";
-              })
-              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -4018,12 +4005,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       ]);
       
       const users = (usersList || []).map(mapUserToUser);
-      const consultants = (usersList || [])
-        .filter((u: any) => {
-          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-          return r === "consultant" || r === "senior consultant";
-        })
-        .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+      const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
       
       set((state) => ({
         data: {
@@ -4510,12 +4492,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       // Re-map consultants with updated timesheets to update utilization in UI
-      const updatedConsultants = state.data.users
-        .filter((u: any) => {
-          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-          return r === "consultant" || r === "senior consultant";
-        })
-        .map((u: any) => mapUserToConsultant(u, updatedTimesheets));
+      const updatedConsultants = state.data.users.map((u: any) => mapUserToConsultant(u, updatedTimesheets));
 
       return {
         data: {

@@ -354,6 +354,62 @@ router.post("/:id/members", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// DELETE /api/projects/:id/members - Remove a user from project team
+router.delete("/:id/members", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({ message: "User ID is required" });
+    }
+
+    const project = await prisma.project.findUnique({ where: { id } });
+    if (!project) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    if (req.user.role !== "super_admin") {
+      if (req.user.role !== "project_manager") {
+        return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can manage team members" });
+      }
+      const isAssigned = await prisma.projectAssignment.findFirst({
+        where: { projectId: id, userId: req.user.id }
+      });
+      if (!isAssigned) {
+        return res.status(403).json({ message: "Forbidden: You do not manage this project" });
+      }
+    }
+
+    await prisma.projectAssignment.deleteMany({
+      where: {
+        userId,
+        projectId: id
+      }
+    });
+
+    invalidateDashboardCache();
+
+    const updatedProject = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        users: { select: { userId: true } }
+      }
+    });
+
+    const formatted = {
+      ...updatedProject,
+      manager: updatedProject?.managerName || "",
+      team: updatedProject?.users.map((u) => u.userId) || []
+    };
+
+    return res.json(formatted);
+  } catch (error) {
+    console.error("DELETE /projects/:id/members error:", error);
+    return res.status(500).json({ message: "Internal server error removing member from project" });
+  }
+});
+
 // GET /api/projects/:id/export-wbs - Export project's WBS to Excel
 router.get("/:id/export-wbs", async (req: AuthenticatedRequest, res) => {
   try {

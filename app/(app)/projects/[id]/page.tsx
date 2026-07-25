@@ -366,7 +366,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
               <span className="badge badge-gray">{p.type}</span>
               <span className={`badge ${healthBadge}`}>{p.health.replace("-", " ")}</span>
-              <span className="badge badge-brand">{p.id}</span>
+              {p.client ? <span className="badge badge-brand">{p.client}</span> : null}
             </div>
             <h1
               style={{
@@ -433,7 +433,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
               value={p.id}
               onChange={(val) => handleSwitchProject(val)}
               placeholder="Select Project"
-              options={visibleProjects.map((pr) => ({ label: `${pr.id}: ${pr.name.substring(0, 25)}...`, value: pr.id }))}
+              options={visibleProjects.map((pr) => ({ label: pr.client ? `${pr.name} (${pr.client})` : pr.name, value: pr.id }))}
             />
             <button
               id="project-export-pdf"
@@ -721,7 +721,62 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                   return (
                     <div key={tid} style={{ marginBottom: "12px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {/* Remove team member button */}
+                          <button
+                            title={`Remove ${c.name} from project`}
+                            onClick={() => {
+                              if (confirm(`Remove ${c.name} from project ${p.name}?`)) {
+                                fetch(`/api/projects/${p.id}/members`, {
+                                  method: "DELETE",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ userId: tid }),
+                                })
+                                  .then((res) => {
+                                    if (!res.ok) throw new Error("Failed to remove member");
+                                    return res.json();
+                                  })
+                                  .then((updatedProj) => {
+                                    useAppStore.setState((state) => {
+                                      const projects = state.data.projects.map((proj) =>
+                                        proj.id === updatedProj.id ? { ...proj, team: updatedProj.team } : proj
+                                      );
+                                      return { data: { ...state.data, projects } };
+                                    });
+                                    showToast("Member removed from project", "success");
+                                  })
+                                  .catch((err) => {
+                                    showToast("Error: " + err.message, "danger");
+                                  });
+                              }
+                            }}
+                            style={{
+                              background: "rgba(239, 68, 68, 0.1)",
+                              color: "#ef4444",
+                              border: "none",
+                              borderRadius: "6px",
+                              width: "20px",
+                              height: "20px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              transition: "all 0.15s ease",
+                              flexShrink: 0,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#ef4444";
+                              e.currentTarget.style.color = "#ffffff";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
+                              e.currentTarget.style.color = "#ef4444";
+                            }}
+                          >
+                            ✕
+                          </button>
                           <div
                             className="avatar"
                             style={{
@@ -763,7 +818,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
         </div>
       </div>
-      <QuickAddModal open={showAddTask} onClose={() => setShowAddTask(false)} />
+      <QuickAddModal open={showAddTask} onClose={() => setShowAddTask(false)} defaultTab="task" defaultProjectId={p.id} />
 
       {/* Add Milestone Modal */}
       {showAddMilestone && (

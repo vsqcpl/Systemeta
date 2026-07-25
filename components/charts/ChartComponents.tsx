@@ -701,7 +701,7 @@ export function ProjectBudgetChart({ customProjects }: ProjectBudgetProps) {
     };
 
     const activeListSlice = activeList.slice(0, 5);
-    const labels = activeListSlice.map((p) => p.id);
+    const labels = activeListSlice.map((p) => p.name.length > 18 ? p.name.slice(0, 18) + '...' : p.name);
     const spent = activeListSlice.map((p) => Math.round((p.spent / p.budget) * 100));
 
     if (chartInstanceRef.current) {

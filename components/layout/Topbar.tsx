@@ -90,7 +90,7 @@ export default function Topbar() {
       "/leave": t("Leave Management"),
       "/expenses": t("Travel & Expenses"),
       "/billing": t("Billing & Finance"),
-      "/analytics": t("Consultant Analytics"),
+      "/analytics": t("User Analytics"),
       "/ai": t("AI Insights Center"),
       "/admin": t("Admin Panel"),
       "/cm-dashboard": "CRM Dashboard",

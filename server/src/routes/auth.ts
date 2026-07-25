@@ -35,6 +35,10 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
+    if (!process.env.DATABASE_URL) {
+      return res.status(500).json({ message: "Server Configuration Error: DATABASE_URL environment variable is missing." });
+    }
+
     // Inject a custom header so the databaseHook can read rememberMe
     // Note: Better Auth's signInEmail Zod schema strictly strips unknown fields from the body.
     // We cannot simply pass { isExtended: true } in the body, as it will never reach the session.create hook.
@@ -46,7 +50,7 @@ router.post("/login", async (req, res) => {
     }
 
     // Call Better Auth to sign in via handler to ensure context.request exists for hooks
-    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5000");
+    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5005");
     requestUrl.pathname = "/api/auth/sign-in/email";
     
     const headers = fromNodeHeaders(req.headers);
@@ -68,7 +72,13 @@ router.post("/login", async (req, res) => {
       }
     });
 
-    const data = await response.json();
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : { message: `Server authentication error (status ${response.status})` };
+    } catch {
+      data = { message: text || `Server error (status ${response.status})` };
+    }
 
     if (response.status !== 200) {
       return res.status(response.status).json(data);
@@ -110,7 +120,7 @@ router.post("/login", async (req, res) => {
 // POST /api/auth/logout
 router.post("/logout", async (req, res) => {
   try {
-    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5000");
+    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5005");
     requestUrl.pathname = "/api/auth/sign-out";
     
     const request = new Request(requestUrl.href, {

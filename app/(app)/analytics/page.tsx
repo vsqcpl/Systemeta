@@ -464,7 +464,7 @@ export default function AnalyticsPage() {
         heightLeft -= pdfHeight;
       }
 
-      pdf.save("Consultant-Analytics-Report.pdf");
+      pdf.save("User-Analytics-Report.pdf");
       showToast("PDF report downloaded successfully.", "success");
     } catch (err) {
       console.error("PDF generation failed:", err);
@@ -477,7 +477,7 @@ export default function AnalyticsPage() {
       {/* Page Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">{t("Consultant Analytics")}</h1>
+          <h1 className="page-title">{t("User Analytics")}</h1>
           <p className="page-subtitle">
             {t("Performance insights")} · {selectedWeek.label}, {MONTH_NAMES[month]} {year}
           </p>
@@ -489,7 +489,7 @@ export default function AnalyticsPage() {
               value={selectedConsultantId}
               onChange={(e) => setSelectedConsultantId(e.target.value)}
             >
-              <option value="all">{t("All Consultants")}</option>
+              <option value="all">{t("All Users")}</option>
               {data.consultants.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
@@ -662,7 +662,7 @@ export default function AnalyticsPage() {
                  <div style={{ fontSize: "12.5px", color: "var(--text-secondary)", lineHeight: 1.6 }}>
                     {trendText} Current efficiency sits at {c.efficiency}%. 
                     <br/><br/>
-                    <strong>Current Week Focus:</strong> {c.weeklyNonBillable > 0 ? `The consultant has accumulated ${c.weeklyNonBillable} non-billable hours, which impacts overall profitability despite a score of ${c.score}.` : `The consultant is operating at optimal billable efficiency with zero non-billable drag.`}
+                    <strong>Current Week Focus:</strong> {c.weeklyNonBillable > 0 ? `The user has accumulated ${c.weeklyNonBillable} non-billable hours, which impacts overall profitability despite a score of ${c.score}.` : `The user is operating at optimal billable efficiency with zero non-billable drag.`}
                  </div>
               </div>
             </div>

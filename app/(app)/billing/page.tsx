@@ -953,7 +953,7 @@ export default function BillingPage() {
                 >
                   {data.projects.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} ({p.id})
+                      {p.client ? `${p.name} (${p.client})` : p.name}
                     </option>
                   ))}
                 </select>

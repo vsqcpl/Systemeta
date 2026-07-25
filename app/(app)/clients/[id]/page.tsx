@@ -247,7 +247,7 @@ export default function ClientProfilePage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>{t("ID")}</th>
+                    <th>{t("Type")}</th>
                     <th>{t("Name")}</th>
                     <th>{t("Status")}</th>
                     <th>{t("Health")}</th>
@@ -258,7 +258,7 @@ export default function ClientProfilePage() {
                 <tbody>
                   {clientProjects.length > 0 ? clientProjects.map(pr => (
                     <tr key={pr.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/projects/${pr.id}`)}>
-                      <td><span className="badge badge-brand">{pr.id}</span></td>
+                      <td><span className="badge badge-brand">{pr.type || "Project"}</span></td>
                       <td style={{ fontWeight: 500 }}>{pr.name}</td>
                       <td><span className="badge badge-neutral">{pr.status}</span></td>
                       <td>

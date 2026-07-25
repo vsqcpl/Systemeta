@@ -98,7 +98,7 @@ export default function SearchOverlay() {
     { label: 'Leave Management', route: '/leave', keywords: ['leave', 'vacation', 'sick', 'calendar', 'management'] },
     { label: 'Travel & Expenses', route: '/expenses', keywords: ['expenses', 'travel', 'meals', 'spend', 'reimbursement'] },
     { label: 'Billing & Finance', route: '/billing', keywords: ['billing', 'finance', 'invoice', 'payment'] },
-    { label: 'Consultant Analytics', route: '/analytics', keywords: ['analytics', 'charts', 'performance', 'utilization'] },
+    { label: 'User Analytics', route: '/analytics', keywords: ['analytics', 'charts', 'performance', 'utilization', 'user', 'consultant'] },
     { label: 'AI Insights Center', route: '/ai', keywords: ['ai', 'insights', 'intelligence', 'analytics'] },
     { label: 'Admin Panel', route: '/admin', keywords: ['admin', 'settings', 'users', 'system'] },
     { label: 'System Settings', route: '/admin?tab=settings', keywords: ['settings', 'system', 'config'] },

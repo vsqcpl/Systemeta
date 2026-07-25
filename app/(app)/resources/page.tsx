@@ -148,11 +148,12 @@ export default function ResourcesPage() {
 
   // Deterministic utilization formula to replace Math.random() (resolves Bug #1)
   const getDeterministicUtil = (cId: string, wIdx: number) => {
+    const consultant = data.consultants.find((x) => x.id === cId);
+    if (!consultant || !consultant.utilization || consultant.utilization === 0) return 0;
     const codeSum = (cId.charCodeAt(0) || 0) + (cId.charCodeAt(1) || 0) * 5;
     const variation = ((codeSum + wIdx * 11) % 31) - 15; // -15% to +15%
-    const consultant = data.consultants.find((x) => x.id === cId);
-    const base = consultant ? consultant.utilization : 75;
-    return Math.min(100, Math.max(20, base + variation));
+    const base = consultant.utilization;
+    return Math.min(100, Math.max(0, base + variation));
   };
 
   return (
@@ -375,8 +376,8 @@ export default function ResourcesPage() {
                     <td>
                       <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                         {assignedProjects.slice(0, 2).map((p) => (
-                          <span key={p.id} className="badge badge-gray" style={{ fontSize: "10px" }}>
-                            {p.id}
+                          <span key={p.id} className="badge badge-gray" style={{ fontSize: "10px" }} title={p.name}>
+                            {p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name}
                           </span>
                         ))}
                         {assignedProjects.length > 2 && (
@@ -603,7 +604,7 @@ export default function ResourcesPage() {
                       projects.map(p => (
                         <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
                           <div>
-                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{p.name} <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontWeight: "normal", marginLeft: "6px" }}>{p.id}</span></div>
+                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</div>
                             <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>Client: {p.client}</div>
                           </div>
                           <div className={`badge ${p.health === 'on-track' ? 'badge-success' : p.health === 'at-risk' ? 'badge-warning' : 'badge-danger'}`}>

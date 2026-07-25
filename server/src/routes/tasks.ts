@@ -112,13 +112,44 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
+    let projectRecord = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { id: project },
+          { name: project },
+          { code: project },
+        ],
+      },
+    });
+    if (!projectRecord) {
+      const allProjects = await prisma.project.findMany();
+      projectRecord = allProjects.find((p) => p.client ? `${p.name} (${p.client})` === project : false) || null;
+    }
+    const resolvedProjectId = projectRecord ? projectRecord.id : project;
+
+    const rawAssigneeList = assignees && Array.isArray(assignees) && assignees.length > 0 ? assignees : [assignee];
+    const uniqueCandidateIds = Array.from(new Set(rawAssigneeList.filter(Boolean))) as string[];
+
+    const existingUsers = await prisma.user.findMany({
+      where: { id: { in: uniqueCandidateIds } },
+    });
+    const validUserIds = existingUsers.map((u) => u.id);
+
+    // If candidate assignees are not in User table, try fallback to avoid foreign key crash
+    const resolvedAssignee = validUserIds.includes(assignee)
+      ? assignee
+      : validUserIds.length > 0
+      ? validUserIds[0]
+      : req.user.id;
+    const resolvedAssignees = validUserIds.length > 0 ? validUserIds : [req.user.id];
+
     const newTask = await prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
           id: randomUUID(),
           title,
-          projectId: project,
-          assigneeId: assignee,
+          projectId: resolvedProjectId,
+          assigneeId: resolvedAssignee,
           priority: priority || "None",
           dueDate: dueDate || "",
           estimate: estimate != null && estimate !== "" ? parseFloat(estimate) : 0,
@@ -128,18 +159,17 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
         },
       });
 
-      const list = assignees && Array.isArray(assignees) && assignees.length > 0 ? assignees : [assignee];
-      
       await tx.taskAssignment.createMany({
-        data: list.map((uId: string) => ({
+        data: resolvedAssignees.map((uId: string) => ({
           taskId: task.id,
           userId: uId,
         })),
+        skipDuplicates: true,
       });
 
       return {
         ...task,
-        assignees: list,
+        assignees: resolvedAssignees,
       };
     });
 
@@ -217,7 +247,11 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    const finalAssigneeId = assigneeId || assignee;
+    let finalAssigneeId = assigneeId || assignee;
+    if (finalAssigneeId) {
+      const exists = await prisma.user.findUnique({ where: { id: finalAssigneeId } });
+      if (!exists) finalAssigneeId = undefined;
+    }
 
     const updatedTask = await prisma.$transaction(async (tx) => {
       if (assignees !== undefined && Array.isArray(assignees)) {
@@ -225,12 +259,18 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
           where: { taskId: id },
         });
         if (assignees.length > 0) {
-          await tx.taskAssignment.createMany({
-            data: assignees.map((userId: string) => ({
-              taskId: id,
-              userId: userId,
-            })),
-          });
+          const uniqueIds = Array.from(new Set(assignees.filter(Boolean))) as string[];
+          const validUsers = await prisma.user.findMany({ where: { id: { in: uniqueIds } } });
+          const validIds = validUsers.map((u) => u.id);
+          if (validIds.length > 0) {
+            await tx.taskAssignment.createMany({
+              data: validIds.map((userId: string) => ({
+                taskId: id,
+                userId: userId,
+              })),
+              skipDuplicates: true,
+            });
+          }
         }
       }
 
