@@ -248,10 +248,13 @@ export type ClientPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 export interface Client {
   id: string;
   companyName: string;
+  company?: string;
+  contactPerson?: string;
   clientType: string;
   industry: string;
   website: string;
   gstNumber: string;
+  gst?: string;
   panNumber: string;
   address: string;
   country: string;
@@ -264,8 +267,10 @@ export interface Client {
   clientCategory: string;
   priority: ClientPriority;
   notes: string;
-  accountOwner: string; // User ID
+  accountOwner: string; // User ID or Manager Name
+  assignedManagerIds?: string;
   createdAt: string;
+  deletedAt?: string | null;
 }
 
 export interface ClientContact {

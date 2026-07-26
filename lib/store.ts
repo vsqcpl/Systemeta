@@ -386,7 +386,8 @@ interface AppStore {
   
   // --- CRM Actions ---
   addClient: (client: Omit<Client, "id" | "createdAt">) => void;
-  updateClient: (id: string, updates: Partial<Client>) => void;
+  updateClient: (id: string, updates: Partial<Client>) => Promise<void>;
+  deleteClient: (id: string) => Promise<boolean>;
   deactivateClient: (id: string) => void;
   activateClient: (id: string) => void;
   addContact: (contact: Omit<ClientContact, "id">) => void;
@@ -4098,14 +4099,86 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  updateClient: (id, updates) => set((state) => ({
-    data: {
-      ...state.data,
-      clients: state.data.clients.map(c => 
-        c.id === id ? { ...c, ...updates } : c
-      )
+  updateClient: async (id, updates) => {
+    try {
+      const res = await fetch(`/api/client-manager/clients/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updates.companyName || updates.company,
+          company: updates.company || updates.companyName,
+          contactPerson: updates.contactPerson,
+          email: updates.email,
+          phone: updates.phone,
+          gst: updates.gst || updates.gstNumber,
+          notes: updates.notes,
+          industry: updates.industry,
+          website: updates.website,
+          address: updates.address,
+          status: updates.status,
+          tier: updates.clientCategory,
+          assignedManagerIds: updates.assignedManagerIds || updates.accountOwner,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        set((state) => ({
+          data: {
+            ...state.data,
+            clients: state.data.clients.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    ...updates,
+                    companyName: saved.name || saved.company || updates.companyName || c.companyName,
+                    status: saved.status || updates.status || c.status,
+                    industry: saved.industry || updates.industry || c.industry,
+                  }
+                : c
+            ),
+          },
+        }));
+        useAppStore.getState().showToast("Client updated successfully", "success");
+        return;
+      }
+    } catch (e) {
+      console.error("Update client API error:", e);
     }
-  })),
+    set((state) => ({
+      data: {
+        ...state.data,
+        clients: state.data.clients.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      },
+    }));
+  },
+
+  deleteClient: async (id) => {
+    try {
+      const res = await fetch(`/api/client-manager/clients/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((state) => ({
+          data: {
+            ...state.data,
+            clients: state.data.clients.filter((c) => c.id !== id),
+          },
+        }));
+        useAppStore.getState().showToast("Client deleted successfully", "success");
+        return true;
+      }
+    } catch (err: any) {
+      console.error("Delete client API error:", err);
+    }
+    // Fallback local update
+    set((state) => ({
+      data: {
+        ...state.data,
+        clients: state.data.clients.filter((c) => c.id !== id),
+      },
+    }));
+    return true;
+  },
 
   deactivateClient: async (id) => {
     try {

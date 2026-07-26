@@ -113,6 +113,8 @@ async function checkRecordAccess(
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
 
+// ─── CLIENTS ──────────────────────────────────────────────────────────────────
+
 router.get("/clients", async (req: Request, res: Response) => {
   try {
     const isSuperAdmin = (req as any).user?.role === "super_admin";
@@ -120,11 +122,14 @@ router.get("/clients", async (req: Request, res: Response) => {
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
     const clients = await prisma.client.findMany({
-      where: isSuperAdmin
-        ? undefined
-        : isClientContact
-        ? { id: userClientId || undefined }
-        : { createdBy: userId },
+      where: {
+        deletedAt: null,
+        ...(isSuperAdmin
+          ? {}
+          : isClientContact
+          ? { id: userClientId || undefined }
+          : { createdBy: userId }),
+      },
       include: { contacts: true, _count: { select: { opportunities: true, requirements: true } } },
       orderBy: { createdAt: "desc" },
     });
@@ -136,12 +141,51 @@ router.get("/clients", async (req: Request, res: Response) => {
 
 router.post("/clients", async (req: Request, res: Response) => {
   try {
-    const { name, industry, website, address, status, tier } = req.body;
+    const {
+      name,
+      company,
+      contactPerson,
+      email,
+      phone,
+      gst,
+      notes,
+      industry,
+      website,
+      address,
+      status,
+      tier,
+      assignedManagerIds,
+    } = req.body;
+
+    const clientName = name || company || "Untitled Client";
     const userId = (req as any).user?.id ?? "system";
+    
     const client = await prisma.client.create({
-      data: { name, industry, website, address, status, tier, createdBy: userId },
+      data: {
+        name: clientName,
+        company: company || clientName,
+        contactPerson: contactPerson || null,
+        email: email || null,
+        phone: phone || null,
+        gst: gst || null,
+        notes: notes || null,
+        industry: industry || null,
+        website: website || null,
+        address: address || null,
+        status: status || "active",
+        tier: tier || "standard",
+        assignedManagerIds: assignedManagerIds || null,
+        createdBy: userId,
+      },
     });
-    await createClientActivityNotification(userId, "success", "Client Created", `Client "${name}" has been created.`, "general");
+
+    await createClientActivityNotification(
+      userId,
+      "success",
+      "Client Created",
+      `Client "${clientName}" has been created.`,
+      "general"
+    );
     res.status(201).json(client);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -152,8 +196,8 @@ router.get("/clients/:id", async (req: Request, res: Response) => {
   try {
     const isSuperAdmin = (req as any).user?.role === "super_admin";
     const userId = (req as any).user?.id;
-    const client = await prisma.client.findUnique({
-      where: { id: req.params.id },
+    const client = await prisma.client.findFirst({
+      where: { id: req.params.id, deletedAt: null },
       include: {
         contacts: true,
         calls: { orderBy: { scheduledAt: "desc" } },
@@ -175,20 +219,58 @@ router.get("/clients/:id", async (req: Request, res: Response) => {
 
 router.put("/clients/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
-    const client = await prisma.client.findUnique({ where: { id: req.params.id } });
+    const client = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
     if (!client) return res.status(404).json({ error: "Client not found" });
     if (!isSuperAdmin && client.createdBy !== userId) {
       return res.status(403).json({ error: "Access denied. You do not own this client record." });
     }
 
-    const { name, industry, website, address, status, tier } = req.body;
+    const {
+      name,
+      company,
+      contactPerson,
+      email,
+      phone,
+      gst,
+      notes,
+      industry,
+      website,
+      address,
+      status,
+      tier,
+      assignedManagerIds,
+    } = req.body;
+
+    const updatedName = name || company || client.name;
+
     const updated = await prisma.client.update({
       where: { id: req.params.id },
-      data: { name, industry, website, address, status, tier },
+      data: {
+        name: updatedName,
+        company: company !== undefined ? company : client.company,
+        contactPerson: contactPerson !== undefined ? contactPerson : client.contactPerson,
+        email: email !== undefined ? email : client.email,
+        phone: phone !== undefined ? phone : client.phone,
+        gst: gst !== undefined ? gst : client.gst,
+        notes: notes !== undefined ? notes : client.notes,
+        industry: industry !== undefined ? industry : client.industry,
+        website: website !== undefined ? website : client.website,
+        address: address !== undefined ? address : client.address,
+        status: status !== undefined ? status : client.status,
+        tier: tier !== undefined ? tier : client.tier,
+        assignedManagerIds: assignedManagerIds !== undefined ? assignedManagerIds : client.assignedManagerIds,
+      },
     });
-    await createClientActivityNotification(userId, "info", "Client Updated", `Client "${name}" details have been updated.`, "general");
+
+    await createClientActivityNotification(
+      userId,
+      "info",
+      "Client Updated",
+      `Client "${updatedName}" details have been updated.`,
+      "general"
+    );
     res.json(updated);
   } catch (e: any) {
     res.status(500).json({ error: e.message });
@@ -197,17 +279,31 @@ router.put("/clients/:id", async (req: Request, res: Response) => {
 
 router.delete("/clients/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
-    const client = await prisma.client.findUnique({ where: { id: req.params.id } });
+    const client = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
     if (!client) return res.status(404).json({ error: "Client not found" });
     if (!isSuperAdmin && client.createdBy !== userId) {
       return res.status(403).json({ error: "Access denied. You do not own this client record." });
     }
 
-    await prisma.client.delete({ where: { id: req.params.id } });
-    await createClientActivityNotification(userId, "alert", "Client Deleted", `Client "${client.name}" has been deleted.`, "general");
-    res.json({ success: true });
+    // Perform Soft Delete to preserve historical invoices, projects, and milestones
+    await prisma.client.update({
+      where: { id: req.params.id },
+      data: {
+        deletedAt: new Date(),
+        status: "Archived",
+      },
+    });
+
+    await createClientActivityNotification(
+      userId,
+      "alert",
+      "Client Deleted",
+      `Client "${client.name}" has been soft-deleted. Historical records preserved.`,
+      "general"
+    );
+    res.json({ success: true, message: "Client soft-deleted successfully" });
   } catch (e: any) {
     res.status(500).json({ error: e.message });
   }

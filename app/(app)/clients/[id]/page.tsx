@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
+import EditClientModal from "@/components/EditClientModal";
+import DeleteClientModal from "@/components/DeleteClientModal";
 import {
   IconUsers,
   IconBriefcase,
@@ -21,11 +23,24 @@ export default function ClientProfilePage() {
   const deactivateClient = useAppStore((state) => state.deactivateClient);
   const activateClient = useAppStore((state) => state.activateClient);
 
+  const currentUser = useAppStore((state) => state.currentUser);
+  const updateClient = useAppStore((state) => state.updateClient);
+  const deleteClient = useAppStore((state) => state.deleteClient);
+
   const client = data.clients?.find(c => c.id === clientId);
 
   const [activeTab, setActiveTab] = useState<"contacts" | "opportunities" | "requirements" | "communication" | "projects">("contacts");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  if (!client) {
+  const canManageClients =
+    !currentUser ||
+    currentUser.role === "super_admin" ||
+    currentUser.role === "client_manager" ||
+    currentUser.role === "director" ||
+    (currentUser as any).permissions?.crm;
+
+  if (!client || client.deletedAt) {
     return (
       <div className="page-container" style={{ padding: "48px", textAlign: "center" }}>
         <h2>{t("Client not found")}</h2>
@@ -44,6 +59,14 @@ export default function ClientProfilePage() {
     p => p.client === clientId || p.client === client.companyName
   ) || [];
 
+  const handleDeleteConfirm = async (id: string) => {
+    const success = await deleteClient(id);
+    if (success) {
+      router.push("/clients");
+    }
+    return success;
+  };
+
   return (
     <div className="page-container" style={{ animation: "fadeIn 0.5s ease-out", padding: "24px" }}>
       {/* Header */}
@@ -60,26 +83,25 @@ export default function ClientProfilePage() {
               <h1 className="page-title" style={{ margin: 0 }}>{client.companyName}</h1>
               <p className="page-subtitle" style={{ margin: 0 }}>
                 {client.industry || t("No Industry")} · {t("Manager")}: {client.accountOwner || t("Unassigned")}
+                {client.email ? ` · ${client.email}` : ""}
+                {client.phone ? ` · ${client.phone}` : ""}
               </p>
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <span className={`badge ${client.status === 'Active' ? 'badge-success' : client.status === 'Inactive' ? 'badge-danger' : 'badge-neutral'}`} style={{ height: "fit-content", padding: "6px 12px" }}>
             {client.status}
           </span>
-          {client.status === 'Active' ? (
-            <button className="btn btn-outline" onClick={() => {
-              if (confirm("Deactivate this client?")) deactivateClient(client.id);
-            }}>
-              {t("Deactivate")}
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={() => {
-              if (confirm("Activate this client?")) activateClient(client.id);
-            }}>
-              {t("Activate")}
-            </button>
+          {canManageClients && (
+            <>
+              <button className="btn btn-secondary" onClick={() => setShowEditModal(true)}>
+                {t("Edit Details")}
+              </button>
+              <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
+                {t("Delete")}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -287,6 +309,24 @@ export default function ClientProfilePage() {
 
         </div>
       </div>
+
+      {showEditModal && (
+        <EditClientModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          client={client}
+          onSave={updateClient}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteClientModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          client={client}
+          onConfirm={handleDeleteConfirm}
+        />
+      )}
     </div>
   );
 }

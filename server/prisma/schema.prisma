@@ -355,16 +355,24 @@ model PermissionOverride {
 // ─── Client Manager CRM Models ───────────────────────────────────────────────
 
 model Client {
-  id           String        @id @default(uuid())
-  name         String
-  industry     String?
-  website      String?
-  address      String?
-  status       String        @default("active")  // active, inactive, prospect
-  tier         String        @default("standard") // standard, premium, enterprise
-  createdBy    String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  name               String
+  company            String?
+  contactPerson      String?
+  email              String?
+  phone              String?
+  gst                String?
+  notes              String?
+  industry           String?
+  website            String?
+  address            String?
+  status             String        @default("active")  // active, inactive, prospect, archived
+  tier               String        @default("standard") // standard, premium, enterprise
+  assignedManagerIds String?
+  createdBy          String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
 
   contacts     Contact[]
   calls        Call[]
