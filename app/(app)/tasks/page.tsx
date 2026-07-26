@@ -762,7 +762,8 @@ function TaskDrawer({
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {task.subtasks.map((sub, sIdx) => {
                 const isSubtaskAssignee = Array.isArray(sub.assignees) && (sub.assignees.includes(user?.id || "") || sub.assignees.includes(user?.name || ""));
-                const canEditStatus = isSubtaskAssignee || isManager;
+                const isTaskAssignee = task.assignee === user?.id || task.assignee === user?.name || (Array.isArray(task.assignees) && (task.assignees.includes(user?.id || "") || task.assignees.includes(user?.name || "")));
+                const canEditStatus = isSubtaskAssignee || isTaskAssignee || isManager;
                 const isExpanded = !!expandedSubtasks[sIdx];
                 return (
                   <div key={sIdx} style={{ padding: "10px 12px", border: "1px solid var(--border-subtle)", borderRadius: "6px", background: "var(--bg-surface-2)" }}>
