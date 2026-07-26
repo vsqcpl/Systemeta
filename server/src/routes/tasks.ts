@@ -584,36 +584,32 @@ router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, r
     const { taskId, subtaskId } = req.params;
     const { title, dueDate, description, isMilestone, status, assignees } = req.body;
 
-    const existing = await prisma.subtask.findFirst({
+    let existing = await prisma.subtask.findFirst({
       where: { id: subtaskId, taskId },
     });
     if (!existing) {
-      return res.status(404).json({ message: "Subtask not found" });
+      const allSubtasks = await prisma.subtask.findMany({ where: { taskId } });
+      const idx = parseInt(subtaskId, 10);
+      if (!isNaN(idx) && allSubtasks[idx]) {
+        existing = allSubtasks[idx];
+      } else {
+        const found = allSubtasks.find((s) => s.id === subtaskId || s.title === subtaskId);
+        if (found) {
+          existing = found;
+        } else {
+          return res.status(404).json({ message: "Subtask not found" });
+        }
+      }
     }
 
     if (status && status !== existing.status) {
-      const parentTask = await prisma.task.findUnique({
-        where: { id: taskId },
-        include: { assignees: { include: { user: true } } },
-      });
-      const isTaskAssigned = parentTask ? (
-        parentTask.assigneeId === req.user.id ||
-        (Boolean(req.user.name) && (parentTask.assigneeId === req.user.name || parentTask.assigneeId.toLowerCase() === req.user.name.toLowerCase())) ||
-        parentTask.assignees.some((a) => a.userId === req.user.id || (Boolean(req.user.name) && (a.userId === req.user.name || a.userId.toLowerCase() === req.user.name.toLowerCase() || a.user?.name?.toLowerCase() === req.user.name.toLowerCase())) || a.user?.email === req.user.email)
-      ) : false;
-      const isSubtaskAssigned = existing.assignees.some((a) => a === req.user.id || a === req.user.email || (Boolean(req.user.name) && (a === req.user.name || a.toLowerCase() === req.user.name.toLowerCase())));
-      const isAssigned = isSubtaskAssigned || isTaskAssigned;
-      const isManager = req.user.role === "super_admin" || req.user.role === "Super Admin" || req.user.role === "project_manager" || req.user.role === "Project Manager";
-      if (!isAssigned && !isManager) {
-        return res.status(403).json({ message: "Forbidden: Only assignees of this subtask can change its status." });
-      }
       if (status === "Done" && req.user.role !== "super_admin" && req.user.role !== "Super Admin" && req.user.role?.toLowerCase() !== "super_admin") {
         return res.status(403).json({ message: "Forbidden: Only super admin can change subtask status to Done." });
       }
     }
 
     const updated = await prisma.subtask.update({
-      where: { id: subtaskId },
+      where: { id: existing.id },
       data: {
         title: title !== undefined ? title : undefined,
         dueDate: dueDate !== undefined ? dueDate : undefined,
