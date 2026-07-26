@@ -793,8 +793,9 @@ function TaskDrawer({
                             const val = e.target.value;
                             useAppStore.getState().updateSubtask(task.id, sub.id || sIdx.toString(), { status: val }).then(() => {
                               showToast("Subtask status updated", "success");
-                            }).catch(() => {
-                              showToast("Failed to update subtask status", "danger");
+                            }).catch((err) => {
+                              const msg = err instanceof Error && err.message ? err.message : "Failed to update subtask status";
+                              showToast(`Failed: ${msg}`, "danger");
                             });
                           }}
                           style={{
