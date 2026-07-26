@@ -415,11 +415,11 @@ export default function ExpensesPage() {
     }
 
     try {
-      const finalProject = newExpense.project || visibleProjects[0]?.id;
+      const finalProject = newExpense.project || "No Project";
       const finalConsultant = newExpense.consultant || (user?.role === "super_admin" ? (data.users?.[0]?.id || data.consultants?.[0]?.id) : user?.id);
 
-      if (!finalProject || !finalConsultant) {
-        showToast("Project and Consultant are required.", "warning");
+      if (!finalConsultant) {
+        showToast("Consultant is required.", "warning");
         return;
       }
 
@@ -562,7 +562,7 @@ export default function ExpensesPage() {
       title: (expense.description || "").replace(/^\[(AI Rejected|Policy|Outside City):\s*[^\]]+\]\s*/ig, ""),
       id: expense.id.startsWith("E") ? `EXP-${expense.id.slice(1)}` : expense.id,
       employeeName,
-      projectCode: expense.project,
+      projectCode: expense.project || "No Project",
       date: expense.date,
       submittedDate: expense.date,
       category: expense.category,
@@ -588,7 +588,7 @@ export default function ExpensesPage() {
         e.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
         e.id.toLowerCase().includes(searchTerm.toLowerCase());
 
-      const matchesProject = selectedProject === "All Projects" || e.project === selectedProject;
+      const matchesProject = selectedProject === "All Projects" || (selectedProject === "No Project" ? (!e.project || e.project === "No Project") : e.project === selectedProject);
       const matchesCategory = categoryFilter === "All Categories" || e.category === categoryFilter;
       
       let matchesStatus = true;
@@ -851,6 +851,7 @@ export default function ExpensesPage() {
                   placeholder={t("All Projects")}
                   options={[
                     { label: t("All Projects"), value: "All Projects" },
+                    { label: t("No Project"), value: "No Project" },
                     ...visibleProjects.map((p) => ({ label: p.name || p.id, value: p.id }))
                   ]}
                 />
@@ -994,7 +995,7 @@ export default function ExpensesPage() {
                               {c.name}
                             </span>
                             <span>·</span>
-                            <span>{e.project}</span>
+                            <span>{e.project || "No Project"}</span>
                             <span>·</span>
                             <span>{e.date}</span>
                             {e.receipt ? (
@@ -1801,7 +1802,10 @@ export default function ExpensesPage() {
                   onChange={(val) => handleFormChange("project", val)}
                   className="select"
                   placeholder="Select Project"
-                  options={visibleProjects.map((p) => ({ label: p.name || p.id, value: p.id }))}
+                  options={[
+                    { label: t("No Project"), value: "No Project" },
+                    ...visibleProjects.map((p) => ({ label: p.name || p.id, value: p.id }))
+                  ]}
                 />
               </div>
 

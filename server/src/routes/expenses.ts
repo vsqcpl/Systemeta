@@ -29,7 +29,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     const formatted = expenses.map((e) => ({
       id: e.id,
       consultant: e.consultantId,
-      project: e.projectId,
+      project: e.projectId || "No Project",
       category: e.category,
       description: e.description,
       amount: e.amount,
@@ -127,9 +127,10 @@ router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
     const { project, category, description, amount, currency, date, receiptUrl, modeOfTransport, fromLocation, toLocation, calculatedDistance, isOutsideCity } = req.body;
 
-    if (!project || !category || !description || !amount || !currency || !date) {
-      return res.status(400).json({ message: "All fields are required" });
+    if (!category || !description || !amount || !currency || !date) {
+      return res.status(400).json({ message: "Category, description, amount, currency, and date are required" });
     }
+    const finalProjectId = (project && project !== "No Project" && project !== "no-project" && project !== "none") ? project : null;
 
     const receiptValue = receiptUrl ? receiptUrl : null;
     const parsedAmount = parseFloat(amount);
@@ -172,7 +173,7 @@ router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
     const expense = await prisma.expense.create({
       data: {
         consultantId: req.user.id,
-        projectId: project,
+        projectId: finalProjectId,
         category,
         description: finalDescription,
         amount: parsedAmount,
@@ -192,7 +193,7 @@ router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
     return res.status(201).json({
       id: expense.id,
       consultant: expense.consultantId,
-      project: expense.projectId,
+      project: expense.projectId || "No Project",
       category: expense.category,
       description: expense.description,
       amount: expense.amount,
@@ -256,7 +257,7 @@ router.patch("/:id", requirePermission("Approve Expenses"), validateCsrf, async 
     return res.json({
       id: updated.id,
       consultant: updated.consultantId,
-      project: updated.projectId,
+      project: updated.projectId || "No Project",
       category: updated.category,
       description: updated.description,
       amount: updated.amount,

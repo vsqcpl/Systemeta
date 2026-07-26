@@ -103,13 +103,20 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
           collectedAmount,
           outstandingAmount,
           payments: i.payments,
+          lineItems: (() => {
+            try {
+              return (i as any).lineItems ? JSON.parse((i as any).lineItems) : [];
+            } catch {
+              return [];
+            }
+          })(),
         };
       }),
       milestones: milestones.map((m) => {
-        // Derive milestone status dynamically if linked invoice status exists
         let syncedStatus = m.status || "Pending";
-        if (syncedStatus === "completed") syncedStatus = "Paid";
-        if (syncedStatus === "upcoming") syncedStatus = "Pending";
+        if (syncedStatus.toLowerCase() === "upcoming" || syncedStatus.toLowerCase() === "pending") syncedStatus = "Pending";
+        else if (syncedStatus.toLowerCase() === "achieved" || syncedStatus.toLowerCase() === "completed" || syncedStatus.toLowerCase() === "paid") syncedStatus = "Achieved";
+        else if (syncedStatus.toLowerCase() === "invoiced") syncedStatus = "Invoiced";
 
         return {
           id: m.id,
@@ -119,6 +126,8 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
           date: m.date,
           status: syncedStatus,
           amount: m.amount,
+          description: (m as any).description || "",
+          taskId: (m as any).taskId || undefined,
         };
       }),
     });
@@ -128,10 +137,10 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   }
 });
 
-// POST /api/billing/milestones - Create a milestone and automatically generate invoice
+// POST /api/billing/milestones - Create a standalone milestone
 router.post("/milestones", requireRoles(["super_admin", "admin", "accounts", "client_manager", "project_manager", "Super Admin", "Admin", "Accounts", "Client Manager", "Project Manager"]), async (req: AuthenticatedRequest, res) => {
   try {
-    const { projectId, project, title, amount, date, status } = req.body;
+    const { projectId, project, title, amount, date, status, description, taskId } = req.body;
 
     const targetProjectId = projectId || project;
     if (!targetProjectId || !title || !amount || !date) {
@@ -139,11 +148,10 @@ router.post("/milestones", requireRoles(["super_admin", "admin", "accounts", "cl
     }
 
     const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ message: "Amount must be a positive number" });
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      return res.status(400).json({ message: "Amount must be a non-negative number" });
     }
 
-    // Resolve project in DB (by id or name) or fallback to first available project / auto-create
     let projectRecord = await prisma.project.findFirst({
       where: {
         OR: [
@@ -176,115 +184,90 @@ router.post("/milestones", requireRoles(["super_admin", "admin", "accounts", "cl
       });
     }
 
-    const clientName = projectRecord.client || "Client";
     const resolvedProjectId = projectRecord.id;
 
-    // Perform transaction: Create Milestone & Generate Invoice
-    const year = new Date().getFullYear();
-    const invoicePrefix = `INV-${year}-`;
-
-    const { milestone, invoice } = await prisma.$transaction(async (tx) => {
-      const createdMilestone = await tx.milestone.create({
-        data: {
-          projectId: resolvedProjectId,
-          title,
-          amount: parsedAmount,
-          date,
-          status: status || "Invoice Generated",
-        },
-      });
-
-      // Generate invoice number
-      const lastInvoice = await tx.invoice.findFirst({
-        where: { invoiceNo: { startsWith: invoicePrefix } },
-        orderBy: { invoiceNo: "desc" },
-      });
-
-      let nextSeq = 1;
-      if (lastInvoice && lastInvoice.invoiceNo) {
-        const parts = lastInvoice.invoiceNo.split("-");
-        const seq = parseInt(parts[parts.length - 1], 10);
-        if (!isNaN(seq)) nextSeq = seq + 1;
-      }
-
-      const invoiceNo = `${invoicePrefix}${String(nextSeq).padStart(3, "0")}`;
-
-      const createdInvoice = await tx.invoice.create({
-        data: {
-          projectId: resolvedProjectId,
-          client: clientName,
-          amount: parsedAmount,
-          status: "pending",
-          issued: new Date().toISOString().split("T")[0],
-          due: date || null,
-          invoiceNo,
-        },
-      });
-
-      return { milestone: createdMilestone, invoice: createdInvoice };
+    const createdMilestone = await prisma.milestone.create({
+      data: {
+        projectId: resolvedProjectId,
+        title,
+        amount: parsedAmount,
+        date,
+        status: status || "Pending",
+        description: description || null,
+        taskId: taskId || null,
+      } as any,
     });
 
-    // Notify role stakeholders
     notifyBillingRoles(
       "info",
-      "Invoice Generated from Milestone",
-      `Invoice ${invoice.invoiceNo || invoice.id} for ₹${parsedAmount.toLocaleString()} generated automatically for milestone "${title}".`,
+      "New Milestone Created",
+      `Milestone "${title}" created under project ${projectRecord.name || resolvedProjectId} (₹${parsedAmount.toLocaleString()}).`,
       "project"
     );
 
     invalidateDashboardCache();
 
     return res.status(201).json({
-      milestone: {
-        id: milestone.id,
-        project: projectRecord.name || milestone.projectId,
-        projectId: milestone.projectId,
-        title: milestone.title,
-        date: milestone.date,
-        status: milestone.status,
-        amount: milestone.amount,
-        invoiceId: invoice.id,
-        invoiceNo: invoice.invoiceNo,
-      },
-      invoice: {
-        id: invoice.id,
-        invoiceNo: invoice.invoiceNo,
-        project: projectRecord.name || invoice.projectId,
-        client: invoice.client,
-        amount: invoice.amount,
-        gst: 18,
-        taxAmount: Math.round((invoice.amount * 0.18) * 100) / 100,
-        status: invoice.status,
-        issued: invoice.issued,
-        due: invoice.due || undefined,
-        collectedAmount: 0,
-        outstandingAmount: invoice.amount,
-        payments: [],
-      },
+      id: createdMilestone.id,
+      project: projectRecord.name || createdMilestone.projectId,
+      projectId: createdMilestone.projectId,
+      title: createdMilestone.title,
+      date: createdMilestone.date,
+      status: createdMilestone.status,
+      amount: createdMilestone.amount,
+      description: (createdMilestone as any).description || "",
+      taskId: (createdMilestone as any).taskId || undefined,
     });
   } catch (error: any) {
     console.error("POST /billing/milestones error:", error?.message || error);
-    return res.status(500).json({ message: error?.message || "Internal server error creating milestone and invoice" });
+    return res.status(500).json({ message: error?.message || "Internal server error creating milestone" });
   }
 });
 
-// POST /api/billing/invoices - Generate an invoice
+// PATCH /api/billing/milestones/:id/achieved - Accountant approved status transition
+router.patch("/milestones/:id/achieved", async (req: AuthenticatedRequest, res) => {
+  try {
+    const role = req.user?.role;
+    if (role !== "accounts" && role !== "Accounts" && role !== "super_admin" && role !== "Super Admin") {
+      return res.status(403).json({ message: "Forbidden: Only Accountant or Super Admin roles can mark milestones as achieved." });
+    }
+    const { id } = req.params;
+    const milestone = await prisma.milestone.findUnique({ where: { id } });
+    if (!milestone) {
+      return res.status(404).json({ message: "Milestone not found" });
+    }
+    const updated = await prisma.milestone.update({
+      where: { id },
+      data: { status: "Achieved" },
+    });
+    invalidateDashboardCache();
+    return res.json({ success: true, milestone: updated });
+  } catch (error: any) {
+    console.error("PATCH /billing/milestones/:id/achieved error:", error?.message || error);
+    return res.status(500).json({ message: "Internal server error updating milestone status" });
+  }
+});
+
+// POST /api/billing/invoices - Generate an invoice with optional milestone & expense links
 router.post("/invoices", requireRoles(["super_admin", "admin", "accounts", "client_manager", "project_manager", "Super Admin", "Admin", "Accounts", "Client Manager", "Project Manager"]), async (req: AuthenticatedRequest, res) => {
   try {
-    const { project, client, amount, issued, due, milestoneId } = req.body;
+    const { project, client, amount, issued, due, milestoneId, milestoneIds, expenseIds, lineItems } = req.body;
 
     if (!project || !client || !amount || !issued) {
       return res.status(400).json({ message: "Required fields are missing" });
     }
 
     const parsedAmount = parseFloat(amount);
-    if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      return res.status(400).json({ message: "Amount must be a positive number" });
+    if (isNaN(parsedAmount) || parsedAmount < 0) {
+      return res.status(400).json({ message: "Amount must be a non-negative number" });
     }
 
     let projectRecord = await prisma.project.findFirst({
       where: {
-        OR: [{ id: project }, { name: project }],
+        OR: [
+          { id: project },
+          { name: project },
+        ],
       },
     });
 
@@ -293,27 +276,14 @@ router.post("/invoices", requireRoles(["super_admin", "admin", "accounts", "clie
     }
 
     if (!projectRecord) {
-      projectRecord = await prisma.project.create({
-        data: {
-          name: typeof project === "string" && project.length > 5 ? project : "Default Project",
-          client: client || "Global Tech Corp",
-          status: "active",
-          health: "on-track",
-          dueDate: issued || new Date().toISOString().split("T")[0],
-          priority: "medium",
-          type: "Implementation",
-          managerName: req.user?.name || "Client Manager",
-          budget: parsedAmount * 2,
-          spent: 0,
-          progress: 50,
-        },
-      });
+      return res.status(404).json({ message: "Specified project not found" });
     }
 
     const resolvedProjectId = projectRecord.id;
 
     const year = new Date().getFullYear();
     const invoicePrefix = `INV-${year}-`;
+    const serializedLineItems = typeof lineItems === "string" ? lineItems : JSON.stringify(lineItems || []);
 
     const invoice = await prisma.$transaction(async (tx) => {
       const lastInvoice = await tx.invoice.findFirst({
@@ -330,7 +300,7 @@ router.post("/invoices", requireRoles(["super_admin", "admin", "accounts", "clie
 
       const invoiceNo = `${invoicePrefix}${String(nextNumber).padStart(3, "0")}`;
 
-      return await tx.invoice.create({
+      const newInvoice = await tx.invoice.create({
         data: {
           projectId: resolvedProjectId,
           client: client || projectRecord.client || "Client",
@@ -339,11 +309,22 @@ router.post("/invoices", requireRoles(["super_admin", "admin", "accounts", "clie
           issued,
           due: due || null,
           invoiceNo,
-        },
+          lineItems: serializedLineItems,
+        } as any,
       });
+
+      // Update linked milestones to Invoiced status
+      const targets = Array.isArray(milestoneIds) ? milestoneIds : (milestoneId ? [milestoneId] : []);
+      if (targets.length > 0) {
+        await tx.milestone.updateMany({
+          where: { id: { in: targets } },
+          data: { status: "Invoiced" },
+        });
+      }
+
+      return newInvoice;
     });
 
-    // Role Notification
     notifyBillingRoles(
       "info",
       "Invoice Generated",
@@ -367,6 +348,7 @@ router.post("/invoices", requireRoles(["super_admin", "admin", "accounts", "clie
       collectedAmount: 0,
       outstandingAmount: invoice.amount,
       payments: [],
+      lineItems: typeof lineItems === "string" ? JSON.parse(lineItems || "[]") : (lineItems || []),
     });
   } catch (error: any) {
     console.error("POST /billing/invoices error:", error?.message || error);

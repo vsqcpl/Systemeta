@@ -20,16 +20,19 @@ export default function BillingPage() {
   const { user } = useAuth();
 
   const visibleProjects = user ? filterProjects(data.projects, user) : [];
-  const visibleProjectIds = visibleProjects.map((p) => p.id);
+  const visibleProjectIdsAndNames = new Set([
+    ...visibleProjects.map((p) => p.id),
+    ...visibleProjects.map((p) => p.name),
+  ]);
 
   const visibleInvoices = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "accounts" || user?.role === "Accounts"
     ? data.invoices
-    : data.invoices.filter((inv) => visibleProjectIds.includes(inv.project));
+    : data.invoices.filter((inv) => visibleProjectIdsAndNames.has(inv.project));
 
 
   const visibleMilestones = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "accounts" || user?.role === "Accounts"
     ? data.milestones
-    : data.milestones.filter((m) => visibleProjectIds.includes(m.project));
+    : data.milestones.filter((m) => visibleProjectIdsAndNames.has(m.project) || visibleProjectIdsAndNames.has(m.projectId));
 
   // Modal State
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -68,10 +71,15 @@ export default function BillingPage() {
   // Milestone Creation State
   const [showMilestoneModal, setShowMilestoneModal] = useState(false);
   const [milestoneTitle, setMilestoneTitle] = useState("");
+  const [milestoneDescription, setMilestoneDescription] = useState("");
   const [milestoneProject, setMilestoneProject] = useState("");
   const [milestoneAmount, setMilestoneAmount] = useState("");
   const [milestoneDate, setMilestoneDate] = useState(() => new Date().toISOString().split("T")[0]);
   const addMilestone = useAppStore((state: any) => state.addMilestone);
+
+  // Invoicing Linking State
+  const [selectedMilestoneIds, setSelectedMilestoneIds] = useState<string[]>([]);
+  const [selectedExpenseIds, setSelectedExpenseIds] = useState<string[]>([]);
 
   // Payment Modals State
   const [showPaymentModal, setShowPaymentModal] = useState<string | null>(null);
@@ -104,12 +112,14 @@ export default function BillingPage() {
         projectId: milestoneProject,
         project: milestoneProject,
         title: milestoneTitle,
+        description: milestoneDescription,
         amount: parseFloat(milestoneAmount),
         date: milestoneDate,
-        status: "Invoice Generated",
+        status: "Pending",
       });
       setShowMilestoneModal(false);
       setMilestoneTitle("");
+      setMilestoneDescription("");
       setMilestoneAmount("");
     } catch (err: any) {
       console.error(err);
@@ -169,12 +179,23 @@ export default function BillingPage() {
       return;
     }
 
+    const lineItems: any[] = [];
+    data.milestones.filter(x => selectedMilestoneIds.includes(x.id)).forEach(m => {
+      lineItems.push({ type: "Milestone", title: m.title, amount: m.amount });
+    });
+    (data.expenses || []).filter(x => selectedExpenseIds.includes(x.id)).forEach(ex => {
+      lineItems.push({ type: "Expense", title: `${ex.category} (${ex.description || "Travel/Expense"})`, amount: ex.amount });
+    });
+
     addInvoice({
       client: clientName,
       project: project,
       issued: invoiceDate,
       due: dueDate,
       amount: parseFloat(amount),
+      milestoneIds: selectedMilestoneIds,
+      expenseIds: selectedExpenseIds,
+      lineItems: lineItems.length > 0 ? lineItems : undefined,
     });
 
     // Reset form & close
@@ -183,6 +204,8 @@ export default function BillingPage() {
     setDueDate("");
     setAmount("");
     setNotes("");
+    setSelectedMilestoneIds([]);
+    setSelectedExpenseIds([]);
     setErrors({});
     setShowInvoiceModal(false);
   };
@@ -371,14 +394,26 @@ export default function BillingPage() {
       doc.setFont("Helvetica", "normal");
       doc.setFontSize(11);
       doc.setTextColor(30, 41, 59);
-      doc.text(`Professional Consulting Services - Project ${inv.project}`, 25, 134);
-      doc.text(formatCurrency(inv.amount), 185, 134, { align: "right" });
-      doc.line(20, 140, 190, 140);
+      let currentY = 134;
+      if (inv.lineItems && Array.isArray(inv.lineItems) && inv.lineItems.length > 0) {
+        inv.lineItems.forEach((item: any) => {
+          doc.text(`${item.type ? `[${item.type}] ` : ''}${item.title || "Item"}`, 25, currentY);
+          doc.text(formatCurrency(Number(item.amount) || 0), 185, currentY, { align: "right" });
+          currentY += 10;
+          doc.line(20, currentY - 4, 190, currentY - 4);
+        });
+        currentY += 4;
+      } else {
+        doc.text(`Professional Consulting Services - Project ${inv.project}`, 25, currentY);
+        doc.text(formatCurrency(inv.amount), 185, currentY, { align: "right" });
+        doc.line(20, currentY + 6, 190, currentY + 6);
+        currentY = 152;
+      }
 
       // Total section
       doc.setFont("Helvetica", "bold");
-      doc.text("Total Due:", 130, 152);
-      doc.text(formatCurrency(inv.amount), 185, 152, { align: "right" });
+      doc.text("Total Due:", 130, currentY);
+      doc.text(formatCurrency(inv.amount), 185, currentY, { align: "right" });
 
       // Footer
       doc.setDrawColor(226, 232, 240);
@@ -411,8 +446,8 @@ export default function BillingPage() {
   const formatShortAmount = formatCurrency;
   const updateMilestone = useAppStore((state) => state.updateMilestone);
 
-  const handleMarkMilestoneAchieved = (milestoneId: string) => {
-    updateMilestone(milestoneId, { status: "completed" });
+  const handleMarkMilestoneAchieved = async (milestoneId: string) => {
+    await useAppStore.getState().markMilestoneAchieved(milestoneId);
   };
 
   return (
@@ -657,9 +692,11 @@ export default function BillingPage() {
                     outstanding: "badge-brand",
                     issued: "badge-brand",
                     partially_paid: "badge-warning",
+                    pending: "badge-warning",
                     overdue: "badge-danger",
                     draft: "badge-gray",
                     cancelled: "badge-gray",
+                    refunded: "badge-gray",
                   };
                   const badgeClass = statusBadge[inv.status] || "badge-gray";
 
@@ -694,7 +731,7 @@ export default function BillingPage() {
                       <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{inv.due || "—"}</td>
                       <td>
                         <span className={`badge ${badgeClass}`} style={{ fontSize: "11px" }}>
-                          {t(inv.status.charAt(0).toUpperCase() + inv.status.slice(1))}
+                          {t(inv.status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()))}
                         </span>
                       </td>
                       <td style={{ textAlign: "right", display: "flex", gap: "4px", justifyContent: "flex-end" }}>
@@ -870,12 +907,22 @@ export default function BillingPage() {
                 </tr>
               ) : (
                 visibleMilestones.map((m) => {
-                  const statusBadge = {
+                  const statusBadgeMap: Record<string, string> = {
                     completed: "badge-success",
+                    Paid: "badge-success",
+                    paid: "badge-success",
                     upcoming: "badge-brand",
+                    Pending: "badge-warning",
+                    pending: "badge-warning",
+                    Achieved: "badge-success",
+                    achieved: "badge-success",
+                    Invoiced: "badge-brand",
+                    invoiced: "badge-brand",
+                    "Invoice Generated": "badge-brand",
                     delayed: "badge-danger",
                     "at-risk": "badge-warning",
-                  }[m.status] || "badge-gray";
+                  };
+                  const badgeClass = statusBadgeMap[m.status] || "badge-gray";
 
                   return (
                     <tr key={m.id}>
@@ -887,30 +934,39 @@ export default function BillingPage() {
                           {m.project}
                         </span>
                       </td>
-                      <td style={{ fontSize: "13px", color: "var(--text-primary)" }}>{m.title}</td>
+                      <td style={{ fontSize: "13px", color: "var(--text-primary)" }}>
+                        <div>{m.title}</div>
+                        {m.description && <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "2px" }}>{m.description}</div>}
+                      </td>
                       <td style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-primary)" }}>
                         {formatCurrency(m.amount)}
                       </td>
                       <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{m.date || "—"}</td>
                       <td>
-                        <span className={`badge ${statusBadge}`} style={{ fontSize: "11px" }}>
-                          {t(m.status.charAt(0).toUpperCase() + m.status.slice(1))}
+                        <span className={`badge ${badgeClass}`} style={{ fontSize: "11px" }}>
+                          {t(m.status.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()))}
                         </span>
                       </td>
                       <td style={{ textAlign: "right" }}>
-                        {m.status !== "completed" && (
-                          <ActionGuard action="mark_milestone_achieved">
-                            <button
-                              className="btn btn-ghost btn-sm"
-                              style={{ color: "var(--success-600)" }}
-                              onClick={() => handleMarkMilestoneAchieved(m.id)}
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "4px" }}>
-                                <polyline points="20 6 9 17 4 12"></polyline>
-                              </svg>
-                              {t("Mark Achieved")}
-                            </button>
-                          </ActionGuard>
+                        {m.status !== "completed" && m.status !== "Paid" && m.status !== "paid" && m.status !== "Achieved" && m.status !== "achieved" && m.status !== "Invoiced" && m.status !== "invoiced" && (
+                          isAccountsOrAdmin ? (
+                            <ActionGuard action="mark_milestone_achieved">
+                              <button
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--success-600)" }}
+                                onClick={() => handleMarkMilestoneAchieved(m.id)}
+                              >
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ marginRight: "4px" }}>
+                                  <polyline points="20 6 9 17 4 12"></polyline>
+                                </svg>
+                                {t("Mark Achieved")}
+                              </button>
+                            </ActionGuard>
+                          ) : (
+                            <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontStyle: "italic" }}>
+                              {t("Pending Approval")}
+                            </span>
+                          )
                         )}
                       </td>
                     </tr>
@@ -1003,6 +1059,100 @@ export default function BillingPage() {
                   <span style={{ fontSize: "11px", color: "red" }}>{t(errors.project)}</span>
                 )}
               </div>
+
+              {/* Linked Milestones Selection */}
+              {project && (
+                <div style={{ background: "var(--bg-surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
+                    {t("Include Unbilled Milestones")}
+                  </div>
+                  {(() => {
+                    const selectedProjObj = visibleProjects.find(p => p.id === project);
+                    const projectMilestones = data.milestones.filter((m) => (m.projectId === project || m.project === project || (selectedProjObj && m.project === selectedProjObj.name)) && m.status !== "Invoiced" && m.status !== "invoiced");
+                    if (projectMilestones.length === 0) {
+                      return <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{t("No unbilled milestones available for this project.")}</div>;
+                    }
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "130px", overflowY: "auto" }}>
+                        {projectMilestones.map((m) => {
+                          const isChecked = selectedMilestoneIds.includes(m.id);
+                          return (
+                            <label key={m.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px", cursor: "pointer", padding: "4px", background: isChecked ? "var(--brand-50)" : "transparent", borderRadius: "4px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const nextIds = e.target.checked
+                                      ? [...selectedMilestoneIds, m.id]
+                                      : selectedMilestoneIds.filter((id) => id !== m.id);
+                                    setSelectedMilestoneIds(nextIds);
+                                    const mTotal = data.milestones.filter(x => nextIds.includes(x.id)).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                                    const eTotal = data.expenses.filter(x => selectedExpenseIds.includes(x.id)).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                                    if (nextIds.length > 0 || selectedExpenseIds.length > 0) {
+                                      setAmount(String(mTotal + eTotal));
+                                    }
+                                  }}
+                                  style={{ cursor: "pointer", accentColor: "var(--brand-500)" }}
+                                />
+                                <span>{m.title} <strong style={{ fontSize: "10px", padding: "2px 4px", background: "var(--bg-surface-3)", borderRadius: "4px" }}>{m.status}</strong></span>
+                              </div>
+                              <span style={{ fontWeight: 600 }}>{formatCurrency(m.amount)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Linked Travel Expenses Selection */}
+              {project && (
+                <div style={{ background: "var(--bg-surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+                  <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "8px" }}>
+                    {t("Include Travel & Expenses")}
+                  </div>
+                  {(() => {
+                    const selectedProjObj = visibleProjects.find(p => p.id === project);
+                    const projectExpenses = (data.expenses || []).filter((ex) => (ex.projectId === project || ex.project === project || (selectedProjObj && ex.project === selectedProjObj.name)) && (ex.status === "approved" || ex.status === "Approved"));
+                    if (projectExpenses.length === 0) {
+                      return <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{t("No approved expenses available for this project.")}</div>;
+                    }
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", maxHeight: "130px", overflowY: "auto" }}>
+                        {projectExpenses.map((ex) => {
+                          const isChecked = selectedExpenseIds.includes(ex.id);
+                          return (
+                            <label key={ex.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", fontSize: "12px", cursor: "pointer", padding: "4px", background: isChecked ? "var(--brand-50)" : "transparent", borderRadius: "4px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(e) => {
+                                    const nextIds = e.target.checked
+                                      ? [...selectedExpenseIds, ex.id]
+                                      : selectedExpenseIds.filter((id) => id !== ex.id);
+                                    setSelectedExpenseIds(nextIds);
+                                    const mTotal = data.milestones.filter(x => selectedMilestoneIds.includes(x.id)).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                                    const eTotal = data.expenses.filter(x => nextIds.includes(x.id)).reduce((sum, x) => sum + (Number(x.amount) || 0), 0);
+                                    if (selectedMilestoneIds.length > 0 || nextIds.length > 0) {
+                                      setAmount(String(mTotal + eTotal));
+                                    }
+                                  }}
+                                  style={{ cursor: "pointer", accentColor: "var(--brand-500)" }}
+                                />
+                                <span>{ex.category} - {ex.description || "Expense"}</span>
+                              </div>
+                              <span style={{ fontWeight: 600 }}>{formatCurrency(ex.amount)}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Date pickers */}
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -1325,7 +1475,7 @@ export default function BillingPage() {
                   {t("Add Billing Milestone")}
                 </h3>
                 <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-tertiary)" }}>
-                  {t("Automatically generates linked Invoice & updates billing dashboard")}
+                  {t("Create a standalone milestone for project tracking and invoice billing")}
                 </p>
               </div>
               <button
@@ -1363,6 +1513,18 @@ export default function BillingPage() {
                 />
               </div>
 
+              <div className="login-field" style={{ marginBottom: "16px" }}>
+                <label className="login-label">{t("Description")}</label>
+                <textarea
+                  className="login-input"
+                  placeholder="Details about deliveries and scope..."
+                  value={milestoneDescription}
+                  onChange={(e) => setMilestoneDescription(e.target.value)}
+                  rows={2}
+                  style={{ minHeight: "60px", padding: "8px 12px" }}
+                />
+              </div>
+
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
                 <div className="login-field">
                   <label className="login-label">{t("Milestone Amount (₹)")}</label>
@@ -1394,7 +1556,7 @@ export default function BillingPage() {
                   {t("Cancel")}
                 </button>
                 <button type="submit" className="btn btn-primary">
-                  {t("Create Milestone & Invoice")}
+                  {t("Create Milestone")}
                 </button>
               </div>
             </form>

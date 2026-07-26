@@ -365,7 +365,8 @@ interface AppStore {
   updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   addTaskComment: (taskId: string, text: string) => void;
   deleteTaskComments: (taskId: string, commentIds: string[]) => void;
-  addSubtaskToTask: (taskId: string, subtask: { title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string }) => void;
+  addSubtaskToTask: (taskId: string, subtask: { title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string; assignees?: string[] }) => void;
+  updateSubtask: (taskId: string, subtaskId: string, updates: { title?: string; dueDate?: string; description?: string; isMilestone?: boolean; status?: string; assignees?: string[] }) => Promise<any>;
   approveLeaveRequest: (id: string) => void;
   rejectLeaveRequest: (id: string) => void;
   addLeaveRequest: (req: Omit<LeaveRequest, "id" | "status">) => void;
@@ -377,9 +378,11 @@ interface AppStore {
   markAllNotificationsRead: () => void;
   updateUserMFA: (id: string, mfa: boolean) => void;
   updateUserStatus: (id: string, status: 'active' | 'inactive') => void;
-  addInvoice: (invoice: Omit<Invoice, "id" | "status">) => void;
+  addInvoice: (invoice: any) => void;
   addPayment: (invoiceId: string, paymentData: any) => Promise<void>;
+  addMilestone: (newMilestone: any) => Promise<any>;
   updateMilestone: (id: string, updates: any) => void;
+  markMilestoneAchieved: (id: string) => Promise<boolean>;
   inviteUser: (user: Omit<User, "id" | "status" | "mfa" | "lastLogin">) => void;
   deleteProject: (id: string) => Promise<boolean>;
   deleteUser: (id: string) => Promise<boolean>;
@@ -3271,16 +3274,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .then((task) => {
         useAppStore.getState().showToast(`Task "${task.title}" created successfully.`, "success");
-        fetch("/api/tasks")
-          .then((r) => r.json())
-          .then((tasks) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                tasks,
-              },
-            }));
-          });
+        Promise.all([
+          fetch("/api/tasks").then((r) => r.json()),
+          fetch("/api/billing").then((r) => r.json()).catch(() => null),
+        ]).then(([tasks, billing]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              tasks,
+              ...(billing && billing.milestones ? { milestones: billing.milestones } : {}),
+            },
+          }));
+        });
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error creating task: " + err.message, "danger");
@@ -3390,16 +3395,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .then((task) => {
         useAppStore.getState().showToast(`Task updated successfully.`, "success");
-        return fetch("/api/tasks")
-          .then((r) => r.json())
-          .then((tasks) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                tasks,
-              },
-            }));
-          });
+        return Promise.all([
+          fetch("/api/tasks").then((r) => r.json()),
+          fetch("/api/billing").then((r) => r.json()).catch(() => null),
+        ]).then(([tasks, billing]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              tasks,
+              ...(billing && billing.milestones ? { milestones: billing.milestones } : {}),
+            },
+          }));
+        });
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error updating task: " + err.message, "danger");
@@ -3543,6 +3550,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
           };
         });
       });
+  },
+
+  updateSubtask: async (taskId, subtaskId, updates) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to update subtask");
+      }
+      const updated = await res.json();
+      const resTasks = await fetch("/api/tasks");
+      if (resTasks.ok) {
+        const tasks = await resTasks.json();
+        set((s) => ({ data: { ...s.data, tasks } }));
+      }
+      return updated;
+    } catch (e) {
+      console.error("Error updating subtask:", e);
+      throw e;
+    }
   },
 
   approveLeaveRequest: (id) => {
@@ -3934,7 +3965,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         return res.json();
       })
       .then((resData) => {
-        useAppStore.getState().showToast("Milestone created and invoice generated automatically.", "success");
+        useAppStore.getState().showToast("Milestone added successfully", "success");
         return Promise.all([
           fetch("/api/billing").then((r) => r.json()),
           fetch("/api/dashboard").then((r) => r.json()),
@@ -3955,6 +3986,37 @@ export const useAppStore = create<AppStore>((set, get) => ({
         useAppStore.getState().showToast("Error creating milestone: " + err.message, "danger");
         throw err;
       });
+  },
+
+  markMilestoneAchieved: async (id: string) => {
+    try {
+      const res = await fetch(`/api/billing/milestones/${id}/achieved`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to mark milestone as achieved");
+      }
+      useAppStore.getState().showToast("Milestone marked as Achieved", "success");
+      const [billing, dashboard] = await Promise.all([
+        fetch("/api/billing").then((r) => r.json()),
+        fetch("/api/dashboard").then((r) => r.json()),
+      ]);
+      set((state) => ({
+        data: {
+          ...state.data,
+          invoices: billing.invoices,
+          milestones: billing.milestones,
+          kpis: dashboard.kpis || state.data.kpis,
+          revenueData: dashboard.revenueData || state.data.revenueData,
+        },
+      }));
+      return true;
+    } catch (err: any) {
+      useAppStore.getState().showToast("Error updating milestone: " + (err.message || "Unknown error"), "danger");
+      return false;
+    }
   },
 
   inviteUser: (newUser) => {

@@ -86,7 +86,7 @@ export function filterTasks(tasks: any[], user: FilterUser) {
     case ROLES.CLIENT_MANAGER:
       return tasks; // Scoped by projects
     case ROLES.CONSULTANT:
-      return tasks.filter(t => t.assignee_id === user.id || t.assigneeId === user.id || t.assignee === user.id);
+      return tasks.filter(t => t.assignee_id === user.id || t.assigneeId === user.id || t.assignee === user.id || t.assignee === user.name || (Array.isArray(t.assignees) && (t.assignees.includes(user.id) || t.assignees.includes(user.name))) || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => Array.isArray(st.assignees) && (st.assignees.includes(user.id) || st.assignees.includes(user.name)))));
     default:
       return [];
   }

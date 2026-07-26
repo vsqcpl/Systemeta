@@ -530,15 +530,18 @@ router.post("/punch-out", async (req: AuthenticatedRequest, res) => {
     });
 
     if (isTaskCompleted && activeSession.project) {
+      const isManager = req.user.role === "super_admin" || req.user.role === "project_manager";
       await prisma.task.updateMany({
         where: {
           title: activeSession.project,
           assigneeId: req.user.id
         },
-        data: {
+        data: isManager ? {
           status: "done",
           progress: 100,
           actualCompletionDate: new Date().toISOString()
+        } : {
+          status: "review"
         }
       });
     }

@@ -141,7 +141,7 @@ export default function TimesheetsPage() {
   }, [data.tasks]);
 
   useEffect(() => {
-    const userTasks = allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id);
+    const userTasks = allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id || t.assignee === user?.name || (Array.isArray(t.assignees) && (t.assignees.includes(user?.id) || t.assignees.includes(user?.name))) || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => Array.isArray(st.assignees) && (st.assignees.includes(user?.id || "") || st.assignees.includes(user?.name || "")))));
     if (userTasks.length > 0 && (projectClient === "Internal Operations" || !projectClient)) {
       setProjectClient(userTasks[0].title);
       setTempProjectClient(userTasks[0].title);
@@ -226,7 +226,7 @@ export default function TimesheetsPage() {
             ...(storeData.tasks.review || []),
             ...(storeData.tasks.done || []),
           ];
-          const taskObj = allTasksList.find((t: any) => t.title === resData.session.project);
+          const taskObj = allTasksList.find((t: any) => t.title === resData.session.project || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => `${st.title} (subtask of ${t.title})` === resData.session.project)));
           
           const newEntry = {
             id: resData.session.id,
@@ -297,7 +297,7 @@ export default function TimesheetsPage() {
           ...(storeData.tasks.review || []),
           ...(storeData.tasks.done || []),
         ];
-        const taskObj = allTasksList.find((t: any) => t.title === resData.session.project);
+        const taskObj = allTasksList.find((t: any) => t.title === resData.session.project || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => `${st.title} (subtask of ${t.title})` === resData.session.project)));
         
         const updatedEntry = {
           id: resData.session.id,
@@ -319,7 +319,12 @@ export default function TimesheetsPage() {
           for (const key of Object.keys(newTasks) as Array<keyof typeof newTasks>) {
             newTasks[key] = newTasks[key]?.filter((t: any) => t.id !== taskObj.id) || [];
           }
-          newTasks.done = [...(newTasks.done || []), { ...taskObj, progress: 100 }];
+          const isManager = user?.role === "super_admin" || user?.role === "project_manager";
+          if (isManager) {
+            newTasks.done = [...(newTasks.done || []), { ...taskObj, status: "done", progress: 100 }];
+          } else {
+            newTasks.review = [...(newTasks.review || []), { ...taskObj, status: "review" }];
+          }
         }
 
         useAppStore.setState({ data: { ...storeData, timesheets: newTimesheetsArray, tasks: newTasks } });
@@ -370,7 +375,7 @@ export default function TimesheetsPage() {
       ...(data.tasks.done || []),
     ];
     
-    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id || t.assigneeId === user.id);
+    const userTasks = allTasksList.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id || t.assignee === user?.name || (Array.isArray(t.assignees) && (t.assignees.includes(user?.id) || t.assignees.includes(user?.name))) || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => Array.isArray(st.assignees) && (st.assignees.includes(user?.id || "") || st.assignees.includes(user?.name || "")))));
     
     return userTasks.map((t: any, idx: number) => {
       const projectObj = data.projects.find((p: any) => p.id === (t.project || t.projectId));
@@ -398,7 +403,7 @@ export default function TimesheetsPage() {
       ...(data.tasks.review || []),
       ...(data.tasks.done || []),
     ];
-    const userTasks = allTasksList.filter((t: any) => t.assignee === user.id || t.assigneeId === user.id);
+    const userTasks = allTasksList.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id || t.assignee === user?.name || (Array.isArray(t.assignees) && (t.assignees.includes(user?.id) || t.assignees.includes(user?.name))) || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => Array.isArray(st.assignees) && (st.assignees.includes(user?.id || "") || st.assignees.includes(user?.name || "")))));
     
     data.projects.forEach((proj: any) => {
       const projTasks = userTasks.filter((t: any) => (t.project || t.projectId) === proj.id);
@@ -516,7 +521,7 @@ export default function TimesheetsPage() {
           ];
           
           const newEntries = resData.sessions.map((s: any) => {
-            const taskObj = allTasksList.find((t: any) => t.title === s.project);
+            const taskObj = allTasksList.find((t: any) => t.title === s.project || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => `${st.title} (subtask of ${t.title})` === s.project)));
             return {
               id: s.id,
               timesheetId: (userTimesheet as any).id,
@@ -1281,7 +1286,24 @@ export default function TimesheetsPage() {
                   value={tempProjectClient}
                   onChange={(val) => setTempProjectClient(val)}
                   placeholder="Select Assigned Task"
-                  options={allTasks.filter((t: any) => t.assignee === user?.id || t.assigneeId === user?.id).map((task: any) => ({ label: task.title, value: task.title }))}
+                  options={(() => {
+                    const opts: { label: string; value: string }[] = [];
+                    allTasks.forEach((t: any) => {
+                      const isMainAssigned = t.assignee === user?.id || t.assigneeId === user?.id || t.assignee === user?.name || (Array.isArray(t.assignees) && (t.assignees.includes(user?.id || "") || t.assignees.includes(user?.name || "")));
+                      if (isMainAssigned) {
+                        opts.push({ label: t.title, value: t.title });
+                      }
+                      if (Array.isArray(t.subtasks)) {
+                        t.subtasks.forEach((st: any) => {
+                          if (Array.isArray(st.assignees) && (st.assignees.includes(user?.id || "") || st.assignees.includes(user?.name || ""))) {
+                            const label = `${st.title} (subtask of ${t.title})`;
+                            opts.push({ label, value: label });
+                          }
+                        });
+                      }
+                    });
+                    return opts;
+                  })()}
                 />
               </div>
             )}
@@ -1444,7 +1466,9 @@ export default function TimesheetsPage() {
                     checked={tempTaskCompleted === true} 
                     onChange={() => setTempTaskCompleted(true)} 
                   />
-                  Yes, move to Done
+                  {user?.role === "super_admin" || user?.role === "project_manager" 
+                    ? "Yes, move to Done" 
+                    : "Task is done, move to in review"}
                 </label>
                 <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "13px", cursor: "pointer" }}>
                   <input 

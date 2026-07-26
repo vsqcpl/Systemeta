@@ -43,11 +43,13 @@ export interface Consultant {
 }
 
 export interface Subtask {
+  id?: string;
   title: string;
   dueDate: string;
   description?: string;
   isMilestone?: boolean;
-  status?: 'Not Started' | 'In Progress' | 'Completed';
+  status?: string;
+  assignees?: string[];
 }
 
 export interface Task {

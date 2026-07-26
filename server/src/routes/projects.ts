@@ -251,9 +251,9 @@ router.get("/:id/milestones", async (req: AuthenticatedRequest, res) => {
 router.post("/:id/milestones", async (req: AuthenticatedRequest, res) => {
   try {
     const { id: projectId } = req.params;
-    const { title, date, amount, status } = req.body;
+    const { title, date, amount, status, description, taskId } = req.body;
 
-    if (!title || !date || !amount) {
+    if (!title || !date || amount === undefined || amount === null) {
       return res.status(400).json({ message: "Title, date, and amount are required." });
     }
 
@@ -263,8 +263,10 @@ router.post("/:id/milestones", async (req: AuthenticatedRequest, res) => {
         title,
         date,
         amount: parseFloat(String(amount)),
-        status: status || "upcoming"
-      }
+        status: status || "Pending",
+        description: description || null,
+        taskId: taskId || null,
+      } as any
     });
 
     invalidateDashboardCache();

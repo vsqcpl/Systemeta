@@ -326,11 +326,11 @@ export default function QuickAddModal({ open, onClose, defaultTab, defaultProjec
 
   const handleCreateExpense = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!expConsultant || !expProject || !expCategory || !expAmount || !expDate) return;
+    if (!expConsultant || !expCategory || !expAmount || !expDate) return;
 
     addExpense({
       consultant: expConsultant,
-      project: expProject,
+      project: expProject || "No Project",
       category: expCategory,
       description: expDescription,
       amount: parseFloat(expAmount),
@@ -1094,9 +1094,11 @@ export default function QuickAddModal({ open, onClose, defaultTab, defaultProjec
                       className="login-input"
                       value={expProject}
                       onChange={(val) => setExpProject(val)}
-                      required
                       placeholder="Select Project"
-                      options={data.projects.map((p) => ({ label: p.name, value: p.id }))}
+                      options={[
+                        { label: "No Project", value: "No Project" },
+                        ...data.projects.map((p) => ({ label: p.name, value: p.id }))
+                      ]}
                     />
                   </div>
                 </div>
