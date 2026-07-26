@@ -597,6 +597,9 @@ router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, r
       if (!isAssigned && !isManager) {
         return res.status(403).json({ message: "Forbidden: Only assignees of this subtask can change its status." });
       }
+      if (status === "Done" && req.user.role !== "super_admin" && req.user.role !== "Super Admin" && req.user.role?.toLowerCase() !== "super_admin") {
+        return res.status(403).json({ message: "Forbidden: Only super admin can change subtask status to Done." });
+      }
     }
 
     const updated = await prisma.subtask.update({

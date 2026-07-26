@@ -810,7 +810,9 @@ function TaskDrawer({
                           <option value="To Do">{t("To Do")}</option>
                           <option value="In Progress">{t("In Progress")}</option>
                           <option value="In Review">{t("In Review")}</option>
-                          <option value="Done">{t("Done")}</option>
+                          {(user?.role?.toLowerCase() === "super_admin" || user?.role === "Super Admin" || sub.status === "Done") && (
+                            <option value="Done">{t("Done")}</option>
+                          )}
                           {sub.status === "Not Started" && <option value="Not Started">{t("Not Started")}</option>}
                           {sub.status === "Completed" && <option value="Completed">{t("Completed")}</option>}
                         </select>
@@ -2198,7 +2200,9 @@ export default function TasksPage() {
                               <option value="To Do">{t("To Do")}</option>
                               <option value="In Progress">{t("In Progress")}</option>
                               <option value="In Review">{t("In Review")}</option>
-                              <option value="Done">{t("Done")}</option>
+                              {(user?.role?.toLowerCase() === "super_admin" || user?.role === "Super Admin" || sub.status === "Done") && (
+                                <option value="Done">{t("Done")}</option>
+                              )}
                               <option value="Not Started">{t("Not Started")}</option>
                               <option value="Completed">{t("Completed")}</option>
                             </select>
