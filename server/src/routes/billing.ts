@@ -512,7 +512,7 @@ router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]),
     });
   } catch (error: any) {
     console.error("POST /billing/invoices/:id/payments error:", error?.message || error);
-    return res.status(500).json({ message: "Internal server error recording payment" });
+    return res.status(500).json({ message: error?.message || "Internal server error recording payment" });
   }
 });
 
