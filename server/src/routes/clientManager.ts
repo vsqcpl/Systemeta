@@ -97,30 +97,55 @@ async function notifyClientActivity(
   }
 }
 
-// Helper to check if a user can access a child record
+// Helper to check if a user can access a client or child record
+function isUserAssignedToClientRecord(client: any, user: any): boolean {
+  if (!user) return false;
+  const role = user.role;
+  if (role === "super_admin" || role === "admin" || role === "Super Admin") return true;
+
+  const userId = (user.id || "").toLowerCase();
+  const userName = (user.name || "").toLowerCase();
+
+  if (client.createdBy && (client.createdBy.toLowerCase() === userId || client.createdBy.toLowerCase() === userName)) {
+    return true;
+  }
+
+  if (client.assignedManagerIds) {
+    const managers = client.assignedManagerIds.split(",").map((s: string) => s.trim().toLowerCase());
+    if (managers.includes(userId) || managers.includes(userName)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 async function checkRecordAccess(
   table: "contact" | "call" | "meeting" | "followUp" | "requirement" | "opportunity" | "escalation",
   id: string,
   userId: string,
-  isSuperAdmin: boolean
+  isSuperAdmin: boolean,
+  user?: any
 ): Promise<boolean> {
   if (isSuperAdmin) return true;
   const record = await (prisma[table] as any).findUnique({ where: { id } });
   if (!record) return false;
   const client = await prisma.client.findUnique({ where: { id: record.clientId } });
-  return client?.createdBy === userId;
+  if (!client) return false;
+  return isUserAssignedToClientRecord(client, user || { id: userId });
 }
-
-// ─── CLIENTS ──────────────────────────────────────────────────────────────────
 
 // ─── CLIENTS ──────────────────────────────────────────────────────────────────
 
 router.get("/clients", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
-    const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
-    const userId = (req as any).user?.id;
-    const userClientId = (req as any).user?.clientId;
+    const user = (req as any).user;
+    const isSuperAdmin = user?.role === "super_admin" || user?.role === "admin" || user?.role === "Super Admin";
+    const isClientContact = user?.role === "client_contact" || user?.role === "Client Contact";
+    const userId = user?.id || "";
+    const userName = user?.name || "";
+    const userClientId = user?.clientId;
+
     const clients = await prisma.client.findMany({
       where: {
         deletedAt: null,
@@ -128,7 +153,14 @@ router.get("/clients", async (req: Request, res: Response) => {
           ? {}
           : isClientContact
           ? { id: userClientId || undefined }
-          : { createdBy: userId }),
+          : {
+              OR: [
+                { createdBy: userId },
+                { createdBy: userName },
+                { assignedManagerIds: { contains: userId } },
+                { assignedManagerIds: { contains: userName } },
+              ],
+            }),
       },
       include: { contacts: true, _count: { select: { opportunities: true, requirements: true } } },
       orderBy: { createdAt: "desc" },
@@ -159,7 +191,8 @@ router.post("/clients", async (req: Request, res: Response) => {
 
     const clientName = name || company || "Untitled Client";
     const userId = (req as any).user?.id ?? "system";
-    
+    const formattedAssigned = Array.isArray(assignedManagerIds) ? assignedManagerIds.join(",") : (assignedManagerIds || null);
+
     const client = await prisma.client.create({
       data: {
         name: clientName,
@@ -174,7 +207,7 @@ router.post("/clients", async (req: Request, res: Response) => {
         address: address || null,
         status: status || "active",
         tier: tier || "standard",
-        assignedManagerIds: assignedManagerIds || null,
+        assignedManagerIds: formattedAssigned,
         createdBy: userId,
       },
     });
@@ -194,8 +227,7 @@ router.post("/clients", async (req: Request, res: Response) => {
 
 router.get("/clients/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
-    const userId = (req as any).user?.id;
+    const user = (req as any).user;
     const client = await prisma.client.findFirst({
       where: { id: req.params.id, deletedAt: null },
       include: {
@@ -208,8 +240,8 @@ router.get("/clients/:id", async (req: Request, res: Response) => {
       },
     });
     if (!client) return res.status(404).json({ error: "Client not found" });
-    if (!isSuperAdmin && client.createdBy !== userId) {
-      return res.status(403).json({ error: "Access denied. You do not own this client record." });
+    if (!isUserAssignedToClientRecord(client, user)) {
+      return res.status(403).json({ error: "Access denied. You are not an assigned manager for this client." });
     }
     res.json(client);
   } catch (e: any) {
@@ -219,12 +251,11 @@ router.get("/clients/:id", async (req: Request, res: Response) => {
 
 router.put("/clients/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
-    const userId = (req as any).user?.id;
+    const user = (req as any).user;
     const client = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
     if (!client) return res.status(404).json({ error: "Client not found" });
-    if (!isSuperAdmin && client.createdBy !== userId) {
-      return res.status(403).json({ error: "Access denied. You do not own this client record." });
+    if (!isUserAssignedToClientRecord(client, user)) {
+      return res.status(403).json({ error: "Access denied. You are not an assigned manager for this client." });
     }
 
     const {

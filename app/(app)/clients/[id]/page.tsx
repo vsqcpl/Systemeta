@@ -13,6 +13,8 @@ import {
   IconFolder,
 } from "@/components/ui/Icons";
 
+import { isManagerAssignedToClient } from "@/lib/permissionHelpers";
+
 export default function ClientProfilePage() {
   const params = useParams();
   const router = useRouter();
@@ -33,17 +35,32 @@ export default function ClientProfilePage() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
 
+  const isAssigned = client ? isManagerAssignedToClient(client, currentUser) : false;
+
   const canManageClients =
-    !currentUser ||
-    currentUser.role === "super_admin" ||
-    currentUser.role === "client_manager" ||
-    currentUser.role === "director" ||
-    (currentUser as any).permissions?.crm;
+    isAssigned &&
+    (!currentUser ||
+      currentUser.role === "super_admin" ||
+      currentUser.role === "client_manager" ||
+      currentUser.role === "director" ||
+      (currentUser as any).permissions?.crm);
 
   if (!client || client.deletedAt) {
     return (
       <div className="page-container" style={{ padding: "48px", textAlign: "center" }}>
         <h2>{t("Client not found")}</h2>
+        <button className="btn btn-primary" onClick={() => router.push("/clients")}>{t("Back to Clients")}</button>
+      </div>
+    );
+  }
+
+  if (!isAssigned) {
+    return (
+      <div className="page-container" style={{ padding: "48px", textAlign: "center" }}>
+        <h2>{t("Access Denied")}</h2>
+        <p style={{ color: "var(--text-tertiary)", marginBottom: "20px" }}>
+          {t("You do not have permission to access or manage this client record.")}
+        </p>
         <button className="btn btn-primary" onClick={() => router.push("/clients")}>{t("Back to Clients")}</button>
       </div>
     );
@@ -58,6 +75,14 @@ export default function ClientProfilePage() {
   const clientProjects = data.projects?.filter(
     p => p.client === clientId || p.client === client.companyName
   ) || [];
+
+  const assignedManagers = Array.isArray(client.assignedManagerIds)
+    ? client.assignedManagerIds.filter(Boolean)
+    : typeof client.assignedManagerIds === "string" && client.assignedManagerIds
+    ? client.assignedManagerIds.split(",").map((s) => s.trim()).filter(Boolean)
+    : client.accountOwner
+    ? [client.accountOwner]
+    : [];
 
   const handleDeleteConfirm = async (id: string) => {
     const success = await deleteClient(id);
@@ -81,11 +106,34 @@ export default function ClientProfilePage() {
             </div>
             <div>
               <h1 className="page-title" style={{ margin: 0 }}>{client.companyName}</h1>
-              <p className="page-subtitle" style={{ margin: 0 }}>
-                {client.industry || t("No Industry")} · {t("Manager")}: {client.accountOwner || t("Unassigned")}
-                {client.email ? ` · ${client.email}` : ""}
-                {client.phone ? ` · ${client.phone}` : ""}
-              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  {client.industry || t("No Industry")}
+                  {client.email ? ` · ${client.email}` : ""}
+                  {client.phone ? ` · ${client.phone}` : ""}
+                </span>
+                <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>· {t("Managers")}:</span>
+                {assignedManagers.length > 0 ? (
+                  assignedManagers.map((m, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: 500,
+                        background: "rgba(99, 102, 241, 0.12)",
+                        color: "var(--primary-color, #4f46e5)",
+                        border: "1px solid rgba(99, 102, 241, 0.2)",
+                      }}
+                    >
+                      {m}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>{t("Unassigned")}</span>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -268,7 +268,7 @@ export interface Client {
   priority: ClientPriority;
   notes: string;
   accountOwner: string; // User ID or Manager Name
-  assignedManagerIds?: string;
+  assignedManagerIds?: string[] | string;
   createdAt: string;
   deletedAt?: string | null;
 }

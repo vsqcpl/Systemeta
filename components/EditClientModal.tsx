@@ -35,6 +35,13 @@ export default function EditClientModal({
   const [industry, setIndustry] = useState(client.industry || "");
   const [status, setStatus] = useState<ClientStatus>(client.status || "Active");
   const [accountOwner, setAccountOwner] = useState(client.accountOwner || "");
+  const [selectedManagerIds, setSelectedManagerIds] = useState<string[]>(() => {
+    if (Array.isArray(client.assignedManagerIds)) return client.assignedManagerIds.filter(Boolean);
+    if (typeof client.assignedManagerIds === "string" && client.assignedManagerIds) {
+      return client.assignedManagerIds.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return client.accountOwner ? [client.accountOwner] : [];
+  });
   const [notes, setNotes] = useState(client.notes || "");
   const [loading, setLoading] = useState(false);
 
@@ -50,15 +57,34 @@ export default function EditClientModal({
     setStatus(client.status || "Active");
     setAccountOwner(client.accountOwner || "");
     setNotes(client.notes || "");
+
+    let initialManagers: string[] = [];
+    if (Array.isArray(client.assignedManagerIds)) {
+      initialManagers = client.assignedManagerIds.filter(Boolean);
+    } else if (typeof client.assignedManagerIds === "string" && client.assignedManagerIds) {
+      initialManagers = client.assignedManagerIds.split(",").map((s) => s.trim()).filter(Boolean);
+    } else if (client.accountOwner) {
+      initialManagers = [client.accountOwner];
+    }
+    setSelectedManagerIds(initialManagers);
   }, [client]);
 
   if (!isOpen) return null;
+
+  const toggleManagerSelection = (managerNameOrId: string) => {
+    setSelectedManagerIds((prev) =>
+      prev.includes(managerNameOrId)
+        ? prev.filter((id) => id !== managerNameOrId)
+        : [...prev, managerNameOrId]
+    );
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
     try {
+      const primaryOwner = selectedManagerIds[0] || accountOwner || "";
       await onSave(client.id, {
         companyName: companyName || company,
         company: company || companyName,
@@ -70,8 +96,8 @@ export default function EditClientModal({
         gst: gstNumber,
         industry,
         status,
-        accountOwner,
-        assignedManagerIds: accountOwner,
+        accountOwner: primaryOwner,
+        assignedManagerIds: selectedManagerIds.length > 0 ? selectedManagerIds : [primaryOwner],
         notes,
       });
       onClose();
@@ -220,19 +246,52 @@ export default function EditClientModal({
               </div>
 
               <div className="login-field">
-                <label className="login-label">{t("Assigned Client Manager")}</label>
-                <select
-                  className="login-input"
-                  value={accountOwner}
-                  onChange={(e) => setAccountOwner(e.target.value)}
+                <label className="login-label">{t("Assigned Client Managers (Multi-Select)")}</label>
+                <div
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                    padding: "12px",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border-color, #e2e8f0)",
+                    background: "var(--bg-secondary, #f8fafc)",
+                    maxHeight: "150px",
+                    overflowY: "auto",
+                  }}
                 >
-                  <option value="">{t("-- Select Manager --")}</option>
-                  {managers.map((m) => (
-                    <option key={m.id} value={m.name}>
-                      {m.name} ({m.role})
-                    </option>
-                  ))}
-                </select>
+                  {managers.length > 0 ? (
+                    managers.map((m) => {
+                      const isChecked = selectedManagerIds.includes(m.name) || selectedManagerIds.includes(m.id);
+                      return (
+                        <label
+                          key={m.id}
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "10px",
+                            fontSize: "14px",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => toggleManagerSelection(m.name)}
+                            style={{ width: "16px", height: "16px", cursor: "pointer" }}
+                          />
+                          <span>
+                            {m.name} <span style={{ fontSize: "12px", opacity: 0.7 }}>({m.role})</span>
+                          </span>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div style={{ fontSize: "13px", color: "var(--text-tertiary)" }}>
+                      {t("No managers available")}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="login-field">

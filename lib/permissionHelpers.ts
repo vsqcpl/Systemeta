@@ -378,3 +378,53 @@ export function getScreenKey(path: string): string {
   if (path === "/timesheet-ai") return "ai_co2_report";
   return "portfolio_dashboard";
 }
+
+/**
+ * Helper to check if a user (or Client Manager) is assigned to or owns a Client record.
+ * Admin always returns true.
+ */
+export function isManagerAssignedToClient(client: any, user: any): boolean {
+  if (!user) return false;
+  const role = normalizeRole(user.role);
+  if (role === "super_admin") return true;
+  if (!client) return false;
+
+  const userId = user.id || "";
+  const userName = (user.name || "").toLowerCase();
+
+  // 1. Check assignedManagerIds (array or comma-separated string)
+  const rawAssigned = client.assignedManagerIds;
+  if (rawAssigned) {
+    let ids: string[] = [];
+    if (Array.isArray(rawAssigned)) {
+      ids = rawAssigned.map((item: any) => String(item).trim());
+    } else if (typeof rawAssigned === "string") {
+      ids = rawAssigned.split(",").map((item) => item.trim());
+    }
+    const isAssigned = ids.some((id) => {
+      if (!id) return false;
+      const norm = id.toLowerCase();
+      return norm === userId.toLowerCase() || norm === userName;
+    });
+    if (isAssigned) return true;
+  }
+
+  // 2. Check accountOwner
+  if (client.accountOwner) {
+    const ownerNorm = String(client.accountOwner).toLowerCase();
+    if (ownerNorm === userId.toLowerCase() || ownerNorm === userName) {
+      return true;
+    }
+  }
+
+  // 3. Check createdBy
+  if (client.createdBy) {
+    const creatorNorm = String(client.createdBy).toLowerCase();
+    if (creatorNorm === userId.toLowerCase() || creatorNorm === userName) {
+      return true;
+    }
+  }
+
+  return false;
+}
+

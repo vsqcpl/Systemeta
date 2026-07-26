@@ -4034,11 +4034,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: clientData.companyName,
+          company: clientData.company || clientData.companyName,
+          contactPerson: clientData.contactPerson,
+          email: clientData.email,
+          phone: clientData.phone,
+          address: clientData.address,
+          gst: clientData.gstNumber || clientData.gst,
           industry: clientData.industry,
           website: clientData.website,
-          address: clientData.address,
           status: clientData.status || "Active",
           tier: clientData.clientCategory || "A",
+          assignedManagerIds: Array.isArray(clientData.assignedManagerIds) ? clientData.assignedManagerIds.join(",") : (clientData.assignedManagerIds || clientData.accountOwner),
         }),
       });
       if (res.ok) {
@@ -4046,6 +4052,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         const mappedClient = {
           id: saved.id,
           companyName: saved.name || saved.companyName || clientData.companyName,
+          company: saved.company || clientData.company || clientData.companyName,
+          contactPerson: saved.contactPerson || clientData.contactPerson || "",
           clientType: clientData.clientType || "Direct",
           industry: saved.industry || clientData.industry || "",
           website: saved.website || clientData.website || "",
@@ -4063,6 +4071,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           priority: clientData.priority || "Medium",
           notes: clientData.notes || "",
           accountOwner: clientData.accountOwner || "",
+          assignedManagerIds: clientData.assignedManagerIds || saved.assignedManagerIds || clientData.accountOwner,
           createdAt: saved.createdAt || new Date().toISOString(),
         };
         set((state) => ({
@@ -4100,6 +4109,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   updateClient: async (id, updates) => {
+    const formattedAssigned = updates.assignedManagerIds !== undefined
+      ? (Array.isArray(updates.assignedManagerIds) ? updates.assignedManagerIds.join(",") : updates.assignedManagerIds)
+      : undefined;
+
     try {
       const res = await fetch(`/api/client-manager/clients/${id}`, {
         method: "PUT",
@@ -4117,7 +4130,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           address: updates.address,
           status: updates.status,
           tier: updates.clientCategory,
-          assignedManagerIds: updates.assignedManagerIds || updates.accountOwner,
+          assignedManagerIds: formattedAssigned !== undefined ? formattedAssigned : updates.accountOwner,
         }),
       });
       if (res.ok) {
