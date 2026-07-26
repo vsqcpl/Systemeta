@@ -592,9 +592,17 @@ router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, r
     }
 
     if (status && status !== existing.status) {
-      const parentTask = await prisma.task.findUnique({ where: { id: taskId } });
-      const isTaskAssigned = parentTask ? (parentTask.assigneeId === req.user.id || (Boolean(req.user.name) && parentTask.assigneeId === req.user.name)) : false;
-      const isAssigned = existing.assignees.includes(req.user.id) || (req.user.name && existing.assignees.includes(req.user.name)) || isTaskAssigned;
+      const parentTask = await prisma.task.findUnique({
+        where: { id: taskId },
+        include: { assignees: { include: { user: true } } },
+      });
+      const isTaskAssigned = parentTask ? (
+        parentTask.assigneeId === req.user.id ||
+        (Boolean(req.user.name) && (parentTask.assigneeId === req.user.name || parentTask.assigneeId.toLowerCase() === req.user.name.toLowerCase())) ||
+        parentTask.assignees.some((a) => a.userId === req.user.id || (Boolean(req.user.name) && (a.userId === req.user.name || a.userId.toLowerCase() === req.user.name.toLowerCase() || a.user?.name?.toLowerCase() === req.user.name.toLowerCase())) || a.user?.email === req.user.email)
+      ) : false;
+      const isSubtaskAssigned = existing.assignees.some((a) => a === req.user.id || a === req.user.email || (Boolean(req.user.name) && (a === req.user.name || a.toLowerCase() === req.user.name.toLowerCase())));
+      const isAssigned = isSubtaskAssigned || isTaskAssigned;
       const isManager = req.user.role === "super_admin" || req.user.role === "Super Admin" || req.user.role === "project_manager" || req.user.role === "Project Manager";
       if (!isAssigned && !isManager) {
         return res.status(403).json({ message: "Forbidden: Only assignees of this subtask can change its status." });
