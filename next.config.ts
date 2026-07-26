@@ -101,6 +101,15 @@ const nextConfig: NextConfig = {
       },
     ];
   },
+  webpack: (config) => {
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      jspdf$: "jspdf/dist/jspdf.umd.min.js",
+      canvg$: false,
+      "core-js": false,
+    };
+    return config;
+  },
 };
 
 export default nextConfig;

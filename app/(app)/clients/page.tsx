@@ -18,7 +18,7 @@ import {
 export default function ClientsPage() {
   const router = useRouter();
   const data = useAppStore((state) => state.data);
-  const currentUser = useAppStore((state) => state.currentUser);
+  const currentUser = useAppStore((state) => state.user);
   const addClient = useAppStore((state) => state.addClient);
   const updateClient = useAppStore((state) => state.updateClient);
   const deleteClient = useAppStore((state) => state.deleteClient);

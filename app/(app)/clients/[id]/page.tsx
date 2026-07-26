@@ -23,7 +23,7 @@ export default function ClientProfilePage() {
   const deactivateClient = useAppStore((state) => state.deactivateClient);
   const activateClient = useAppStore((state) => state.activateClient);
 
-  const currentUser = useAppStore((state) => state.currentUser);
+  const currentUser = useAppStore((state) => state.user);
   const updateClient = useAppStore((state) => state.updateClient);
   const deleteClient = useAppStore((state) => state.deleteClient);
 
