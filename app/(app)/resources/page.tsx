@@ -1,24 +1,35 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useAppStore, useTranslation } from "@/lib/store";
-import { TeamRadarChart } from "@/components/charts/ChartComponents";
-import { formatCurrency, calculateAverageUtilization, calculateWeeklyUtilization, getRecentWeeks } from "@/lib/utils";
-import { Consultant } from "@/lib/data/types";
+import {
+  getEmployeeResourceMetrics,
+  getOverallResourceSummary,
+  flattenTasks,
+  EmployeeResourceMetrics,
+} from "@/lib/resourcePlanningUtils";
+import { Consultant, User } from "@/lib/data/types";
 
 export default function ResourcesPage() {
   const data = useAppStore((state) => state.data);
   const { t } = useTranslation();
   const showToast = useAppStore((state) => state.showToast);
-  const currencyFormat = useAppStore((state) => state.currencyFormat);
-
-  const [selectedMonth, setSelectedMonth] = useState("Jun 2026");
-
-  // Options Menu States
   const user = useAppStore((state) => state.user);
+
+  // Filters State
+  const [selectedEmployee, setSelectedEmployee] = useState<string>("all");
+  const [selectedProject, setSelectedProject] = useState<string>("all");
+  const [selectedDepartment, setSelectedDepartment] = useState<string>("all");
+  const [selectedPeriod, setSelectedPeriod] = useState<string>("all");
+  const [searchTerm, setSearchTerm] = useState<string>("");
+
+  // Modals & Menu State
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
-  const [activeModal, setActiveModal] = useState<'details' | 'projects' | 'utilization' | 'allocation' | null>(null);
-  const [selectedConsultant, setSelectedConsultant] = useState<Consultant | null>(null);
+  const [activeModal, setActiveModal] = useState<
+    "details" | "projects" | "utilization" | "allocation" | null
+  >(null);
+  const [selectedEmployeeMetrics, setSelectedEmployeeMetrics] =
+    useState<EmployeeResourceMetrics | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -29,215 +40,475 @@ export default function ResourcesPage() {
     };
     if (activeMenuId) {
       document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("click", handleClickOutside);
     }
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("click", handleClickOutside);
     };
   }, [activeMenuId]);
 
-  const canAccessMenu = (consultant: Consultant) => {
-    if (!user) return false;
-    if (user.role === "super_admin" || user.role === "Super Admin") return true;
-    
-    if (user.role === "project_manager" || user.role === "Project Manager" || user.role === "senior_consultant" || user.role === "Senior Consultant") {
-      const userProjects = data.projects.filter(p => p.manager === user.id || p.team.includes(user.id) || p.manager === user.name);
-      return userProjects.some(p => p.team.includes(consultant.id) || p.manager === consultant.id || p.manager === consultant.name);
-    }
-    
-    return false; // consultant, accounts, client_contact
-  };
-
-  const canViewAdvancedOptions = () => {
-    return user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
-  };
-
-  const recentWeeks = getRecentWeeks(data.timesheets, 5);
-  // fallback if no timesheets available
-  const weeks = recentWeeks.length > 0 ? recentWeeks : ["W1 Jun", "W2 Jun", "W3 Jun", "W4 Jun", "W1 Jul"].map(w => ({ weekStr: w, label: w }));
-
-  const exportBtnStyle: React.CSSProperties = {
-    display: "flex", alignItems: "center", gap: "6px",
-    padding: "7px 14px", fontSize: "13px", fontWeight: 500,
-    color: "#1e3a5f", background: "transparent",
-    border: "1px solid rgba(0,0,0,0.15)", borderRadius: "7px",
-    cursor: "pointer", transition: "background 150ms ease, border-color 150ms ease",
-  };
-
-  const handleExportCSV = () => {
-    if (data.consultants.length === 0) {
-      showToast("No data to export", "warning");
-      return;
-    }
-    const dateStr = new Date().toISOString().split("T")[0];
-    const headers = ["Name", "Role", "Utilization %", "Allocated Hours", "Available Hours", "Projects Assigned"];
-    const rows = data.consultants.map((c) => {
-      const assignedProjects = data.projects.filter((p) => p.team.includes(c.id));
-      const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, data.timesheets) : c.utilization;
-      const allocatedHours = Math.round(util * 40 / 100);
-      const availableHours = 40 - allocatedHours;
-      return [
-        `"${c.name}"`,
-        `"${c.role}"`,
-        util,
-        allocatedHours,
-        availableHours,
-        `"${assignedProjects.map((p) => p.id).join("; ")}"`,
-      ];
+  // Combine Consultants & Users for complete real employee roster
+  const allEmployeesList = useMemo(() => {
+    const map = new Map<string, any>();
+    (data.consultants || []).forEach((c) => {
+      const key = (c.id || c.name || "").toLowerCase();
+      map.set(key, c);
     });
-    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `Systemeta_Resources_${dateStr}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    showToast("Export downloaded successfully", "success");
+
+    (data.users || []).forEach((u) => {
+      const key = (u.id || u.name || "").toLowerCase();
+      if (!map.has(key)) {
+        map.set(key, {
+          id: u.id,
+          name: u.name,
+          role: u.role || "Team Member",
+          dept: "Operations",
+          utilization: 0,
+          availability: 100,
+          avatar: u.avatar || u.name.substring(0, 2).toUpperCase(),
+          color: u.color || "#6366f1",
+          skills: ["Consulting"],
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [data.consultants, data.users]);
+
+  // Extract Departments for Filter
+  const departmentsList = useMemo(() => {
+    const depts = new Set<string>();
+    allEmployeesList.forEach((e) => {
+      if (e.dept) depts.add(e.dept);
+      if (e.department) depts.add(e.department);
+    });
+    return Array.from(depts).sort();
+  }, [allEmployeesList]);
+
+  // All Tasks
+  const allTasks = useMemo(() => flattenTasks(data.tasks), [data.tasks]);
+
+  // Filter Timesheets by Period if selected
+  const filteredTimesheets = useMemo(() => {
+    let timesheets = data.timesheets || [];
+    if (selectedPeriod === "all") return timesheets;
+
+    const now = new Date();
+    return timesheets.filter((ts) => {
+      if (!ts.week) return true;
+      const tsDate = new Date(ts.week);
+      if (isNaN(tsDate.getTime())) return true;
+
+      if (selectedPeriod === "this_month") {
+        return (
+          tsDate.getMonth() === now.getMonth() &&
+          tsDate.getFullYear() === now.getFullYear()
+        );
+      }
+      if (selectedPeriod === "last_month") {
+        const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        return (
+          tsDate.getMonth() === lastMonth.getMonth() &&
+          tsDate.getFullYear() === lastMonth.getFullYear()
+        );
+      }
+      return true;
+    });
+  }, [data.timesheets, selectedPeriod]);
+
+  // Calculate Metrics for All Employees
+  const employeeMetricsList = useMemo(() => {
+    return allEmployeesList.map((emp) =>
+      getEmployeeResourceMetrics(
+        emp,
+        allTasks,
+        filteredTimesheets,
+        data.projects || [],
+        selectedProject
+      )
+    );
+  }, [allEmployeesList, allTasks, filteredTimesheets, data.projects, selectedProject]);
+
+  // Filter Employee Metrics by UI Filters
+  const filteredEmployeeMetrics = useMemo(() => {
+    return employeeMetricsList.filter((m) => {
+      if (selectedEmployee !== "all" && m.id !== selectedEmployee && m.name !== selectedEmployee) {
+        return false;
+      }
+      if (selectedDepartment !== "all" && m.dept !== selectedDepartment) {
+        return false;
+      }
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matchName = m.name.toLowerCase().includes(term);
+        const matchRole = m.role.toLowerCase().includes(term);
+        const matchDept = m.dept.toLowerCase().includes(term);
+        if (!matchName && !matchRole && !matchDept) return false;
+      }
+      return true;
+    });
+  }, [employeeMetricsList, selectedEmployee, selectedDepartment, searchTerm]);
+
+  // Overall Summary Metrics
+  const summary = useMemo(() => {
+    return getOverallResourceSummary(filteredEmployeeMetrics);
+  }, [filteredEmployeeMetrics]);
+
+  // Extract Recent Submitted Weeks for Heatmap
+  const recentWeeks = useMemo(() => {
+    const weeksSet = new Set<string>();
+    (data.timesheets || []).forEach((ts) => {
+      if (ts.week) weeksSet.add(ts.week);
+    });
+    const sorted = Array.from(weeksSet).sort(
+      (a, b) => new Date(b).getTime() - new Date(a).getTime()
+    );
+    return sorted.slice(0, 5).reverse();
+  }, [data.timesheets]);
+
+  // Helper menu permissions
+  const canAccessMenu = (m: EmployeeResourceMetrics) => {
+    if (!user) return false;
+    if (user.role === "super_admin" || user.role === "Super Admin" || user.role === "admin") {
+      return true;
+    }
+    if (
+      user.role === "project_manager" ||
+      user.role === "Project Manager" ||
+      user.role === "client_manager"
+    ) {
+      return true;
+    }
+    return user.id === m.id || user.name === m.name;
   };
 
-  const handleExportSchedule = () => {
-    if (data.consultants.length === 0) {
+  // CSV Export Handler
+  const handleExportCSV = () => {
+    if (filteredEmployeeMetrics.length === 0) {
       showToast("No data to export", "warning");
       return;
     }
     const dateStr = new Date().toISOString().split("T")[0];
     const headers = [
-      t("Consultant Name"),
-      t("Role"),
-      t("Department"),
-      t("Current Projects"),
-      t("Utilization Percentage"),
-      t("Availability Percentage"),
-      t("Status")
+      "Employee Name",
+      "Role",
+      "Department",
+      "Planned Hours",
+      "Actual Hours",
+      "Logged Hours",
+      "Capacity Hours",
+      "Utilisation %",
+      "Efficiency %",
+      "Status",
+      "Assigned Projects",
     ];
-    const rows = data.consultants.map((c) => {
-      const assignedProjects = data.projects.filter((p) => p.team.includes(c.id));
-      const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, data.timesheets) : c.utilization;
-      const statusStr = util > 90 
-        ? t("Over-allocated") 
-        : util > 80 
-          ? t("Near limit") 
-          : t("Available");
-      const availStr = `${100 - util}% ${t("free")}`;
-      
-      return [
-        `"${c.name}"`,
-        `"${c.role}"`,
-        `"${c.dept}"`,
-        `"${assignedProjects.map((p) => p.id).join("; ")}"`,
-        `"${util}%"`,
-        `"${availStr}"`,
-        `"${statusStr}"`
-      ];
-    });
 
-    const csvContent = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const rows = filteredEmployeeMetrics.map((m) => [
+      `"${m.name}"`,
+      `"${m.role}"`,
+      `"${m.dept}"`,
+      m.plannedHours,
+      m.actualHours,
+      m.loggedHours,
+      m.capacityHours,
+      `${m.utilisationPercent}%`,
+      `${m.efficiencyPercent}%`,
+      `"${m.status}"`,
+      `"${m.projects.join("; ")}"`,
+    ]);
+
+    const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `Systemeta_Consultant_Availability_${dateStr}.csv`);
-    link.style.visibility = "hidden";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    showToast("Schedule exported successfully", "success");
-  };
-
-  // Deterministic utilization formula to replace Math.random() (resolves Bug #1)
-  const getDeterministicUtil = (cId: string, wIdx: number) => {
-    const consultant = data.consultants.find((x) => x.id === cId);
-    if (!consultant || !consultant.utilization || consultant.utilization === 0) return 0;
-    const codeSum = (cId.charCodeAt(0) || 0) + (cId.charCodeAt(1) || 0) * 5;
-    const variation = ((codeSum + wIdx * 11) % 31) - 15; // -15% to +15%
-    const base = consultant.utilization;
-    return Math.min(100, Math.max(0, base + variation));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `Systemeta_Resource_Planning_${dateStr}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("Resource Planning CSV exported successfully", "success");
   };
 
   return (
     <div style={{ animation: "fadeIn 0.5s ease-out" }}>
-      {/* Page Header */}
+      {/* Header */}
       <div className="page-header">
         <div>
           <h1 className="page-title">{t("Resource Planning")}</h1>
           <p className="page-subtitle">
-            {data.consultants.length} {t("consultants")} · {t("Week of Jun 9–13, 2026")}
+            {filteredEmployeeMetrics.length} {t("employees evaluated")} · {t("Live Real-Time Data")}
           </p>
         </div>
         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <button
-            id="resources-export-csv"
-            style={exportBtnStyle}
+            className="btn btn-secondary btn-sm"
             onClick={handleExportCSV}
-            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = "rgba(0,0,0,0.04)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,0,0,0.25)"; }}
-            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = "transparent"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(0,0,0,0.15)"; }}
+            style={{ display: "flex", alignItems: "center", gap: "6px" }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            {t("Export CSV")}
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            {t("Export CSV Report")}
           </button>
         </div>
       </div>
 
-      {/* Heatmap & Radar Section */}
+      {/* Filter Toolbar */}
+      <div
+        className="card"
+        style={{
+          padding: "16px",
+          marginBottom: "20px",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "16px",
+          alignItems: "center",
+          background: "var(--bg-surface, #ffffff)",
+        }}
+      >
+        <div style={{ flex: "1 1 200px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+            {t("Filter Employee")}
+          </label>
+          <select
+            className="login-input"
+            style={{ padding: "8px 12px", fontSize: "13px" }}
+            value={selectedEmployee}
+            onChange={(e) => setSelectedEmployee(e.target.value)}
+          >
+            <option value="all">{t("All Employees")}</option>
+            {allEmployeesList.map((emp) => (
+              <option key={emp.id} value={emp.id}>
+                {emp.name} ({emp.role || "Consultant"})
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ flex: "1 1 200px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+            {t("Filter Project")}
+          </label>
+          <select
+            className="login-input"
+            style={{ padding: "8px 12px", fontSize: "13px" }}
+            value={selectedProject}
+            onChange={(e) => setSelectedProject(e.target.value)}
+          >
+            <option value="all">{t("All Projects")}</option>
+            {(data.projects || []).map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ flex: "1 1 200px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+            {t("Department")}
+          </label>
+          <select
+            className="login-input"
+            style={{ padding: "8px 12px", fontSize: "13px" }}
+            value={selectedDepartment}
+            onChange={(e) => setSelectedDepartment(e.target.value)}
+          >
+            <option value="all">{t("All Departments")}</option>
+            {departmentsList.map((dept) => (
+              <option key={dept} value={dept}>
+                {dept}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ flex: "1 1 180px" }}>
+          <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "4px" }}>
+            {t("Time Period")}
+          </label>
+          <select
+            className="login-input"
+            style={{ padding: "8px 12px", fontSize: "13px" }}
+            value={selectedPeriod}
+            onChange={(e) => setSelectedPeriod(e.target.value)}
+          >
+            <option value="all">{t("All Time")}</option>
+            <option value="this_month">{t("This Month")}</option>
+            <option value="last_month">{t("Last Month")}</option>
+          </select>
+        </div>
+
+        {(selectedEmployee !== "all" ||
+          selectedProject !== "all" ||
+          selectedDepartment !== "all" ||
+          selectedPeriod !== "all") && (
+          <div style={{ alignSelf: "flex-end" }}>
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setSelectedEmployee("all");
+                setSelectedProject("all");
+                setSelectedDepartment("all");
+                setSelectedPeriod("all");
+              }}
+            >
+              {t("Reset Filters")}
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* KPI Cards Grid */}
+      <div
+        className="kpi-grid"
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+          gap: "16px",
+          marginBottom: "24px",
+        }}
+      >
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Total Capacity")}</div>
+          <div className="kpi-value" style={{ fontSize: "24px", fontWeight: 700 }}>
+            {summary.totalCapacity} <span style={{ fontSize: "14px", fontWeight: 500 }}>hrs</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("Submitted work weeks × 40h")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Logged Hours")}</div>
+          <div className="kpi-value" style={{ fontSize: "24px", fontWeight: 700, color: "var(--primary-color, #4f46e5)" }}>
+            {summary.totalLogged} <span style={{ fontSize: "14px", fontWeight: 500 }}>hrs</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("Sum of approved timesheets")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Planned Hours")}</div>
+          <div className="kpi-value" style={{ fontSize: "24px", fontWeight: 700, color: "#0284c7" }}>
+            {summary.totalPlanned} <span style={{ fontSize: "14px", fontWeight: 500 }}>hrs</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("Task estimated work")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Actual Hours")}</div>
+          <div className="kpi-value" style={{ fontSize: "24px", fontWeight: 700, color: "#0d9488" }}>
+            {summary.totalActual} <span style={{ fontSize: "14px", fontWeight: 500 }}>hrs</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("Punched time logs")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Utilisation %")}</div>
+          <div
+            className="kpi-value"
+            style={{
+              fontSize: "24px",
+              fontWeight: 700,
+              color: summary.overallUtilisation > 90 ? "#ef4444" : summary.overallUtilisation > 75 ? "#10b981" : "#3b82f6",
+            }}
+          >
+            {summary.overallUtilisation}%
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("(Logged / Capacity) × 100")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Efficiency %")}</div>
+          <div
+            className="kpi-value"
+            style={{
+              fontSize: "24px",
+              fontWeight: 700,
+              color: summary.overallEfficiency >= 100 ? "#10b981" : summary.overallEfficiency >= 80 ? "#f59e0b" : "#ef4444",
+            }}
+          >
+            {summary.overallEfficiency}%
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("(Planned / Actual) × 100")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Available Capacity")}</div>
+          <div className="kpi-value" style={{ fontSize: "24px", fontWeight: 700, color: "#10b981" }}>
+            {summary.availableCapacity} <span style={{ fontSize: "14px", fontWeight: 500 }}>hrs</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("Unallocated capacity")}
+          </div>
+        </div>
+
+        <div className="card kpi-card" style={{ padding: "16px 20px" }}>
+          <div className="kpi-title">{t("Overallocated")}</div>
+          <div className="kpi-value" style={{ fontSize: "24px", fontWeight: 700, color: summary.overallocatedCount > 0 ? "#ef4444" : "var(--text-primary)" }}>
+            {summary.overallocatedCount} <span style={{ fontSize: "14px", fontWeight: 500 }}>{t("employees")}</span>
+          </div>
+          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginTop: "4px" }}>
+            {t("Utilisation > 100%")}
+          </div>
+        </div>
+      </div>
+
+      {/* Heatmap Section & Live Trends */}
       <div className="grid-2 mb-4">
         {/* Heatmap Card */}
         <div className="card">
           <div className="card-header" style={{ marginBottom: "16px" }}>
-            <span className="card-title">{t("Utilization Heatmap")}</span>
-            <div
-              style={{
-                display: "flex",
-                gap: "4px",
-                alignItems: "center",
-                fontSize: "11px",
-                color: "var(--text-tertiary)",
-              }}
-            >
-              <span style={{ width: "12px", height: "12px", background: "#dbeafe", borderRadius: "2px", display: "inline-block" }} />
-              {t("Low")}
-              <span style={{ width: "12px", height: "12px", background: "#2563eb", borderRadius: "2px", display: "inline-block", marginLeft: "4px" }} />
-              {t("High")}
+            <span className="card-title">{t("Submitted Weeks Utilisation Heatmap")}</span>
+            <div style={{ display: "flex", gap: "6px", alignItems: "center", fontSize: "11px", color: "var(--text-tertiary)" }}>
+              <span style={{ width: "10px", height: "10px", background: "#e0f2fe", borderRadius: "2px" }} /> 0% (New)
+              <span style={{ width: "10px", height: "10px", background: "#3b82f6", borderRadius: "2px", marginLeft: "4px" }} /> Optimal
+              <span style={{ width: "10px", height: "10px", background: "#ef4444", borderRadius: "2px", marginLeft: "4px" }} /> Overallocated
             </div>
           </div>
           <div className="card-body">
             <div style={{ overflowX: "auto" }}>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: `120px repeat(${weeks.length}, 1fr)`,
-                    gap: "8px",
-                    minWidth: "400px",
-                  }}
-                >
-                <div />
-                {weeks.map((w) => (
-                  <div
-                    key={w.weekStr}
-                    style={{
-                      textAlign: "center",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      color: "var(--text-tertiary)",
-                      padding: "4px",
-                    }}
-                  >
-                    {w.label}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: `140px repeat(${recentWeeks.length > 0 ? recentWeeks.length : 1}, 1fr)`,
+                  gap: "8px",
+                  minWidth: "420px",
+                }}
+              >
+                <div style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-tertiary)" }}>Employee</div>
+                {recentWeeks.length > 0 ? (
+                  recentWeeks.map((w) => (
+                    <div key={w} style={{ textAlign: "center", fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)" }}>
+                      {w}
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ textAlign: "center", fontSize: "11px", fontWeight: 600, color: "var(--text-tertiary)" }}>
+                    {t("No Weeks")}
                   </div>
-                ))}
+                )}
 
-                {data.consultants.map((c) => (
-                  <React.Fragment key={c.id}>
+                {filteredEmployeeMetrics.map((m) => (
+                  <React.Fragment key={m.id}>
                     <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 0" }}>
                       <div
                         className="avatar"
                         style={{
-                          background: c.color,
+                          background: m.color,
                           width: "22px",
                           height: "22px",
                           minWidth: "22px",
-                          fontSize: "8px",
+                          fontSize: "9px",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -245,54 +516,79 @@ export default function ResourcesPage() {
                           fontWeight: "bold",
                         }}
                       >
-                        {c.avatar}
+                        {m.avatar}
                       </div>
                       <span
-                        style={{
-                          fontSize: "11px",
-                          color: "var(--text-secondary)",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                        }}
-                        title={c.name}
+                        style={{ fontSize: "12px", color: "var(--text-primary)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}
+                        title={m.name}
                       >
-                        {c.name.split(" ")[0]}
+                        {m.name.split(" ")[0]}
                       </span>
                     </div>
 
-                    {weeks.map((w, wIdx) => {
-                      const v = Math.round(recentWeeks.length > 0 
-                        ? calculateWeeklyUtilization(c.id, w.weekStr, data.timesheets)
-                        : getDeterministicUtil(c.id, wIdx));
-                      
-                      let bg = "#3b82f6"; // optimal blue
-                      if (v < 50) bg = "#93c5fd"; // underutilized light blue
-                      if (v >= 85) bg = "#f59e0b"; // near limit orange
-                      if (v >= 100) bg = "#ef4444"; // over limit red
-                      
-                      return (
-                        <div
-                          key={wIdx}
-                          className="heatmap-cell"
-                          style={{
-                            height: "32px",
-                            background: bg,
-                            borderRadius: "6px",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: v < 50 ? "#1e3a8a" : "white",
-                            fontSize: "12px",
-                            fontWeight: 600,
-                            transition: "all 0.2s",
-                          }}
-                          title={`${c.name}: ${v}% utilization`}
-                        >
-                          {v}%
-                        </div>
-                      );
-                    })}
+                    {recentWeeks.length > 0 ? (
+                      recentWeeks.map((wStr) => {
+                        const empTimesheet = (data.timesheets || []).find(
+                          (ts: any) =>
+                            (ts.consultant === m.id || ts.consultant === m.name) &&
+                            ts.week === wStr &&
+                            ts.status !== "rejected" &&
+                            ts.status !== "Rejected"
+                        );
+
+                        let weekLogged = 0;
+                        if (empTimesheet && empTimesheet.entries) {
+                          empTimesheet.entries.forEach((e: any) => {
+                            if (selectedProject !== "all" && e.project !== selectedProject) return;
+                            weekLogged += e.hours || 0;
+                          });
+                        }
+
+                        const weekUtil = empTimesheet ? Math.min(100, Math.round((weekLogged / 40) * 100)) : 0;
+
+                        let bg = "#3b82f6";
+                        if (weekUtil === 0) bg = "#e0f2fe";
+                        else if (weekUtil < 50) bg = "#93c5fd";
+                        else if (weekUtil >= 85 && weekUtil <= 100) bg = "#f59e0b";
+                        else if (weekUtil > 100) bg = "#ef4444";
+
+                        return (
+                          <div
+                            key={wStr}
+                            className="heatmap-cell"
+                            style={{
+                              height: "30px",
+                              background: bg,
+                              borderRadius: "6px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: weekUtil < 50 ? "#1e3a8a" : "white",
+                              fontSize: "11px",
+                              fontWeight: 600,
+                            }}
+                            title={`${m.name} (${wStr}): ${weekLogged}h logged (${weekUtil}%)`}
+                          >
+                            {weekUtil}%
+                          </div>
+                        );
+                      })
+                    ) : (
+                      <div
+                        style={{
+                          height: "30px",
+                          background: "#e0f2fe",
+                          borderRadius: "6px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          fontSize: "11px",
+                          color: "#1e3a8a",
+                        }}
+                      >
+                        0%
+                      </div>
+                    )}
                   </React.Fragment>
                 ))}
               </div>
@@ -300,383 +596,416 @@ export default function ResourcesPage() {
           </div>
         </div>
 
-        {/* Overview Card */}
+        {/* Project Hour Distribution Card */}
         <div className="card" style={{ display: "flex", flexDirection: "column" }}>
-          <div className="card-header" style={{ marginBottom: 0 }}>
-            <span className="card-title">{t("Team Utilization Overview")}</span>
+          <div className="card-header">
+            <span className="card-title">{t("Project Workload Allocation")}</span>
           </div>
-          <div className="card-body" style={{ display: "flex", flexDirection: "column", flexGrow: 1 }}>
-            <div className="chart-container" style={{ flexGrow: 1, minHeight: "260px" }}>
-              <TeamRadarChart />
-            </div>
+          <div className="card-body" style={{ flexGrow: 1, display: "flex", flexDirection: "column", gap: "12px" }}>
+            {(data.projects || []).length > 0 ? (
+              (data.projects || []).slice(0, 5).map((p) => {
+                let projectHours = 0;
+                (data.timesheets || []).forEach((ts: any) => {
+                  if (ts.status === "rejected" || ts.status === "Rejected") return;
+                  if (ts.entries) {
+                    ts.entries.forEach((e: any) => {
+                      if (e.project === p.id || e.project === p.name) {
+                        projectHours += e.hours || 0;
+                      }
+                    });
+                  }
+                });
+
+                const pct = summary.totalLogged > 0 ? Math.round((projectHours / summary.totalLogged) * 100) : 0;
+
+                return (
+                  <div key={p.id}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", marginBottom: "4px" }}>
+                      <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</span>
+                      <span style={{ color: "var(--text-secondary)", fontWeight: 500 }}>
+                        {projectHours}h ({pct}%)
+                      </span>
+                    </div>
+                    <div className="progress-bar" style={{ height: "8px", background: "var(--bg-secondary, #e2e8f0)" }}>
+                      <div
+                        className="progress-fill"
+                        style={{
+                          width: `${pct}%`,
+                          background: "var(--primary-color, #4f46e5)",
+                          borderRadius: "4px",
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            ) : (
+              <div style={{ color: "var(--text-tertiary)", fontSize: "13px", textAlign: "center", padding: "24px" }}>
+                {t("No projects active")}
+              </div>
+            )}
           </div>
         </div>
       </div>
 
-      {/* Consultant Availability Table */}
+      {/* Employee Leaderboard Table */}
       <div className="card">
-        <div className="card-header" style={{ marginBottom: 0 }}>
-          <span className="card-title">{t("Consultant Availability")}</span>
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={handleExportSchedule}
-          >
-            {t("Export Schedule")}
-          </button>
+        <div className="card-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "12px" }}>
+          <span className="card-title">{t("Employee Resource Leaderboard")}</span>
+          <div style={{ width: "240px" }}>
+            <input
+              type="text"
+              className="login-input"
+              style={{ padding: "6px 12px", fontSize: "13px" }}
+              placeholder={t("Search employee or role...")}
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+          </div>
         </div>
+
         <div className="table-wrapper" style={{ border: "none", borderRadius: 0 }}>
           <table>
             <thead>
               <tr>
-                <th>{t("Consultant")}</th>
-                <th>{t("Role")}</th>
-                <th>{t("Department")}</th>
-                <th>{t("Current Projects")}</th>
-                <th>{t("Utilization")}</th>
-                <th>{t("Availability")}</th>
+                <th>{t("Employee")}</th>
+                <th>{t("Role / Dept")}</th>
+                <th>{t("Planned")}</th>
+                <th>{t("Actual")}</th>
+                <th>{t("Logged")}</th>
+                <th>{t("Capacity")}</th>
+                <th>{t("Utilisation")}</th>
+                <th>{t("Efficiency")}</th>
                 <th>{t("Status")}</th>
                 <th />
               </tr>
             </thead>
             <tbody>
-              {data.consultants.map((c) => {
-                const util = recentWeeks.length > 0 ? calculateAverageUtilization(c.id, data.timesheets) : c.utilization;
-                const availability = 100 - util;
-                const barColor = util > 90 ? "#ef4444" : util > 80 ? "#f59e0b" : "#10b981";
-                const assignedProjects = data.projects.filter((p) => p.team.includes(c.id));
-                return (
-                  <tr key={c.id}>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
-                        <div
-                          className="avatar"
-                          style={{
-                            background: c.color,
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                            color: "white",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          {c.avatar}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
-                            {c.name}
-                          </div>
-                          <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
-                            {c.skills.slice(0, 2).join(", ")}
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ fontSize: "13px", color: "var(--text-primary)" }}>{c.role}</td>
-                    <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{c.dept}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
-                        {assignedProjects.slice(0, 2).map((p) => (
-                          <span key={p.id} className="badge badge-gray" style={{ fontSize: "10px" }} title={p.name}>
-                            {p.name.length > 15 ? p.name.slice(0, 15) + '...' : p.name}
-                          </span>
-                        ))}
-                        {assignedProjects.length > 2 && (
-                          <span className="badge badge-gray" style={{ fontSize: "10px" }}>
-                            +{assignedProjects.length - 2}
-                          </span>
-                        )}
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <div className="progress-bar" style={{ width: "70px", height: "6px" }}>
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${util}%`, background: barColor }}
-                          />
-                        </div>
-                        <span style={{ fontSize: "12px", fontWeight: 700, color: barColor }}>
-                          {util}%
-                        </span>
-                      </div>
-                    </td>
-                    <td>
-                      <span className="badge badge-success" style={{ fontSize: "11px" }}>
-                        {availability}% {t("free")}
-                      </span>
-                    </td>
-                    <td>
-                      <span className="status-indicator" style={{ color: barColor, fontSize: "12px" }}>
-                        <span className="status-dot-pulse" style={{ background: barColor }} />
-                        {util > 90 ? t("Over-allocated") : util > 80 ? t("Near limit") : t("Available")}
-                      </span>
-                    </td>
-                    <td style={{ position: "relative" }}>
-                      <div ref={activeMenuId === c.id ? menuRef : null}>
-                        <button
-                          className="btn btn-ghost btn-sm btn-icon"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (canAccessMenu(c)) {
-                              setActiveMenuId(activeMenuId === c.id ? null : c.id);
-                            }
-                          }}
-                          disabled={!canAccessMenu(c)}
-                          style={{ 
-                            background: activeMenuId === c.id ? "rgba(0,0,0,0.05)" : "transparent",
-                            opacity: canAccessMenu(c) ? 1 : 0.3,
-                            cursor: canAccessMenu(c) ? "pointer" : "not-allowed"
-                          }}
-                        >
-                          ⋯
-                        </button>
+              {filteredEmployeeMetrics.length > 0 ? (
+                filteredEmployeeMetrics.map((m) => {
+                  const utilColor =
+                    m.utilisationPercent > 100
+                      ? "#ef4444"
+                      : m.utilisationPercent >= 75
+                      ? "#10b981"
+                      : m.utilisationPercent === 0
+                      ? "var(--text-tertiary)"
+                      : "#3b82f6";
 
-                        {canAccessMenu(c) && activeMenuId === c.id && (
+                  const effColor =
+                    m.efficiencyPercent >= 100
+                      ? "#10b981"
+                      : m.efficiencyPercent >= 80
+                      ? "#f59e0b"
+                      : m.efficiencyPercent === 0
+                      ? "var(--text-tertiary)"
+                      : "#ef4444";
+
+                  return (
+                    <tr key={m.id}>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "9px" }}>
                           <div
+                            className="avatar"
                             style={{
-                              position: "absolute",
-                              right: "100%",
-                              top: "50%",
-                              transform: "translateY(-50%)",
-                              marginRight: "8px",
-                              background: "var(--bg-surface, #ffffff)",
-                              border: "1px solid rgba(0,0,0,0.1)",
-                              borderRadius: "8px",
-                              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                              zIndex: 100,
-                              padding: "4px",
-                              minWidth: "220px",
+                              background: m.color,
                               display: "flex",
-                              flexDirection: "column",
-                              gap: "2px"
+                              alignItems: "center",
+                              justifyContent: "center",
+                              color: "white",
+                              fontWeight: "bold",
                             }}
                           >
-                            <button
-                              style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px", color: "var(--text-primary)" }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.04)")}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              onClick={() => { setActiveModal('details'); setSelectedConsultant(c); setActiveMenuId(null); }}
-                            >
-                              View Details
-                            </button>
-                            <button
-                              style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px", color: "var(--text-primary)" }}
-                              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.04)")}
-                              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                              onClick={() => { setActiveModal('projects'); setSelectedConsultant(c); setActiveMenuId(null); }}
-                            >
-                              View Assigned Projects
-                            </button>
-                            
-                            {canViewAdvancedOptions() && (
-                              <>
-                                <button
-                                  style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px", color: "var(--text-primary)" }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.04)")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                                  onClick={() => { setActiveModal('utilization'); setSelectedConsultant(c); setActiveMenuId(null); }}
-                                >
-                                  View Utilization History
-                                </button>
-                                <button
-                                  style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px", color: "var(--text-primary)" }}
-                                  onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0,0,0,0.04)")}
-                                  onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                                  onClick={() => { setActiveModal('allocation'); setSelectedConsultant(c); setActiveMenuId(null); }}
-                                >
-                                  Resource Allocation Summary
-                                </button>
-                              </>
-                            )}
+                            {m.avatar}
                           </div>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+                          <div>
+                            <div style={{ fontWeight: 600, fontSize: "13px", color: "var(--text-primary)" }}>
+                              {m.name}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
+                              {m.skills.slice(0, 2).join(", ")}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+
+                      <td style={{ fontSize: "13px" }}>
+                        <div style={{ fontWeight: 500, color: "var(--text-primary)" }}>{m.role}</div>
+                        <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{m.dept}</div>
+                      </td>
+
+                      <td style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {m.plannedHours}h
+                      </td>
+
+                      <td style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {m.actualHours}h
+                      </td>
+
+                      <td style={{ fontSize: "13px", fontWeight: 600, color: "var(--primary-color, #4f46e5)" }}>
+                        {m.loggedHours}h
+                      </td>
+
+                      <td style={{ fontSize: "13px", fontWeight: 500, color: "var(--text-secondary)" }}>
+                        {m.capacityHours}h
+                      </td>
+
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          <div className="progress-bar" style={{ width: "60px", height: "6px" }}>
+                            <div className="progress-fill" style={{ width: `${m.utilisationPercent}%`, background: utilColor }} />
+                          </div>
+                          <span style={{ fontSize: "12px", fontWeight: 700, color: utilColor }}>
+                            {m.utilisationPercent}%
+                          </span>
+                        </div>
+                      </td>
+
+                      <td>
+                        <span style={{ fontSize: "12px", fontWeight: 700, color: effColor }}>
+                          {m.efficiencyPercent}%
+                        </span>
+                      </td>
+
+                      <td>
+                        <span
+                          className={`badge ${
+                            m.status === "Over-allocated"
+                              ? "badge-danger"
+                              : m.status === "Optimal"
+                              ? "badge-success"
+                              : m.status === "Under-utilized"
+                              ? "badge-warning"
+                              : "badge-neutral"
+                          }`}
+                          style={{ fontSize: "11px" }}
+                        >
+                          {t(m.status)}
+                        </span>
+                      </td>
+
+                      <td style={{ position: "relative" }}>
+                        <div ref={activeMenuId === m.id ? menuRef : null}>
+                          <button
+                            className="btn btn-ghost btn-sm btn-icon"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (canAccessMenu(m)) {
+                                setActiveMenuId(activeMenuId === m.id ? null : m.id);
+                              }
+                            }}
+                            disabled={!canAccessMenu(m)}
+                            style={{
+                              background: activeMenuId === m.id ? "rgba(0,0,0,0.05)" : "transparent",
+                              opacity: canAccessMenu(m) ? 1 : 0.3,
+                              cursor: canAccessMenu(m) ? "pointer" : "not-allowed",
+                            }}
+                          >
+                            ⋯
+                          </button>
+
+                          {canAccessMenu(m) && activeMenuId === m.id && (
+                            <div
+                              style={{
+                                position: "absolute",
+                                right: "100%",
+                                top: "50%",
+                                transform: "translateY(-50%)",
+                                marginRight: "8px",
+                                background: "var(--bg-surface, #ffffff)",
+                                border: "1px solid rgba(0,0,0,0.1)",
+                                borderRadius: "8px",
+                                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                                zIndex: 100,
+                                padding: "4px",
+                                minWidth: "200px",
+                                display: "flex",
+                                flexDirection: "column",
+                                gap: "2px",
+                              }}
+                            >
+                              <button
+                                style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px" }}
+                                onClick={() => { setActiveModal("details"); setSelectedEmployeeMetrics(m); setActiveMenuId(null); }}
+                              >
+                                {t("View Details")}
+                              </button>
+                              <button
+                                style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px" }}
+                                onClick={() => { setActiveModal("projects"); setSelectedEmployeeMetrics(m); setActiveMenuId(null); }}
+                              >
+                                {t("View Assigned Projects")}
+                              </button>
+                              <button
+                                style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px" }}
+                                onClick={() => { setActiveModal("utilization"); setSelectedEmployeeMetrics(m); setActiveMenuId(null); }}
+                              >
+                                {t("View Utilization History")}
+                              </button>
+                              <button
+                                style={{ padding: "8px 12px", textAlign: "left", fontSize: "13px", background: "transparent", border: "none", cursor: "pointer", borderRadius: "4px" }}
+                                onClick={() => { setActiveModal("allocation"); setSelectedEmployeeMetrics(m); setActiveMenuId(null); }}
+                              >
+                                {t("Resource Allocation Summary")}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                <tr>
+                  <td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "var(--text-tertiary)" }}>
+                    {t("No employee resource records found matching current filters.")}
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* --- Consultant Options Modals --- */}
-      {activeModal && selectedConsultant && (
-        <div 
-          className="modal-overlay" 
+      {/* --- Options Modals --- */}
+      {activeModal && selectedEmployeeMetrics && (
+        <div
+          className="modal-overlay"
           onClick={() => setActiveModal(null)}
           style={{
             position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
+            inset: 0,
             backgroundColor: "rgba(0, 0, 0, 0.5)",
             backdropFilter: "blur(4px)",
-            WebkitBackdropFilter: "blur(4px)",
             zIndex: 9999,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            padding: "20px"
+            padding: "20px",
           }}
         >
-          <div 
-            className="modal-content" 
+          <div
+            className="modal-content"
             onClick={(e) => e.stopPropagation()}
             style={{
               background: "var(--bg-surface, #ffffff)",
               borderRadius: "12px",
-              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+              boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1)",
               width: "100%",
               maxWidth: "500px",
               maxHeight: "90vh",
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
-              border: "1px solid var(--border-subtle, rgba(0,0,0,0.1))"
             }}
           >
             <div className="modal-header" style={{ padding: "20px 24px", borderBottom: "1px solid var(--border-subtle)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 className="modal-title">
-                {activeModal === 'details' && `${selectedConsultant.name} - Details`}
-                {activeModal === 'projects' && `${selectedConsultant.name} - Assigned Projects`}
-                {activeModal === 'utilization' && `${selectedConsultant.name} - Utilization History`}
-                {activeModal === 'allocation' && `${selectedConsultant.name} - Allocation Summary`}
+              <h2 className="modal-title" style={{ margin: 0, fontSize: "18px" }}>
+                {activeModal === "details" && `${selectedEmployeeMetrics.name} - ${t("Details")}`}
+                {activeModal === "projects" && `${selectedEmployeeMetrics.name} - ${t("Assigned Projects")}`}
+                {activeModal === "utilization" && `${selectedEmployeeMetrics.name} - ${t("Utilization History")}`}
+                {activeModal === "allocation" && `${selectedEmployeeMetrics.name} - ${t("Allocation Summary")}`}
               </h2>
               <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setActiveModal(null)}>
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                ✕
               </button>
             </div>
-            
+
             <div className="modal-body" style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "16px" }}>
-              {activeModal === 'details' && (() => {
-                const util = recentWeeks.length > 0 ? calculateAverageUtilization(selectedConsultant.id, data.timesheets) : selectedConsultant.utilization;
-                const availability = 100 - util;
-                return (
+              {activeModal === "details" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-                    <div className="avatar" style={{ background: selectedConsultant.color, width: "48px", height: "48px", fontSize: "18px", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>
-                      {selectedConsultant.avatar}
+                  <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                    <div className="avatar" style={{ background: selectedEmployeeMetrics.color, width: "48px", height: "48px", fontSize: "18px", color: "white", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>
+                      {selectedEmployeeMetrics.avatar}
                     </div>
                     <div>
-                      <h3 style={{ margin: 0, fontSize: "16px", color: "var(--text-primary)" }}>{selectedConsultant.name}</h3>
-                      <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>{selectedConsultant.role} • {selectedConsultant.dept}</p>
+                      <h3 style={{ margin: 0, fontSize: "16px", color: "var(--text-primary)" }}>{selectedEmployeeMetrics.name}</h3>
+                      <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)" }}>
+                        {selectedEmployeeMetrics.role} • {selectedEmployeeMetrics.dept}
+                      </p>
                     </div>
                   </div>
-                  
+
                   <div className="grid-2">
-                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
-                      <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Status</span>
-                      <strong style={{ fontSize: "13px", color: util > 90 ? "#ef4444" : util > 80 ? "#f59e0b" : "#10b981" }}>
-                        {util > 90 ? t("Over-allocated") : util > 80 ? t("Near limit") : t("Available")}
-                      </strong>
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-tertiary)", display: "block" }}>{t("Status")}</span>
+                      <strong style={{ fontSize: "14px" }}>{t(selectedEmployeeMetrics.status)}</strong>
                     </div>
-                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
-                      <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Utilization</span>
-                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{util}%</strong>
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-tertiary)", display: "block" }}>{t("Utilisation")}</span>
+                      <strong style={{ fontSize: "14px" }}>{selectedEmployeeMetrics.utilisationPercent}%</strong>
                     </div>
-                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
-                      <span style={{ display: "block", fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px" }}>Availability</span>
-                      <strong style={{ fontSize: "13px", color: "var(--text-primary)" }}>{availability}%</strong>
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-tertiary)", display: "block" }}>{t("Efficiency")}</span>
+                      <strong style={{ fontSize: "14px" }}>{selectedEmployeeMetrics.efficiencyPercent}%</strong>
                     </div>
-                  </div>
-                  <div>
-                    <h4 style={{ fontSize: "13px", color: "var(--text-secondary)", marginBottom: "8px" }}>Key Skills</h4>
-                    <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
-                      {selectedConsultant.skills.map((s, idx) => (
-                        <span key={idx} className="badge badge-gray">{s}</span>
-                      ))}
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "12px", borderRadius: "8px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-tertiary)", display: "block" }}>{t("Total Capacity")}</span>
+                      <strong style={{ fontSize: "14px" }}>{selectedEmployeeMetrics.capacityHours}h</strong>
                     </div>
-                  </div>
-                </div>
-                );
-              })()}
-
-              {activeModal === 'projects' && (() => {
-                const projects = data.projects.filter((p) => p.team.includes(selectedConsultant.id));
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                    {projects.length === 0 ? (
-                      <p style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>No active projects assigned.</p>
-                    ) : (
-                      projects.map(p => (
-                        <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
-                          <div>
-                            <div style={{ fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>{p.name}</div>
-                            <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>Client: {p.client}</div>
-                          </div>
-                          <div className={`badge ${p.health === 'on-track' ? 'badge-success' : p.health === 'at-risk' ? 'badge-warning' : 'badge-danger'}`}>
-                            {p.health.replace('-', ' ')}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                );
-              })()}
-
-              {activeModal === 'utilization' && (
-                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                  <p style={{ fontSize: "13px", color: "var(--text-secondary)", margin: 0 }}>
-                    Historical utilization over the trailing 4 weeks.
-                  </p>
-                  <div style={{ display: "flex", gap: "8px", alignItems: "flex-end", height: "160px", padding: "16px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)" }}>
-                    {weeks.map((w, idx) => {
-                      const util = recentWeeks.length > 0 
-                        ? calculateWeeklyUtilization(selectedConsultant.id, w.weekStr, data.timesheets)
-                        : getDeterministicUtil(selectedConsultant.id, idx);
-                      const barColor = util > 90 ? "#ef4444" : util > 80 ? "#f59e0b" : "#2563eb";
-                      return (
-                        <div key={idx} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "8px" }}>
-                          <div style={{ fontSize: "11px", color: "var(--text-secondary)", fontWeight: 600 }}>{util}%</div>
-                          <div style={{ width: "100%", flex: 1, background: "rgba(0,0,0,0.05)", borderRadius: "4px", position: "relative", display: "flex", alignItems: "flex-end" }}>
-                            <div style={{ width: "100%", height: `${util}%`, background: barColor, borderRadius: "4px", transition: "height 0.3s ease" }} />
-                          </div>
-                          <div style={{ fontSize: "10px", color: "var(--text-tertiary)", textAlign: "center", whiteSpace: "nowrap" }}>{w.label}</div>
-                        </div>
-                      );
-                    })}
                   </div>
                 </div>
               )}
 
-              {activeModal === 'allocation' && (() => {
-                const projects = data.projects.filter((p) => p.team.includes(selectedConsultant.id));
-                const util = recentWeeks.length > 0 ? calculateAverageUtilization(selectedConsultant.id, data.timesheets) : selectedConsultant.utilization;
-                const allocatedHours = Math.round((util / 100) * 40);
-                const availableHours = 40 - allocatedHours;
-                return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px", background: "rgba(46, 134, 193, 0.05)", borderRadius: "8px", border: "1px solid rgba(46, 134, 193, 0.15)" }}>
-                      <div>
-                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>Weekly Allocation</div>
-                        <div style={{ fontSize: "24px", color: "#2E86C1", fontWeight: "bold" }}>{util}%</div>
+              {activeModal === "projects" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {selectedEmployeeMetrics.projects.length === 0 ? (
+                    <p style={{ color: "var(--text-tertiary)", fontSize: "13px" }}>{t("No active projects assigned.")}</p>
+                  ) : (
+                    selectedEmployeeMetrics.projects.map((projName, idx) => (
+                      <div key={idx} style={{ padding: "12px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", fontSize: "14px", fontWeight: 600, color: "var(--text-primary)" }}>
+                        {projName}
                       </div>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: "12px", color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase" }}>Active Projects</div>
-                        <div style={{ fontSize: "24px", color: "var(--text-primary)", fontWeight: "bold" }}>{projects.length}</div>
-                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+
+              {activeModal === "utilization" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
+                    {t("Logged vs Planned vs Capacity Breakdown")}
+                  </div>
+                  <div style={{ padding: "16px", background: "rgba(0,0,0,0.02)", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "10px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>{t("Planned Hours")}:</span> <strong>{selectedEmployeeMetrics.plannedHours}h</strong>
                     </div>
-                    
-                    <div className="grid-2">
-                      <div style={{ background: "rgba(0,0,0,0.02)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)", textAlign: "center" }}>
-                        <div style={{ fontSize: "28px", fontWeight: "bold", color: "var(--text-primary)", marginBottom: "4px" }}>{allocatedHours}h</div>
-                        <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Capacity Used</div>
-                      </div>
-                      <div style={{ background: "rgba(0,0,0,0.02)", padding: "16px", borderRadius: "8px", border: "1px solid rgba(0,0,0,0.05)", textAlign: "center" }}>
-                        <div style={{ fontSize: "28px", fontWeight: "bold", color: "#10b981", marginBottom: "4px" }}>{availableHours}h</div>
-                        <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>Available Capacity</div>
-                      </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>{t("Actual Hours")}:</span> <strong>{selectedEmployeeMetrics.actualHours}h</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>{t("Approved Logged Hours")}:</span> <strong>{selectedEmployeeMetrics.loggedHours}h</strong>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span>{t("Calculated Capacity")}:</span> <strong>{selectedEmployeeMetrics.capacityHours}h</strong>
                     </div>
                   </div>
-                );
-              })()}
+                </div>
+              )}
+
+              {activeModal === "allocation" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  <div className="grid-2">
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "16px", borderRadius: "8px", textAlign: "center" }}>
+                      <div style={{ fontSize: "24px", fontWeight: "bold", color: "var(--text-primary)" }}>{selectedEmployeeMetrics.loggedHours}h</div>
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("Capacity Used")}</div>
+                    </div>
+                    <div style={{ background: "rgba(0,0,0,0.02)", padding: "16px", borderRadius: "8px", textAlign: "center" }}>
+                      <div style={{ fontSize: "24px", fontWeight: "bold", color: "#10b981" }}>
+                        {Math.max(0, selectedEmployeeMetrics.capacityHours - selectedEmployeeMetrics.loggedHours)}h
+                      </div>
+                      <div style={{ fontSize: "12px", color: "var(--text-secondary)" }}>{t("Available Capacity")}</div>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
-            
-            <div className="modal-footer" style={{ padding: "20px 24px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "flex-end", background: "var(--bg-surface-2, #f8fafc)" }}>
-              <button className="btn btn-secondary" onClick={() => setActiveModal(null)}>Close</button>
+
+            <div className="modal-footer" style={{ padding: "16px 24px", borderTop: "1px solid var(--border-subtle)", display: "flex", justifyContent: "flex-end" }}>
+              <button className="btn btn-secondary" onClick={() => setActiveModal(null)}>
+                {t("Close")}
+              </button>
             </div>
           </div>
         </div>
