@@ -37,8 +37,8 @@ export const auth = betterAuth({
   },
   // Ensure sessions last long enough and cookies are secure
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
+    expiresIn: 60 * 60 * 24 * 30, // 30 days maximum duration
+    updateAge: 60 * 60 * 24, // 1 day sliding window update
     additionalFields: {
       isExtended: {
         type: "boolean",
@@ -52,22 +52,24 @@ export const auth = betterAuth({
       create: {
         before: async (session, context) => {
           const isExtendedHeader = context?.request?.headers?.get("x-is-extended");
-          console.log("BETTER AUTH HOOK: context.request exists?", !!context?.request);
-          console.log("BETTER AUTH HOOK: session.isExtended =", session.isExtended, "isExtendedHeader =", isExtendedHeader);
-          // If we passed the header (from auth.ts fallback injection) or if it's already on the payload
           const isExtended = session.isExtended === true || isExtendedHeader === "true";
           
           if (isExtended) {
-            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000);
+            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000); // 30 days
             return { data: { ...session, isExtended: true, expiresAt } };
+          } else {
+            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 1000); // 24 hours
+            return { data: { ...session, isExtended: false, expiresAt } };
           }
-          return { data: { ...session, isExtended: false } };
         },
       },
       update: {
         before: async (session, context) => {
           if (session.isExtended === true) {
             const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000);
+            return { data: { ...session, expiresAt } };
+          } else {
+            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 1000);
             return { data: { ...session, expiresAt } };
           }
         },
