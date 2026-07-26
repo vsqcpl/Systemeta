@@ -252,6 +252,7 @@ router.get("/clients/:id", async (req: Request, res: Response) => {
 router.put("/clients/:id", async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
+    const userId = user?.id || user?.name || "system";
     const client = await prisma.client.findFirst({ where: { id: req.params.id, deletedAt: null } });
     if (!client) return res.status(404).json({ error: "Client not found" });
     if (!isUserAssignedToClientRecord(client, user)) {
