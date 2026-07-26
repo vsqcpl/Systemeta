@@ -65,6 +65,14 @@ export default function BillingPage() {
   const [notes, setNotes] = useState("");
   const [errors, setErrors] = useState<{ clientName?: string; project?: string; invoiceDate?: string; dueDate?: string; amount?: string }>({});
 
+  // Milestone Creation State
+  const [showMilestoneModal, setShowMilestoneModal] = useState(false);
+  const [milestoneTitle, setMilestoneTitle] = useState("");
+  const [milestoneProject, setMilestoneProject] = useState("");
+  const [milestoneAmount, setMilestoneAmount] = useState("");
+  const [milestoneDate, setMilestoneDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const addMilestone = useAppStore((state: any) => state.addMilestone);
+
   // Payment Modals State
   const [showPaymentModal, setShowPaymentModal] = useState<string | null>(null);
   const [showHistoryModal, setShowHistoryModal] = useState<string | null>(null);
@@ -84,6 +92,29 @@ export default function BillingPage() {
   const [paymentRemarks, setPaymentRemarks] = useState("");
   const addPayment = useAppStore((state: any) => state.addPayment);
   const [isSubmittingPayment, setIsSubmittingPayment] = React.useState(false);
+
+  const handleCreateMilestone = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!milestoneTitle || !milestoneProject || !milestoneAmount || !milestoneDate) {
+      showToast("Please fill all required milestone fields", "danger");
+      return;
+    }
+    try {
+      await addMilestone({
+        projectId: milestoneProject,
+        project: milestoneProject,
+        title: milestoneTitle,
+        amount: parseFloat(milestoneAmount),
+        date: milestoneDate,
+        status: "Invoice Generated",
+      });
+      setShowMilestoneModal(false);
+      setMilestoneTitle("");
+      setMilestoneAmount("");
+    } catch (err: any) {
+      console.error(err);
+    }
+  };
 
   // Auto-select first project
   React.useEffect(() => {
@@ -420,6 +451,17 @@ export default function BillingPage() {
             </button>
           </ActionGuard>
           <ActionGuard action="generate_billing_summary">
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                if (visibleProjects.length > 0 && !milestoneProject) {
+                  setMilestoneProject(visibleProjects[0].id);
+                }
+                setShowMilestoneModal(true);
+              }}
+            >
+              + {t("Add Milestone")}
+            </button>
             <button
               className="btn btn-primary btn-sm"
               onClick={() => setShowInvoiceModal(true)}
@@ -1237,6 +1279,125 @@ export default function BillingPage() {
                 </>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Milestone Modal */}
+      {showMilestoneModal && (
+        <div
+          className="modal-overlay"
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.4)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={() => setShowMilestoneModal(false)}
+        >
+          <div
+            className="card-classic"
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              background: "var(--bg-surface, #ffffff)",
+              borderRadius: "12px",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+              animation: "scaleUp 0.15s ease",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "20px 24px",
+                borderBottom: "1px solid var(--border-color, #e2e8f0)",
+              }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: "var(--text-primary)" }}>
+                  {t("Add Billing Milestone")}
+                </h3>
+                <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--text-tertiary)" }}>
+                  {t("Automatically generates linked Invoice & updates billing dashboard")}
+                </p>
+              </div>
+              <button
+                className="btn btn-ghost btn-sm btn-icon"
+                onClick={() => setShowMilestoneModal(false)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateMilestone} style={{ padding: "24px" }}>
+              <div className="login-field" style={{ marginBottom: "16px" }}>
+                <label className="login-label">{t("Project")}</label>
+                <select
+                  className="login-input"
+                  value={milestoneProject}
+                  onChange={(e) => setMilestoneProject(e.target.value)}
+                >
+                  {visibleProjects.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} ({p.client})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="login-field" style={{ marginBottom: "16px" }}>
+                <label className="login-label">{t("Milestone Title")}</label>
+                <input
+                  type="text"
+                  className="login-input"
+                  placeholder="e.g., Phase 1 Deliverables Signoff"
+                  value={milestoneTitle}
+                  onChange={(e) => setMilestoneTitle(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "16px" }}>
+                <div className="login-field">
+                  <label className="login-label">{t("Milestone Amount (₹)")}</label>
+                  <input
+                    type="number"
+                    className="login-input"
+                    placeholder="e.g. 150000"
+                    value={milestoneAmount}
+                    onChange={(e) => setMilestoneAmount(e.target.value)}
+                  />
+                </div>
+                <div className="login-field">
+                  <label className="login-label">{t("Target Milestone Date")}</label>
+                  <input
+                    type="date"
+                    className="login-input"
+                    value={milestoneDate}
+                    onChange={(e) => setMilestoneDate(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end", marginTop: "24px" }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowMilestoneModal(false)}
+                >
+                  {t("Cancel")}
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  {t("Create Milestone & Invoice")}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

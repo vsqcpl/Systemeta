@@ -77,7 +77,16 @@ export interface TaskComment {
   time: string;
 }
 
-export type MilestoneStatus = 'upcoming' | 'at-risk' | 'delayed' | 'completed';
+export type MilestoneStatus =
+  | 'Invoice Generated'
+  | 'Pending'
+  | 'Paid'
+  | 'Overdue'
+  | 'Cancelled'
+  | 'upcoming'
+  | 'at-risk'
+  | 'delayed'
+  | 'completed';
 
 export interface Milestone {
   id: string;
@@ -85,8 +94,10 @@ export interface Milestone {
   projectId?: string; // Project ID (API/backend field — alias of project)
   title: string;
   date: string;
-  status: MilestoneStatus;
+  status: MilestoneStatus | string;
   amount: number;
+  invoiceId?: string;
+  invoiceNo?: string;
 }
 
 export interface RevenueData {
@@ -158,7 +169,15 @@ export interface Expense {
   onHoldReason?: string | null;
 }
 
-export type InvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus =
+  | 'pending'
+  | 'draft'
+  | 'issued'
+  | 'partially_paid'
+  | 'paid'
+  | 'overdue'
+  | 'cancelled'
+  | 'refunded';
 
 export interface Payment {
   id: string;
@@ -176,10 +195,15 @@ export interface Payment {
 
 export interface Invoice {
   id: string;
+  invoiceNo?: string;
   project: string; // Project ID
   client: string;
   amount: number;
-  status: InvoiceStatus;
+  gst?: number;
+  taxAmount?: number;
+  milestoneId?: string;
+  milestone?: string;
+  status: InvoiceStatus | string;
   issued: string;
   due?: string;
   paid?: string;

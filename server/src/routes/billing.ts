@@ -9,14 +9,49 @@ const router = Router();
 
 router.use(authMiddleware);
 
+/**
+ * Helper to dispatch role notifications to Admin, Finance (Accounts), and Client Managers
+ */
+async function notifyBillingRoles(type: string, title: string, message: string, category: string = "general") {
+  try {
+    const targetUsers = await prisma.user.findMany({
+      where: {
+        role: {
+          in: ["super_admin", "accounts", "client_manager", "Super Admin", "Accounts", "Client Manager"],
+        },
+      },
+      select: { id: true },
+    });
+
+    if (targetUsers.length > 0) {
+      await prisma.notification.createMany({
+        data: targetUsers.map((u) => ({
+          userId: u.id,
+          type,
+          title,
+          message,
+          category,
+          createdAt: new Date().toISOString(),
+        })),
+      });
+    }
+  } catch (err) {
+    console.error("Failed to notify billing roles:", err);
+  }
+}
+
 // GET /api/billing - Get invoices and milestones
 router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
     let projectsFilter: string[] = [];
-    const isElevated = req.user.role === "super_admin" || req.user.role === "accounts";
+    const isElevated =
+      req.user.role === "super_admin" ||
+      req.user.role === "accounts" ||
+      req.user.role === "Super Admin" ||
+      req.user.role === "Accounts";
 
     if (!isElevated) {
-      if (req.user.role === "project_manager") {
+      if (req.user.role === "project_manager" || req.user.role === "Project Manager") {
         const managedProjects = await prisma.project.findMany({
           where: { managerName: req.user.name },
           select: { id: true },
@@ -37,10 +72,12 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       prisma.invoice.findMany({
         where: whereClause,
         include: { payments: true, project: true },
+        orderBy: { issued: "desc" },
       }),
-      prisma.milestone.findMany({ 
+      prisma.milestone.findMany({
         where: whereClause,
         include: { project: true },
+        orderBy: { date: "desc" },
       }),
     ]);
 
@@ -48,12 +85,17 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       invoices: invoices.map((i) => {
         const collectedAmount = i.payments.reduce((sum, p) => sum + p.amount, 0);
         const outstandingAmount = Math.round((i.amount - collectedAmount) * 100) / 100;
+        const gst = 18; // Default 18% GST
+        const taxAmount = Math.round((i.amount * 0.18) * 100) / 100;
 
         return {
           id: i.id,
+          invoiceNo: i.invoiceNo || i.id,
           project: (i as any).project?.name || i.projectId,
           client: i.client,
           amount: i.amount,
+          gst,
+          taxAmount,
           status: i.status,
           issued: i.issued,
           due: i.due || undefined,
@@ -63,14 +105,22 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
           payments: i.payments,
         };
       }),
-      milestones: milestones.map((m) => ({
-        id: m.id,
-        project: (m as any).project?.name || m.projectId,
-        title: m.title,
-        date: m.date,
-        status: m.status,
-        amount: m.amount,
-      })),
+      milestones: milestones.map((m) => {
+        // Derive milestone status dynamically if linked invoice status exists
+        let syncedStatus = m.status || "Pending";
+        if (syncedStatus === "completed") syncedStatus = "Paid";
+        if (syncedStatus === "upcoming") syncedStatus = "Pending";
+
+        return {
+          id: m.id,
+          project: (m as any).project?.name || m.projectId,
+          projectId: m.projectId,
+          title: m.title,
+          date: m.date,
+          status: syncedStatus,
+          amount: m.amount,
+        };
+      }),
     });
   } catch (error: any) {
     console.error("GET /billing error:", error?.message || error);
@@ -78,11 +128,121 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// POST /api/billing/milestones - Create a milestone and automatically generate invoice
+router.post("/milestones", requireRoles(["super_admin", "accounts", "project_manager"]), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { projectId, project, title, amount, date, status } = req.body;
+
+    const targetProjectId = projectId || project;
+    if (!targetProjectId || !title || !amount || !date) {
+      return res.status(400).json({ message: "Missing required milestone fields (projectId, title, amount, date)" });
+    }
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ message: "Amount must be a positive number" });
+    }
+
+    const projectRecord = await prisma.project.findUnique({ where: { id: targetProjectId } });
+    if (!projectRecord) {
+      return res.status(404).json({ message: "Project not found" });
+    }
+
+    const clientName = projectRecord.client || "Client";
+
+    // Perform transaction: Create Milestone & Generate Invoice
+    const year = new Date().getFullYear();
+    const invoicePrefix = `INV-${year}-`;
+
+    const { milestone, invoice } = await prisma.$transaction(async (tx) => {
+      const createdMilestone = await tx.milestone.create({
+        data: {
+          projectId: targetProjectId,
+          title,
+          amount: parsedAmount,
+          date,
+          status: status || "Invoice Generated",
+        },
+      });
+
+      // Generate invoice number
+      const lastInvoice = await tx.invoice.findFirst({
+        where: { invoiceNo: { startsWith: invoicePrefix } },
+        orderBy: { invoiceNo: "desc" },
+      });
+
+      let nextSeq = 1;
+      if (lastInvoice && lastInvoice.invoiceNo) {
+        const parts = lastInvoice.invoiceNo.split("-");
+        const seq = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(seq)) nextSeq = seq + 1;
+      }
+
+      const invoiceNo = `${invoicePrefix}${String(nextSeq).padStart(3, "0")}`;
+
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          projectId: targetProjectId,
+          client: clientName,
+          amount: parsedAmount,
+          status: "pending",
+          issued: new Date().toISOString().split("T")[0],
+          due: date || null,
+          invoiceNo,
+        },
+      });
+
+      return { milestone: createdMilestone, invoice: createdInvoice };
+    });
+
+    // Notify role stakeholders
+    notifyBillingRoles(
+      "info",
+      "Invoice Generated from Milestone",
+      `Invoice ${invoice.invoiceNo || invoice.id} for ₹${parsedAmount.toLocaleString()} generated automatically for milestone "${title}".`,
+      "project"
+    );
+
+    invalidateDashboardCache();
+
+    return res.status(201).json({
+      milestone: {
+        id: milestone.id,
+        project: projectRecord.name || milestone.projectId,
+        projectId: milestone.projectId,
+        title: milestone.title,
+        date: milestone.date,
+        status: milestone.status,
+        amount: milestone.amount,
+        invoiceId: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+      },
+      invoice: {
+        id: invoice.id,
+        invoiceNo: invoice.invoiceNo,
+        project: projectRecord.name || invoice.projectId,
+        client: invoice.client,
+        amount: invoice.amount,
+        gst: 18,
+        taxAmount: Math.round((invoice.amount * 0.18) * 100) / 100,
+        status: invoice.status,
+        issued: invoice.issued,
+        due: invoice.due || undefined,
+        collectedAmount: 0,
+        outstandingAmount: invoice.amount,
+        payments: [],
+      },
+    });
+  } catch (error: any) {
+    console.error("POST /billing/milestones error:", error?.message || error);
+    return res.status(500).json({ message: "Internal server error creating milestone and invoice" });
+  }
+});
 
 // POST /api/billing/invoices - Generate an invoice
 router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
   try {
-    const { project, client, amount, issued, due } = req.body;
+    const { project, client, amount, issued, due, milestoneId } = req.body;
 
     if (!project || !client || !amount || !issued) {
       return res.status(400).json({ message: "Required fields are missing" });
@@ -93,36 +253,25 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       return res.status(400).json({ message: "Amount must be a positive number" });
     }
 
-    // Verify project exists
     const projectRecord = await prisma.project.findUnique({ where: { id: project } });
     if (!projectRecord) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    // Generate sequential Invoice No
     const year = new Date().getFullYear();
     const invoicePrefix = `INV-${year}-`;
 
     const invoice = await prisma.$transaction(async (tx) => {
-      // Find the latest invoice for this year
       const lastInvoice = await tx.invoice.findFirst({
-        where: {
-          invoiceNo: {
-            startsWith: invoicePrefix,
-          },
-        },
-        orderBy: {
-          invoiceNo: "desc",
-        },
+        where: { invoiceNo: { startsWith: invoicePrefix } },
+        orderBy: { invoiceNo: "desc" },
       });
 
       let nextNumber = 1;
       if (lastInvoice && lastInvoice.invoiceNo) {
         const lastParts = lastInvoice.invoiceNo.split("-");
         const lastSequence = parseInt(lastParts[lastParts.length - 1], 10);
-        if (!isNaN(lastSequence)) {
-          nextNumber = lastSequence + 1;
-        }
+        if (!isNaN(lastSequence)) nextNumber = lastSequence + 1;
       }
 
       const invoiceNo = `${invoicePrefix}${String(nextNumber).padStart(3, "0")}`;
@@ -132,7 +281,7 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
           projectId: project,
           client,
           amount: parsedAmount,
-          status: "draft",
+          status: "pending",
           issued,
           due: due || null,
           invoiceNo,
@@ -140,34 +289,24 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
       });
     });
 
-    // Log Activity (non-critical — don't let failure block response)
-    prisma.activity.create({
-      data: {
-        userId: req.user.id,
-        action: "Generated invoice",
-        subject: `${invoice.invoiceNo || invoice.id} – ${client} ₹${(parsedAmount / 100000).toFixed(2)}L`,
-        projectId: project,
-        type: "invoice",
-      },
-    }).catch((e) => console.error("Activity log failed:", e));
-
-    // Log Audit (non-critical)
-    logAuditEvent({
-      userEmail: req.user.email,
-      action: "INVOICE_GENERATED",
-      resource: `invoice:${invoice.id}`,
-      detail: `Generated invoice ${invoice.invoiceNo || invoice.id} for client ${client} with amount ₹${parsedAmount.toLocaleString()}`,
-      ip: req.ip || "127.0.0.1",
-    }).catch((e) => console.error("Audit log failed:", e));
+    // Role Notification
+    notifyBillingRoles(
+      "info",
+      "Invoice Generated",
+      `Invoice ${invoice.invoiceNo || invoice.id} generated for client ${client} (₹${parsedAmount.toLocaleString()}).`,
+      "general"
+    );
 
     invalidateDashboardCache();
 
     return res.status(201).json({
       id: invoice.id,
       invoiceNo: invoice.invoiceNo,
-      project: invoice.projectId,
+      project: projectRecord.name || invoice.projectId,
       client: invoice.client,
       amount: invoice.amount,
+      gst: 18,
+      taxAmount: Math.round((invoice.amount * 0.18) * 100) / 100,
       status: invoice.status,
       issued: invoice.issued,
       due: invoice.due || undefined,
@@ -181,89 +320,82 @@ router.post("/invoices", requireRoles(["super_admin", "accounts"]), async (req: 
   }
 });
 
-// GET /api/billing/invoices/:id/download-data - Fetch invoice and branding for PDF generation
-router.get("/invoices/:id/download-data", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
+// PATCH /api/billing/invoices/:id - Update invoice status
+router.patch("/invoices/:id", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
+    const { status, due } = req.body;
 
     const invoice = await prisma.invoice.findUnique({
       where: { id },
-      include: {
-        project: {
-          select: { name: true },
-        },
-      },
+      include: { payments: true, project: true },
     });
 
     if (!invoice) {
       return res.status(404).json({ message: "Invoice not found" });
     }
 
-    const branding = await prisma.companyBranding.findFirst();
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: {
+        ...(status !== undefined && { status }),
+        ...(due !== undefined && { due }),
+      },
+      include: { payments: true, project: true },
+    });
 
-    // Log Audit for PDF download
-    logAuditEvent({
-      userEmail: req.user.email,
-      action: "INVOICE_PDF_DOWNLOADED",
-      resource: `invoice:${invoice.id}`,
-      detail: `Downloaded PDF data for invoice ${invoice.invoiceNo || invoice.id}`,
-      ip: req.ip || "127.0.0.1",
-    }).catch((e) => console.error("Audit log failed:", e));
+    // Notify roles
+    notifyBillingRoles(
+      "info",
+      "Invoice Status Updated",
+      `Invoice ${updated.invoiceNo || updated.id} status updated to "${updated.status}".`,
+      "general"
+    );
+
+    invalidateDashboardCache();
+
+    const collectedAmount = updated.payments.reduce((sum, p) => sum + p.amount, 0);
+
+    return res.json({
+      id: updated.id,
+      invoiceNo: updated.invoiceNo,
+      project: (updated as any).project?.name || updated.projectId,
+      client: updated.client,
+      amount: updated.amount,
+      status: updated.status,
+      issued: updated.issued,
+      due: updated.due || undefined,
+      paid: updated.paid || undefined,
+      collectedAmount,
+      outstandingAmount: Math.round((updated.amount - collectedAmount) * 100) / 100,
+      payments: updated.payments,
+    });
+  } catch (error: any) {
+    console.error("PATCH /billing/invoices/:id error:", error?.message || error);
+    return res.status(500).json({ message: "Failed to update invoice status" });
+  }
+});
+
+// GET /api/billing/invoices/:id/download-data
+router.get("/invoices/:id/download-data", requireRoles(["super_admin", "accounts"]), async (req: AuthenticatedRequest, res) => {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      include: { project: { select: { name: true } } },
+    });
+
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
+    const branding = await prisma.companyBranding.findFirst();
 
     return res.status(200).json({ invoice, branding: branding || {} });
   } catch (error: any) {
-    console.error("GET /billing/invoices/:id/download-data error:", error?.message || error);
+    console.error("GET /billing/invoices/:id/download-data error:", error);
     return res.status(500).json({ message: "Failed to fetch invoice download data" });
   }
 });
 
-// PATCH /api/billing/milestones/:id - Update a milestone
-router.patch("/milestones/:id", requireRoles(["super_admin", "accounts", "project_manager"]), async (req: AuthenticatedRequest, res) => {
-  try {
-    const { id } = req.params;
-    const { status, title, amount, date } = req.body;
-
-    const milestone = await prisma.milestone.findUnique({ where: { id } });
-    if (!milestone) {
-      return res.status(404).json({ message: "Milestone not found" });
-    }
-
-    const updated = await prisma.milestone.update({
-      where: { id },
-      data: {
-        ...(status !== undefined && { status }),
-        ...(title !== undefined && { title }),
-        ...(amount !== undefined && { amount: parseFloat(amount) }),
-        ...(date !== undefined && { date }),
-      },
-    });
-
-    // Log Audit (non-critical)
-    logAuditEvent({
-      userEmail: req.user.email,
-      action: "MILESTONE_UPDATED",
-      resource: `milestone:${id}`,
-      detail: `Updated milestone ${id} — status: ${status || milestone.status}`,
-      ip: req.ip || "127.0.0.1",
-    }).catch((e) => console.error("Audit log failed:", e));
-
-    invalidateDashboardCache();
-
-    return res.json({
-      id: updated.id,
-      project: updated.projectId,
-      title: updated.title,
-      date: updated.date,
-      status: updated.status,
-      amount: updated.amount,
-    });
-  } catch (error: any) {
-    console.error("PATCH /billing/milestones error:", error?.message || error);
-    return res.status(500).json({ message: "Internal server error updating milestone" });
-  }
-});
-
-// GET /api/billing/invoices/:id/payments - Get payments for a specific invoice
+// GET /api/billing/invoices/:id/payments
 router.get("/invoices/:id/payments", async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
@@ -271,14 +403,10 @@ router.get("/invoices/:id/payments", async (req: AuthenticatedRequest, res) => {
       where: { id },
       include: { payments: { orderBy: { recordedAt: "asc" } } },
     });
-
-    if (!invoice) {
-      return res.status(404).json({ message: "Invoice not found" });
-    }
-
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     return res.json(invoice.payments);
   } catch (error: any) {
-    console.error("GET /billing/invoices/:id/payments error:", error?.message || error);
+    console.error("GET /billing/invoices/:id/payments error:", error);
     return res.status(500).json({ message: "Internal server error fetching payments" });
   }
 });
@@ -289,32 +417,25 @@ router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]),
     const { id } = req.params;
     const { amount, date, method, referenceNumber, transactionId, remarks, proofUrl } = req.body;
 
-    // --- Validate amount ---
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
       return res.status(400).json({ message: "Invalid payment amount" });
     }
 
-    // --- Validate method ---
     if (!method || typeof method !== "string" || method.trim() === "") {
       return res.status(400).json({ message: "Payment method is required" });
     }
 
-    // --- Validate/normalize date ---
     const paymentDate = date && typeof date === "string" && date.trim() !== ""
       ? date.trim()
       : new Date().toISOString().split("T")[0];
 
-    // --- Fetch invoice ---
     const invoice = await prisma.invoice.findUnique({
       where: { id },
       include: { payments: true },
     });
 
-    if (!invoice) {
-      return res.status(404).json({ message: "Invoice not found" });
-    }
-
+    if (!invoice) return res.status(404).json({ message: "Invoice not found" });
     if (invoice.status === "cancelled") {
       return res.status(400).json({ message: "Cannot record payment for a cancelled invoice" });
     }
@@ -337,95 +458,57 @@ router.post("/invoices/:id/payments", requireRoles(["super_admin", "accounts"]),
       newStatus = "partially_paid";
     }
 
-    // --- Run the core transaction (payment + invoice status) ---
-    let payment: any;
-    let updatedInvoice: any;
-
-    try {
-      const txResult = await prisma.$transaction(async (tx) => {
-        const p = await tx.payment.create({
-          data: {
-            invoiceId: id,
-            amount: parsedAmount,
-            date: paymentDate,
-            method: method.trim(),
-            referenceNumber: referenceNumber?.trim() || null,
-            transactionId: transactionId?.trim() || null,
-            remarks: remarks?.trim() || null,
-            proofUrl: proofUrl?.trim() || null,
-            recordedBy: req.user?.name || req.user?.email || "System",
-          },
-        });
-
-        const inv = await tx.invoice.update({
-          where: { id },
-          data: {
-            status: newStatus,
-            ...(newStatus === "paid" ? { paid: paymentDate } : {}),
-          },
-          include: { payments: true },
-        });
-
-        return { payment: p, invoice: inv };
+    const txResult = await prisma.$transaction(async (tx) => {
+      const p = await tx.payment.create({
+        data: {
+          invoiceId: id,
+          amount: parsedAmount,
+          date: paymentDate,
+          method: method.trim(),
+          referenceNumber: referenceNumber?.trim() || null,
+          transactionId: transactionId?.trim() || null,
+          remarks: remarks?.trim() || null,
+          proofUrl: proofUrl?.trim() || null,
+          recordedBy: req.user?.name || req.user?.email || "System",
+        },
       });
 
-      payment = txResult.payment;
-      updatedInvoice = txResult.invoice;
-    } catch (txError: any) {
-      console.error("Payment transaction failed:", JSON.stringify({
-        message: txError.message,
-        code: txError.code || txError.errorCode,
-        meta: txError.meta,
-        clientVersion: txError.clientVersion,
-        stack: txError.stack,
-        original: txError
-      }, null, 2));
-
-      // Detailed Postgres Error Extraction for Logs
-      if (txError.meta) {
-        console.error("[Postgres Error Details] Target:", txError.meta?.target);
-        console.error("[Postgres Error Details] Cause:", txError.meta?.cause);
-        console.error("[Postgres Error Details] Details:", txError.meta?.details);
-      }
-      if (txError.code) {
-        console.error(`[Prisma Error Code] ${txError.code}`);
-      }
-
-      return res.status(500).json({ 
-        message: "Failed to record payment — database error",
-        errorDetails: {
-          code: txError.code,
-          meta: txError.meta,
-          details: txError.meta?.cause || txError.message || "Unknown error"
-        }
+      const inv = await tx.invoice.update({
+        where: { id },
+        data: {
+          status: newStatus,
+          ...(newStatus === "paid" ? { paid: paymentDate } : {}),
+        },
+        include: { payments: true },
       });
-    }
 
-    // --- Audit log outside transaction so it never rolls back the payment ---
-    logAuditEvent({
-      userEmail: req.user.email,
-      action: "PAYMENT_RECORDED",
-      resource: `invoice:${id}`,
-      detail: `Recorded payment of ₹${parsedAmount.toLocaleString()} via ${method.trim()} for invoice ${id}. New status: ${newStatus}.`,
-      ip: req.ip || "127.0.0.1",
-    }).catch((e) => console.error("Audit log failed (non-critical):", e));
+      return { payment: p, invoice: inv };
+    });
+
+    // Notify roles
+    notifyBillingRoles(
+      "success",
+      "Payment Recorded",
+      `Payment of ₹${parsedAmount.toLocaleString()} recorded for invoice ${invoice.invoiceNo || invoice.id}. New status: ${newStatus}.`,
+      "general"
+    );
 
     invalidateDashboardCache();
 
-    const collectedAmount = updatedInvoice.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
+    const collectedAmount = txResult.invoice.payments.reduce((sum: number, p: any) => sum + p.amount, 0);
 
     return res.status(201).json({
-      id: updatedInvoice.id,
-      project: updatedInvoice.projectId,
-      client: updatedInvoice.client,
-      amount: updatedInvoice.amount,
-      status: updatedInvoice.status,
-      issued: updatedInvoice.issued,
-      due: updatedInvoice.due || undefined,
-      paid: updatedInvoice.paid || undefined,
+      id: txResult.invoice.id,
+      project: txResult.invoice.projectId,
+      client: txResult.invoice.client,
+      amount: txResult.invoice.amount,
+      status: txResult.invoice.status,
+      issued: txResult.invoice.issued,
+      due: txResult.invoice.due || undefined,
+      paid: txResult.invoice.paid || undefined,
       collectedAmount: Math.round(collectedAmount * 100) / 100,
-      outstandingAmount: Math.round((updatedInvoice.amount - collectedAmount) * 100) / 100,
-      payments: updatedInvoice.payments,
+      outstandingAmount: Math.round((txResult.invoice.amount - collectedAmount) * 100) / 100,
+      payments: txResult.invoice.payments,
     });
   } catch (error: any) {
     console.error("POST /billing/invoices/:id/payments error:", error?.message || error);

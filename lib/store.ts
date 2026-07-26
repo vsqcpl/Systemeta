@@ -3900,20 +3900,60 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .then(() => {
         useAppStore.getState().showToast("Milestone updated successfully", "success");
-        fetch("/api/billing")
-          .then((r) => r.json())
-          .then((billing) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                invoices: billing.invoices,
-                milestones: billing.milestones,
-              },
-            }));
-          });
+        Promise.all([
+          fetch("/api/billing").then((r) => r.json()),
+          fetch("/api/dashboard").then((r) => r.json()),
+        ]).then(([billing, dashboard]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              invoices: billing.invoices,
+              milestones: billing.milestones,
+              kpis: dashboard.kpis || state.data.kpis,
+              revenueData: dashboard.revenueData || state.data.revenueData,
+            },
+          }));
+        });
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error updating milestone: " + err.message, "danger");
+      });
+  },
+
+  addMilestone: (newMilestone: any) => {
+    return fetch("/api/billing/milestones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newMilestone),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to create milestone");
+        }
+        return res.json();
+      })
+      .then((resData) => {
+        useAppStore.getState().showToast("Milestone created and invoice generated automatically.", "success");
+        return Promise.all([
+          fetch("/api/billing").then((r) => r.json()),
+          fetch("/api/dashboard").then((r) => r.json()),
+        ]).then(([billing, dashboard]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              invoices: billing.invoices,
+              milestones: billing.milestones,
+              kpis: dashboard.kpis || state.data.kpis,
+              revenueData: dashboard.revenueData || state.data.revenueData,
+            },
+          }));
+          return resData;
+        });
+      })
+      .catch((err) => {
+        useAppStore.getState().showToast("Error creating milestone: " + err.message, "danger");
+        throw err;
       });
   },
 
