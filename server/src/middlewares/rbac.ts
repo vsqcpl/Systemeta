@@ -64,7 +64,16 @@ export function requireRoles(allowedRoles: string[]) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    const userRole = (req.user.role || "").toLowerCase().replace(/[\s_]+/g, "");
+    const normalizedAllowed = allowedRoles.map((r) => r.toLowerCase().replace(/[\s_]+/g, ""));
+
+    const isAdmin = userRole === "admin" || userRole === "superadmin";
+
+    const isAllowed = normalizedAllowed.some(
+      (r) => r === userRole || (isAdmin && (r === "admin" || r === "superadmin"))
+    );
+
+    if (!isAllowed) {
       return res.status(403).json({ message: "Forbidden: Insufficient permissions" });
     }
 
