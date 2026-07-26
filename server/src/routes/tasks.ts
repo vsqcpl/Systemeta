@@ -593,7 +593,7 @@ router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, r
 
     if (status && status !== existing.status) {
       const parentTask = await prisma.task.findUnique({ where: { id: taskId } });
-      const isTaskAssigned = parentTask ? (parentTask.assignee === req.user.id || (req.user.name && parentTask.assignee === req.user.name) || (parentTask.assignees && (parentTask.assignees.includes(req.user.id) || (req.user.name && parentTask.assignees.includes(req.user.name))))) : false;
+      const isTaskAssigned = parentTask ? (parentTask.assigneeId === req.user.id || (Boolean(req.user.name) && parentTask.assigneeId === req.user.name)) : false;
       const isAssigned = existing.assignees.includes(req.user.id) || (req.user.name && existing.assignees.includes(req.user.name)) || isTaskAssigned;
       const isManager = req.user.role === "super_admin" || req.user.role === "Super Admin" || req.user.role === "project_manager" || req.user.role === "Project Manager";
       if (!isAssigned && !isManager) {
