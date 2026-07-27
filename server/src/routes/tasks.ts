@@ -603,8 +603,10 @@ router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, r
     }
 
     if (status && status !== existing.status) {
-      if (status === "Done" && req.user.role !== "super_admin" && req.user.role !== "Super Admin" && req.user.role?.toLowerCase() !== "super_admin") {
-        return res.status(403).json({ message: "Forbidden: Only super admin can change subtask status to Done." });
+      const userRole = (req.user?.role || "").toLowerCase();
+      const isManager = userRole === "super_admin" || userRole === "project_manager";
+      if (!isManager) {
+        return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can update subtask status." });
       }
     }
 
