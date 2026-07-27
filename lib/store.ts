@@ -3522,11 +3522,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     fetch(`/api/tasks/${taskId}/subtasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(subtask),
     })
       .then(() => {
         // Refresh tasks from server
-        fetch("/api/tasks")
+        fetch("/api/tasks", { credentials: "include" })
           .then((r) => r.json())
           .then((tasks) => {
             set((s) => ({ data: { ...s.data, tasks } }));
@@ -3557,14 +3558,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
       const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(updates),
       });
       if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.message || "Failed to update subtask");
+        const text = await res.text().catch(() => "");
+        let errDesc = text;
+        try {
+          const json = JSON.parse(text);
+          if (json.message) errDesc = json.message;
+        } catch (_) {}
+        throw new Error(`(${res.status}) ${errDesc || "Failed to update subtask"}`);
       }
       const updated = await res.json();
-      const resTasks = await fetch("/api/tasks");
+      const resTasks = await fetch("/api/tasks", { credentials: "include" });
       if (resTasks.ok) {
         const tasks = await resTasks.json();
         set((s) => ({ data: { ...s.data, tasks } }));
