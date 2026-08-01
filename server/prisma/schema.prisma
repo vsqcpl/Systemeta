@@ -511,6 +511,5 @@ model CompanyBranding {
   taxId           String?
   bankDetails     String?
   maintenanceMode Boolean  @default(false)
-  projectTypes    String?
   updatedAt       DateTime @updatedAt
 }
