@@ -1,5 +1,6 @@
 import { ROLES } from "./roles";
 import { useAppStore } from "./store";
+import { isManagerAssignedToClient } from "./permissionHelpers";
 
 export interface FilterUser {
   id: string;
@@ -21,6 +22,18 @@ function getNormalizedRole(role: string): string {
   return role.toLowerCase().replace(/\s+/g, "_");
 }
 
+export function filterClients(clients: any[], user: FilterUser) {
+  if (!user) return [];
+  const userRole = getNormalizedRole(user.role);
+  if (userRole === ROLES.SUPER_ADMIN) {
+    return clients;
+  }
+  if (userRole === ROLES.CLIENT_MANAGER) {
+    return clients.filter((c) => isManagerAssignedToClient(c, user));
+  }
+  return [];
+}
+
 export function filterProjects(projects: any[], user: FilterUser) {
   const pIds = user.projectIds || user.project_ids || [];
   const cIds = user.clientIds || user.client_ids || [];
@@ -33,10 +46,13 @@ export function filterProjects(projects: any[], user: FilterUser) {
       return projects;
     case ROLES.CLIENT_MANAGER: {
       const storeClients = useAppStore.getState().data.clients || [];
-      const clientNames = storeClients.map((c: any) => (c.companyName || "").toLowerCase());
+      const assignedClients = filterClients(storeClients, user);
+      const clientNames = assignedClients.map((c: any) => (c.companyName || c.name || "").toLowerCase());
+      const clientIds = assignedClients.map((c: any) => c.id);
       return projects.filter(p => {
         const pClient = (p.client || "").toLowerCase();
-        return clientNames.includes(pClient);
+        const pClientId = p.client_id || p.clientId;
+        return clientNames.includes(pClient) || (pClientId && clientIds.includes(pClientId));
       });
     }
     case ROLES.PROJECT_MANAGER:
@@ -70,7 +86,7 @@ export function filterTasks(tasks: any[], user: FilterUser) {
     case ROLES.CLIENT_MANAGER:
       return tasks; // Scoped by projects
     case ROLES.CONSULTANT:
-      return tasks.filter(t => t.assignee_id === user.id || t.assigneeId === user.id || t.assignee === user.id);
+      return tasks.filter(t => t.assignee_id === user.id || t.assigneeId === user.id || t.assignee === user.id || t.assignee === user.name || (Array.isArray(t.assignees) && (t.assignees.includes(user.id) || t.assignees.includes(user.name))) || (Array.isArray(t.subtasks) && t.subtasks.some((st: any) => Array.isArray(st.assignees) && (st.assignees.includes(user.id) || st.assignees.includes(user.name)))));
     default:
       return [];
   }

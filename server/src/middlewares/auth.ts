@@ -22,6 +22,13 @@ export async function authMiddleware(
       return res.status(401).json({ message: "Unauthorized: No active session" });
     }
 
+    if (session.session?.expiresAt && new Date(session.session.expiresAt) <= new Date()) {
+      try {
+        await prisma.session.delete({ where: { id: session.session.id } });
+      } catch (_) {}
+      return res.status(401).json({ message: "Unauthorized: Session has expired" });
+    }
+
     // Load full user details from DB to make sure we have latest info like custom fields
     const dbUser = await prisma.user.findUnique({
       where: { id: session.user.id },

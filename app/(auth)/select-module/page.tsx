@@ -20,9 +20,18 @@ export default function SelectModulePage() {
   React.useEffect(() => {
     document.documentElement.classList.add("landing-page-route");
     document.body.classList.add("landing-page-route");
+    // Forcefully shatter any lingering inline scroll locks left over by previous modal or app transitions
+    document.body.style.overflow = "visible";
+    document.documentElement.style.overflow = "visible";
+    document.body.style.height = "auto";
+    document.documentElement.style.height = "auto";
     return () => {
       document.documentElement.classList.remove("landing-page-route");
       document.body.classList.remove("landing-page-route");
+      document.body.style.overflow = "";
+      document.documentElement.style.overflow = "";
+      document.body.style.height = "";
+      document.documentElement.style.height = "";
     };
   }, []);
 
@@ -95,7 +104,7 @@ export default function SelectModulePage() {
           <img src="/systemata.jpg" alt="Systemata" style={{ height: "26px", objectFit: "contain", transform: "translateY(2px)" }} />
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div className="ms-topbar-controls" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "10px", justifyContent: "flex-end", maxWidth: "100%" }}>
           <button
             className="topbar-btn"
             onClick={() => setDarkMode(!darkMode)}

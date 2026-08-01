@@ -1088,7 +1088,7 @@ Billing Milestones Summary:
               >
                 <option value="">-- Choose Project --</option>
                 {filteredProjects.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                  <option key={p.id} value={p.id}>{p.client ? `${p.name} (${p.client})` : p.name}</option>
                 ))}
               </select>
 
@@ -1722,7 +1722,7 @@ Billing Milestones Summary:
               >
                 <option value="">-- Choose Project --</option>
                 {filteredBillingProjects.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                  <option key={p.id} value={p.id}>{p.client ? `${p.name} (${p.client})` : p.name}</option>
                 ))}
               </select>
 
@@ -2332,7 +2332,7 @@ ${billingScanData.blockers.length > 0 ? billingScanData.blockers.map((b: any, i:
               >
                 <option value="all">Analyze All Active Projects</option>
                 {(data?.projects || []).filter((p: any) => p.status === "active" || p.status === "planning").map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                  <option key={p.id} value={p.id}>{p.client ? `${p.name} (${p.client})` : p.name}</option>
                 ))}
               </select>
               <button
@@ -3765,7 +3765,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                     >
                       <option value="">-- Choose Project --</option>
                       {(data?.projects || []).filter((p: any) => p.status === "active" || p.status === "planning").map((p: any) => (
-                        <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                        <option key={p.id} value={p.id}>{p.client ? `${p.name} (${p.client})` : p.name}</option>
                       ))}
                     </select>
                   </div>
@@ -4566,7 +4566,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
               >
                 <option value="">-- Choose Project --</option>
                 {filteredAssignmentProjects.map((p: any) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.id})</option>
+                  <option key={p.id} value={p.id}>{p.client ? `${p.name} (${p.client})` : p.name}</option>
                 ))}
               </select>
 
@@ -6021,7 +6021,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                         <option value="">-- Choose Project --</option>
                         {filtered.map((p: any) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} ({p.id}) · {p.managerName || p.manager || "No Manager"}
+                            {p.client ? `${p.name} (${p.client})` : p.name} · {p.managerName || p.manager || "No Manager"}
                           </option>
                         ))}
                       </select>
@@ -6280,7 +6280,7 @@ Output ONLY the JSON array. Do not include markdown formats.`;
                         <option value="">-- Choose Project --</option>
                         {filtered.map((p: any) => (
                           <option key={p.id} value={p.id}>
-                            {p.name} ({p.id}) · {p.managerName || p.manager || "No Manager"}
+                            {p.client ? `${p.name} (${p.client})` : p.name} · {p.managerName || p.manager || "No Manager"}
                           </option>
                         ))}
                       </select>

@@ -69,9 +69,9 @@ export default function UserSettingsPage() {
         </p>
       </div>
 
-      <div style={{ display: "flex", gap: "24px", alignItems: "flex-start" }}>
+      <div className="user-settings-container" style={{ display: "flex", gap: "24px", alignItems: "flex-start", flexWrap: "wrap" }}>
         {/* Left panel: profile card + section nav */}
-        <div style={{ width: "220px", flexShrink: 0 }}>
+        <div className="user-settings-sidebar" style={{ width: "220px", flexShrink: 0 }}>
           {/* Profile card */}
           <div
             className="card"

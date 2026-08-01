@@ -30,7 +30,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showAddMilestone, setShowAddMilestone] = useState(false);
-  const [milestoneForm, setMilestoneForm] = useState({ title: "", date: "", amount: "", status: "upcoming" });
+  const [milestoneForm, setMilestoneForm] = useState({ title: "", date: "", amount: "", status: "Pending", description: "" });
   const [isSavingMilestone, setIsSavingMilestone] = useState(false);
   const deleteProject = useAppStore((state) => state.deleteProject);
   const fetchInitialData = useAppStore((state) => state.fetchInitialData);
@@ -309,8 +309,8 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
   const projectTasks = Object.values(data.tasks).flat().filter((t: any) => t.project === p.id);
   const hasWbs = projectTasks.length > 0;
 
-  const projectMilestones = data.milestones.filter((m) => m.project === p.id || m.projectId === p.id);
-  const paidMilestonesCount = projectMilestones.filter((m) => m.status === "upcoming").length;
+  const projectMilestones = data.milestones.filter((m) => m.project === p.id || m.projectId === p.id || m.project === p.name);
+  const paidMilestonesCount = projectMilestones.filter((m) => m.status === "upcoming" || m.status === "Pending").length;
 
   const handleAddMilestone = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -328,7 +328,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
         throw new Error(err.message || "Failed to create milestone");
       }
       showToast("Milestone created successfully", "success");
-      setMilestoneForm({ title: "", date: "", amount: "", status: "upcoming" });
+      setMilestoneForm({ title: "", date: "", amount: "", status: "Pending", description: "" });
       setShowAddMilestone(false);
       await fetchInitialData();
     } catch (err: any) {
@@ -366,7 +366,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
             <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "8px" }}>
               <span className="badge badge-gray">{p.type}</span>
               <span className={`badge ${healthBadge}`}>{p.health.replace("-", " ")}</span>
-              <span className="badge badge-brand">{p.id}</span>
+              {p.client ? <span className="badge badge-brand">{p.client}</span> : null}
             </div>
             <h1
               style={{
@@ -433,7 +433,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
               value={p.id}
               onChange={(val) => handleSwitchProject(val)}
               placeholder="Select Project"
-              options={visibleProjects.map((pr) => ({ label: `${pr.id}: ${pr.name.substring(0, 25)}...`, value: pr.id }))}
+              options={visibleProjects.map((pr) => ({ label: pr.client ? `${pr.name} (${pr.client})` : pr.name, value: pr.id }))}
             />
             <button
               id="project-export-pdf"
@@ -648,52 +648,71 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                 ) : (
                   projectMilestones.map((m, i) => {
                     const statusColor =
-                      m.status === "delayed" ? "#ef4444" : m.status === "at-risk" ? "#f59e0b" : "var(--brand-600)";
+                      m.status === "delayed" ? "#ef4444" : m.status === "at-risk" ? "#f59e0b" : m.status === "Achieved" || m.status === "completed" || m.status === "Paid" ? "#10b981" : "var(--brand-600)";
+                    const isAccountsOrAdmin = user && ["super_admin", "accounts", "Accounts", "Super Admin"].includes(user.role);
                     return (
                       <div
                         key={m.id}
                         style={{
                           flex: 1,
-                          minWidth: "140px",
+                          minWidth: "160px",
                           textAlign: "center",
                           padding: "12px",
                           position: "relative",
+                          border: "1px solid var(--border-subtle)",
+                          borderRadius: "8px",
+                          background: "var(--bg-surface-2)",
+                          margin: "0 4px",
                         }}
                       >
-                        {i < projectMilestones.length - 1 && (
-                          <div
-                            style={{
-                              position: "absolute",
-                              top: "20px",
-                              left: "50%",
-                              right: "-50%",
-                              height: "2px",
-                              background: statusColor,
-                              opacity: 0.3,
-                              zIndex: 0,
-                            }}
-                          />
-                        )}
                         <div
                           style={{
-                            width: "20px",
-                            height: "20px",
+                            width: "14px",
+                            height: "14px",
                             borderRadius: "50%",
                             background: statusColor,
-                            margin: "0 auto 8px",
-                            position: "relative",
-                            zIndex: 1,
-                            border: "3px solid var(--bg-surface)",
-                            boxShadow: `0 0 0 2px ${statusColor}`,
+                            margin: "0 auto 6px",
+                            boxShadow: `0 0 0 2px ${statusColor}33`,
                           }}
                         />
-                        <div style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-primary)" }}>
-                          {m.title.length > 18 ? `${m.title.substring(0, 18)}...` : m.title}
+                        <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginBottom: "4px" }}>
+                          {m.title}
                         </div>
-                        <div style={{ fontSize: "10px", color: "var(--text-tertiary)", margin: "2px 0" }}>{m.date}</div>
+                        {m.description && (
+                          <div style={{ fontSize: "11px", color: "var(--text-tertiary)", marginBottom: "4px", fontStyle: "italic" }}>
+                            {m.description}
+                          </div>
+                        )}
+                        <div style={{ fontSize: "10.5px", color: "var(--text-tertiary)", margin: "2px 0" }}>{m.date || "No Date"}</div>
+                        <div style={{ margin: "4px 0" }}>
+                          <span className="badge" style={{ fontSize: "10px", backgroundColor: `${statusColor}22`, color: statusColor, padding: "2px 6px", borderRadius: "12px" }}>
+                            {m.status}
+                          </span>
+                        </div>
                         {!isClientContact && (
-                          <div style={{ fontSize: "12px", fontWeight: 700, color: statusColor }}>
-                            {formatCurrency(m.amount)}
+                          <div style={{ fontSize: "12px", fontWeight: 700, color: "var(--text-primary)", marginTop: "4px" }}>
+                            {m.amount > 0 ? formatCurrency(m.amount) : "Task Milestone"}
+                          </div>
+                        )}
+                        {m.status !== "completed" && m.status !== "Paid" && m.status !== "paid" && m.status !== "Achieved" && m.status !== "achieved" && m.status !== "Invoiced" && m.status !== "invoiced" && (
+                          <div style={{ marginTop: "8px" }}>
+                            {isAccountsOrAdmin ? (
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                style={{ color: "var(--success-600)", fontSize: "11px", padding: "2px 8px" }}
+                                onClick={async () => {
+                                  await useAppStore.getState().markMilestoneAchieved(m.id);
+                                  await fetchInitialData();
+                                }}
+                              >
+                                Mark Achieved
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: "10.5px", color: "var(--text-tertiary)", fontStyle: "italic" }}>
+                                Pending Approval
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>
@@ -721,7 +740,62 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                   return (
                     <div key={tid} style={{ marginBottom: "12px" }}>
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "5px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "7px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                          {/* Remove team member button */}
+                          <button
+                            title={`Remove ${c.name} from project`}
+                            onClick={() => {
+                              if (confirm(`Remove ${c.name} from project ${p.name}?`)) {
+                                fetch(`/api/projects/${p.id}/members`, {
+                                  method: "DELETE",
+                                  headers: { "Content-Type": "application/json" },
+                                  body: JSON.stringify({ userId: tid }),
+                                })
+                                  .then((res) => {
+                                    if (!res.ok) throw new Error("Failed to remove member");
+                                    return res.json();
+                                  })
+                                  .then((updatedProj) => {
+                                    useAppStore.setState((state) => {
+                                      const projects = state.data.projects.map((proj) =>
+                                        proj.id === updatedProj.id ? { ...proj, team: updatedProj.team } : proj
+                                      );
+                                      return { data: { ...state.data, projects } };
+                                    });
+                                    showToast("Member removed from project", "success");
+                                  })
+                                  .catch((err) => {
+                                    showToast("Error: " + err.message, "danger");
+                                  });
+                              }
+                            }}
+                            style={{
+                              background: "rgba(239, 68, 68, 0.1)",
+                              color: "#ef4444",
+                              border: "none",
+                              borderRadius: "6px",
+                              width: "20px",
+                              height: "20px",
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              cursor: "pointer",
+                              fontSize: "12px",
+                              fontWeight: 700,
+                              transition: "all 0.15s ease",
+                              flexShrink: 0,
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.background = "#ef4444";
+                              e.currentTarget.style.color = "#ffffff";
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.background = "rgba(239, 68, 68, 0.1)";
+                              e.currentTarget.style.color = "#ef4444";
+                            }}
+                          >
+                            ✕
+                          </button>
                           <div
                             className="avatar"
                             style={{
@@ -763,7 +837,7 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
 
         </div>
       </div>
-      <QuickAddModal open={showAddTask} onClose={() => setShowAddTask(false)} />
+      <QuickAddModal open={showAddTask} onClose={() => setShowAddTask(false)} defaultTab="task" defaultProjectId={p.id} />
 
       {/* Add Milestone Modal */}
       {showAddMilestone && (
@@ -785,6 +859,16 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                   value={milestoneForm.title}
                   onChange={(e) => setMilestoneForm(f => ({ ...f, title: e.target.value }))}
                   required
+                />
+              </div>
+              <div>
+                <label style={{ fontSize: "12px", fontWeight: 600, color: "var(--text-secondary)", display: "block", marginBottom: "5px" }}>Description</label>
+                <textarea
+                  className="input"
+                  placeholder="Details about deliverables..."
+                  value={milestoneForm.description}
+                  onChange={(e) => setMilestoneForm(f => ({ ...f, description: e.target.value }))}
+                  rows={2}
                 />
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
@@ -818,10 +902,11 @@ export default function ProjectDashboardPage({ params }: { params: Promise<{ id:
                   value={milestoneForm.status}
                   onChange={(e) => setMilestoneForm(f => ({ ...f, status: e.target.value }))}
                 >
+                  <option value="Pending">Pending</option>
                   <option value="upcoming">Upcoming</option>
                   <option value="at-risk">At Risk</option>
                   <option value="delayed">Delayed</option>
-                  <option value="completed">Completed</option>
+                  <option value="Achieved">Achieved</option>
                 </select>
               </div>
               <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "4px" }}>

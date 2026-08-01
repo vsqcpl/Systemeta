@@ -154,7 +154,8 @@ model Subtask {
   dueDate     String
   description String?
   isMilestone Boolean  @default(false)
-  status      String   @default("Not Started") // e.g. Not Started, In Progress, Completed
+  status      String   @default("To Do") // e.g. To Do, In Progress, In Review, Done
+  assignees   String[] @default([])
 
   @@index([taskId])
 }
@@ -180,7 +181,9 @@ model Milestone {
   title     String
   date      String
   status    String    // e.g. upcoming, at-risk, delayed, completed
-  amount    Float
+  amount      Float
+  description String?
+  taskId      String?
 
   @@index([projectId])
 }
@@ -277,6 +280,7 @@ model Invoice {
   issued    String
   due       String?
   paid      String?
+  lineItems String?
 
   payments  Payment[]
 }
@@ -355,16 +359,24 @@ model PermissionOverride {
 // ─── Client Manager CRM Models ───────────────────────────────────────────────
 
 model Client {
-  id           String        @id @default(uuid())
-  name         String
-  industry     String?
-  website      String?
-  address      String?
-  status       String        @default("active")  // active, inactive, prospect
-  tier         String        @default("standard") // standard, premium, enterprise
-  createdBy    String
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                 String        @id @default(uuid())
+  name               String
+  company            String?
+  contactPerson      String?
+  email              String?
+  phone              String?
+  gst                String?
+  notes              String?
+  industry           String?
+  website            String?
+  address            String?
+  status             String        @default("active")  // active, inactive, prospect, archived
+  tier               String        @default("standard") // standard, premium, enterprise
+  assignedManagerIds String?
+  createdBy          String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  deletedAt          DateTime?
 
   contacts     Contact[]
   calls        Call[]

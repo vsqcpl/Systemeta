@@ -170,8 +170,8 @@ function AdminPageContent() {
     setLoadingData(true);
     try {
       const [uRes, aRes] = await Promise.all([
-        fetch("/api/users"),
-        fetch("/api/audit")
+        fetch("/api/users", { credentials: "include" }),
+        fetch("/api/audit", { credentials: "include" })
       ]);
       if (uRes.ok) {
         const uData = await uRes.ok ? await uRes.json() : [];
@@ -193,7 +193,7 @@ function AdminPageContent() {
 
   const fetchBranding = async () => {
     try {
-      const res = await fetch("/api/branding");
+      const res = await fetch("/api/branding", { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         if (data.companyName) {
@@ -554,6 +554,7 @@ function AdminPageContent() {
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify(payload),
       });
 
@@ -589,6 +590,7 @@ function AdminPageContent() {
       const res = await fetch(`/api/users/${uId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ mfa: !currentMfa }),
       });
       if (res.ok) {
@@ -616,6 +618,7 @@ function AdminPageContent() {
       const res = await fetch(`/api/users/${uId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ status: targetStatus, reason }),
       });
       if (res.ok) {
@@ -853,6 +856,7 @@ function AdminPageContent() {
         await fetch("/api/branding", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({
             logoUrl: brandingLogoUrl,
             companyName: brandingCompanyName,
@@ -902,6 +906,7 @@ function AdminPageContent() {
                 const res = await fetch("/api/branding/maintenance", {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
+                  credentials: "include",
                   body: JSON.stringify({ enabled: nextState }),
                 });
                 if (res.ok) {

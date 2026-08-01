@@ -44,6 +44,8 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
               { projectId: { in: projectsFilter } },
               { assigneeId: req.user.id },
               { assignees: { some: { userId: req.user.id } } },
+              { subtasks: { some: { assignees: { has: req.user.id } } } },
+              { subtasks: { some: { assignees: { has: req.user.name || "" } } } },
             ],
           },
       include: {
@@ -80,11 +82,13 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
         time: c.createdAt.toISOString(),
       })),
       subtasks: t.subtasks.map((s) => ({
+        id: s.id,
         title: s.title,
         dueDate: s.dueDate,
         description: s.description || undefined,
         isMilestone: s.isMilestone,
         status: s.status as any,
+        assignees: s.assignees || [],
       })),
     }));
 
@@ -106,40 +110,118 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 // POST /api/tasks - Create a task
 router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: AuthenticatedRequest, res) => {
   try {
-    const { title, project, assignee, priority, dueDate, estimate, status, tags, isMilestone, assignees } = req.body;
+    const { title, project, assignee, priority, dueDate, estimate, status, tags, isMilestone, assignees, subtasks } = req.body;
 
     if (!title || !project || !assignee) {
       return res.status(400).json({ message: "Required fields are missing" });
     }
+
+    let projectRecord = await prisma.project.findFirst({
+      where: {
+        OR: [
+          { id: project },
+          { name: project },
+          { code: project },
+        ],
+      },
+    });
+    if (!projectRecord) {
+      const allProjects = await prisma.project.findMany();
+      projectRecord = allProjects.find((p) => p.client ? `${p.name} (${p.client})` === project : false) || null;
+    }
+    const resolvedProjectId = projectRecord ? projectRecord.id : project;
+
+    const rawAssigneeList = assignees && Array.isArray(assignees) && assignees.length > 0 ? assignees : [assignee];
+    const uniqueCandidateIds = Array.from(new Set(rawAssigneeList.filter(Boolean))) as string[];
+
+    const existingUsers = await prisma.user.findMany({
+      where: {
+        OR: [
+          { id: { in: uniqueCandidateIds } },
+          { name: { in: uniqueCandidateIds } },
+          { email: { in: uniqueCandidateIds } },
+        ],
+      },
+    });
+    const validUserIds = existingUsers.map((u) => u.id);
+
+    // If candidate assignees are not in User table, try fallback to avoid foreign key crash
+    const resolvedAssignee = validUserIds.includes(assignee)
+      ? assignee
+      : validUserIds.length > 0
+      ? validUserIds[0]
+      : req.user.id;
+    const resolvedAssignees = validUserIds.length > 0 ? validUserIds : [req.user.id];
 
     const newTask = await prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
           id: randomUUID(),
           title,
-          projectId: project,
-          assigneeId: assignee,
-          priority: priority || "",
+          projectId: resolvedProjectId,
+          assigneeId: resolvedAssignee,
+          priority: priority || "None",
           dueDate: dueDate || "",
-          estimate: estimate !== undefined && estimate !== "" ? parseFloat(estimate) : 0,
+          estimate: estimate != null && estimate !== "" ? parseFloat(estimate) : 0,
           status: status || "todo",
           tags: tags ? (Array.isArray(tags) ? tags.join(", ") : String(tags)) : "",
           isMilestone: isMilestone || false,
         },
       });
 
-      const list = assignees && Array.isArray(assignees) && assignees.length > 0 ? assignees : [assignee];
-      
       await tx.taskAssignment.createMany({
-        data: list.map((uId: string) => ({
+        data: resolvedAssignees.map((uId: string) => ({
           taskId: task.id,
           userId: uId,
         })),
+        skipDuplicates: true,
       });
+
+      if (task.isMilestone) {
+        await tx.milestone.create({
+          data: {
+            projectId: resolvedProjectId,
+            title: task.title,
+            date: task.dueDate || new Date().toISOString().split("T")[0],
+            amount: 0,
+            status: "Pending",
+            description: `Milestone linked from task: ${task.title}`,
+            taskId: task.id,
+          } as any,
+        });
+      }
+
+      let createdSubtasks: any[] = [];
+      if (subtasks && Array.isArray(subtasks) && subtasks.length > 0) {
+        for (const sub of subtasks) {
+          if (!sub.title) continue;
+          const newSub = await tx.subtask.create({
+            data: {
+              taskId: task.id,
+              title: sub.title,
+              dueDate: sub.dueDate || task.dueDate || new Date().toISOString().split("T")[0],
+              description: sub.description || null,
+              isMilestone: Boolean(sub.isMilestone),
+              status: sub.status || "To Do",
+              assignees: Array.isArray(sub.assignees) ? sub.assignees : [],
+            },
+          });
+          createdSubtasks.push({
+            id: newSub.id,
+            title: newSub.title,
+            dueDate: newSub.dueDate,
+            description: newSub.description || undefined,
+            isMilestone: newSub.isMilestone,
+            status: newSub.status,
+            assignees: newSub.assignees || [],
+          });
+        }
+      }
 
       return {
         ...task,
-        assignees: list,
+        assignees: resolvedAssignees,
+        subtasks: createdSubtasks,
       };
     });
 
@@ -159,7 +241,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
       tags: newTask.tags,
       isMilestone: newTask.isMilestone,
       comments: [],
-      subtasks: [],
+      subtasks: (newTask as any).subtasks || [],
     });
   } catch (error) {
     console.error("POST /tasks error:", error);
@@ -171,7 +253,7 @@ router.post("/", requireRoles(["super_admin", "project_manager"]), async (req: A
 router.patch("/:id", async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { status, progress, actualCompletionDate, assigneeId, assignee, estimate, priority, dueDate, title, assignees } = req.body;
+    const { status, progress, actualCompletionDate, assigneeId, assignee, estimate, priority, dueDate, title, assignees, isMilestone } = req.body;
 
     const task = await prisma.task.findUnique({ 
       where: { id },
@@ -217,7 +299,11 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    const finalAssigneeId = assigneeId || assignee;
+    let finalAssigneeId = assigneeId || assignee;
+    if (finalAssigneeId) {
+      const exists = await prisma.user.findUnique({ where: { id: finalAssigneeId } });
+      if (!exists) finalAssigneeId = undefined;
+    }
 
     const updatedTask = await prisma.$transaction(async (tx) => {
       if (assignees !== undefined && Array.isArray(assignees)) {
@@ -225,26 +311,44 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
           where: { taskId: id },
         });
         if (assignees.length > 0) {
-          await tx.taskAssignment.createMany({
-            data: assignees.map((userId: string) => ({
-              taskId: id,
-              userId: userId,
-            })),
+          const uniqueIds = Array.from(new Set(assignees.filter(Boolean))) as string[];
+          const validUsers = await prisma.user.findMany({
+            where: {
+              OR: [
+                { id: { in: uniqueIds } },
+                { name: { in: uniqueIds } },
+                { email: { in: uniqueIds } },
+              ],
+            },
           });
+          const validIds = validUsers.map((u) => u.id);
+          if (validIds.length > 0) {
+            if (!finalAssigneeId) {
+              finalAssigneeId = validIds[0];
+            }
+            await tx.taskAssignment.createMany({
+              data: validIds.map((userId: string) => ({
+                taskId: id,
+                userId: userId,
+              })),
+              skipDuplicates: true,
+            });
+          }
         }
       }
 
-      return tx.task.update({
+      const updated = await tx.task.update({
         where: { id },
         data: {
           status: status || undefined,
           progress: progress !== undefined ? parseInt(progress) : undefined,
           actualCompletionDate: actualCompletionDate !== undefined ? actualCompletionDate : undefined,
           assigneeId: finalAssigneeId || undefined,
-          estimate: estimate !== undefined ? (estimate !== "" ? parseFloat(estimate) : 0) : undefined,
+          estimate: estimate != null ? (estimate !== "" ? parseFloat(estimate) : 0) : undefined,
           priority: priority || undefined,
           dueDate: dueDate || undefined,
           title: title || undefined,
+          isMilestone: isMilestone !== undefined ? Boolean(isMilestone) : undefined,
         },
         include: {
           comments: true,
@@ -254,6 +358,43 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
           },
         },
       });
+
+      if (isMilestone !== undefined) {
+        if (Boolean(isMilestone)) {
+          const existing = await tx.milestone.findFirst({
+            where: {
+              OR: [
+                { taskId: id } as any,
+                { projectId: task.projectId, title: title || task.title }
+              ]
+            }
+          });
+          if (!existing) {
+            await tx.milestone.create({
+              data: {
+                projectId: task.projectId,
+                title: title || task.title,
+                date: dueDate || task.dueDate || new Date().toISOString().split("T")[0],
+                amount: 0,
+                status: "Pending",
+                description: `Milestone linked from task: ${title || task.title}`,
+                taskId: id,
+              } as any,
+            });
+          }
+        } else {
+          await tx.milestone.deleteMany({
+            where: {
+              OR: [
+                { taskId: id } as any,
+                { projectId: task.projectId, title: title || task.title }
+              ]
+            }
+          });
+        }
+      }
+
+      return updated;
     });
 
     const formattedUpdatedTask = {
@@ -270,6 +411,15 @@ router.patch("/:id", async (req: AuthenticatedRequest, res) => {
       tags: updatedTask.tags,
       isMilestone: updatedTask.isMilestone,
       actualCompletionDate: updatedTask.actualCompletionDate || undefined,
+      subtasks: (updatedTask.subtasks || []).map((s: any) => ({
+        id: s.id,
+        title: s.title,
+        dueDate: s.dueDate,
+        description: s.description || undefined,
+        isMilestone: s.isMilestone,
+        status: s.status as any,
+        assignees: s.assignees || [],
+      })),
     };
 
     invalidateDashboardCache();
@@ -388,7 +538,7 @@ router.delete("/:id/comments", async (req: AuthenticatedRequest, res) => {
 router.post("/:id/subtasks", async (req: AuthenticatedRequest, res) => {
   try {
     const { id } = req.params;
-    const { title, dueDate, description, isMilestone, status } = req.body;
+    const { title, dueDate, description, isMilestone, status, assignees } = req.body;
 
     if (!title || !dueDate) {
       return res.status(400).json({ message: "Subtask title and dueDate are required" });
@@ -406,16 +556,86 @@ router.post("/:id/subtasks", async (req: AuthenticatedRequest, res) => {
         dueDate,
         description: description || null,
         isMilestone: isMilestone || false,
-        status: status || "Not Started",
+        status: status || "To Do",
+        assignees: Array.isArray(assignees) ? assignees : [],
       },
     });
 
     invalidateDashboardCache();
 
-    return res.status(201).json(subtask);
+    return res.status(201).json({
+      id: subtask.id,
+      title: subtask.title,
+      dueDate: subtask.dueDate,
+      description: subtask.description || undefined,
+      isMilestone: subtask.isMilestone,
+      status: subtask.status,
+      assignees: subtask.assignees || [],
+    });
   } catch (error) {
     console.error("POST /tasks/:id/subtasks error:", error);
     return res.status(500).json({ message: "Internal server error adding subtask" });
+  }
+});
+
+// PATCH /api/tasks/:taskId/subtasks/:subtaskId - Update subtask status or details
+router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, res) => {
+  try {
+    const { taskId, subtaskId } = req.params;
+    const { title, dueDate, description, isMilestone, status, assignees } = req.body;
+
+    let existing = await prisma.subtask.findFirst({
+      where: { id: subtaskId, taskId },
+    });
+    if (!existing) {
+      const allSubtasks = await prisma.subtask.findMany({ where: { taskId } });
+      const idx = parseInt(subtaskId, 10);
+      if (!isNaN(idx) && allSubtasks[idx]) {
+        existing = allSubtasks[idx];
+      } else {
+        const found = allSubtasks.find((s) => s.id === subtaskId || s.title === subtaskId);
+        if (found) {
+          existing = found;
+        } else {
+          return res.status(404).json({ message: "Subtask not found" });
+        }
+      }
+    }
+
+    if (status && status !== existing.status) {
+      const userRole = (req.user?.role || "").toLowerCase();
+      const isManager = userRole === "super_admin" || userRole === "project_manager";
+      if (!isManager) {
+        return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can update subtask status." });
+      }
+    }
+
+    const updated = await prisma.subtask.update({
+      where: { id: existing.id },
+      data: {
+        title: title !== undefined ? title : undefined,
+        dueDate: dueDate !== undefined ? dueDate : undefined,
+        description: description !== undefined ? description : undefined,
+        isMilestone: isMilestone !== undefined ? Boolean(isMilestone) : undefined,
+        status: status !== undefined ? status : undefined,
+        assignees: assignees !== undefined && Array.isArray(assignees) ? assignees : undefined,
+      },
+    });
+
+    invalidateDashboardCache();
+
+    return res.json({
+      id: updated.id,
+      title: updated.title,
+      dueDate: updated.dueDate,
+      description: updated.description || undefined,
+      isMilestone: updated.isMilestone,
+      status: updated.status,
+      assignees: updated.assignees || [],
+    });
+  } catch (error) {
+    console.error("PATCH /tasks/:taskId/subtasks/:subtaskId error:", error);
+    return res.status(500).json({ message: "Internal server error updating subtask" });
   }
 });
 

@@ -691,7 +691,7 @@ export default function ProjectsPage() {
                         {p.name}
                       </div>
                       <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>
-                        {p.id} · {p.type}
+                        {p.type}
                       </div>
                     </td>
                     <td style={{ fontSize: "13px", color: "var(--text-secondary)" }}>{p.client}</td>

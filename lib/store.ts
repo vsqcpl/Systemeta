@@ -62,7 +62,7 @@ export const NAVIGATION_TRANSLATIONS: Record<string, Record<string, string>> = {
     leave: "Leave Management",
     expenses: "Travel & Expenses",
     billing: "Billing & Finance",
-    analytics: "Consultant Analytics",
+    analytics: "User Analytics",
     ai: "AI Center",
     admin: "Admin Panel",
     systemAdmin: "System administration",
@@ -85,7 +85,7 @@ export const NAVIGATION_TRANSLATIONS: Record<string, Record<string, string>> = {
     leave: "Leave Management",
     expenses: "Travel & Expenses",
     billing: "Billing & Finance",
-    analytics: "Consultant Analytics",
+    analytics: "User Analytics",
     ai: "AI Center",
     admin: "Admin Panel",
     systemAdmin: "System administration",
@@ -363,7 +363,8 @@ interface AppStore {
   updateTask: (taskId: string, updates: Partial<Task>) => Promise<void>;
   addTaskComment: (taskId: string, text: string) => void;
   deleteTaskComments: (taskId: string, commentIds: string[]) => void;
-  addSubtaskToTask: (taskId: string, subtask: { title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string }) => void;
+  addSubtaskToTask: (taskId: string, subtask: { title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string; assignees?: string[] }) => void;
+  updateSubtask: (taskId: string, subtaskId: string, updates: { title?: string; dueDate?: string; description?: string; isMilestone?: boolean; status?: string; assignees?: string[] }) => Promise<any>;
   approveLeaveRequest: (id: string) => void;
   rejectLeaveRequest: (id: string) => void;
   addLeaveRequest: (req: Omit<LeaveRequest, "id" | "status">) => void;
@@ -375,16 +376,19 @@ interface AppStore {
   markAllNotificationsRead: () => void;
   updateUserMFA: (id: string, mfa: boolean) => void;
   updateUserStatus: (id: string, status: 'active' | 'inactive') => void;
-  addInvoice: (invoice: Omit<Invoice, "id" | "status">) => void;
+  addInvoice: (invoice: any) => void;
   addPayment: (invoiceId: string, paymentData: any) => Promise<void>;
+  addMilestone: (newMilestone: any) => Promise<any>;
   updateMilestone: (id: string, updates: any) => void;
+  markMilestoneAchieved: (id: string) => Promise<boolean>;
   inviteUser: (user: Omit<User, "id" | "status" | "mfa" | "lastLogin">) => void;
   deleteProject: (id: string) => Promise<boolean>;
   deleteUser: (id: string) => Promise<boolean>;
   
   // --- CRM Actions ---
   addClient: (client: Omit<Client, "id" | "createdAt">) => void;
-  updateClient: (id: string, updates: Partial<Client>) => void;
+  updateClient: (id: string, updates: Partial<Client>) => Promise<void>;
+  deleteClient: (id: string) => Promise<boolean>;
   deactivateClient: (id: string) => void;
   activateClient: (id: string) => void;
   addContact: (contact: Omit<ClientContact, "id">) => void;
@@ -449,7 +453,7 @@ export const translations = {
     'Timesheets': 'Timesheets',
     'Leave Management': 'Leave Management',
     'Travel & Expenses': 'Travel & Expenses',
-    'Consultant Analytics': 'Consultant Analytics',
+    'User Analytics': 'User Analytics',
     'Gantt / Timeline': 'Gantt / Timeline',
     // Common / Admin
     'Search': 'Search',
@@ -507,7 +511,7 @@ export const translations = {
     'Timesheets': 'Timesheets',
     'Leave Management': 'Leave Management',
     'Travel & Expenses': 'Travel & Expenses',
-    'Consultant Analytics': 'Consultant Analytics',
+    'User Analytics': 'User Analytics',
     'Gantt / Timeline': 'Gantt / Timeline',
     // Common / Admin
     'Search': 'Search',
@@ -565,7 +569,7 @@ export const translations = {
     'Timesheets': 'समय पत्रक',
     'Leave Management': 'अवकाश प्रबंधन',
     'Travel & Expenses': 'यात्रा और व्यय',
-    'Consultant Analytics': 'सलाहकार विश्लेषिकी',
+    'User Analytics': 'उपयोगकर्ता विश्लेषिकी',
     'Gantt / Timeline': 'गैंट / समयरेखा',
     // Common / Admin
     'Search': 'खोजें',
@@ -623,7 +627,7 @@ export const translations = {
     'Timesheets': 'الجداول الزمنية',
     'Leave Management': 'إدارة الإجازات',
     'Travel & Expenses': 'السفر والمصاريف',
-    'Consultant Analytics': 'تحليلات المستشار',
+    'User Analytics': 'تحليلات المستخدم',
     'Gantt / Timeline': 'مخطط غانت / الجدول الزمني',
     // Common / Admin
     'Search': 'بحث',
@@ -679,7 +683,7 @@ export const translations = {
     'Leave Management': 'Gestion des congés',
     'Travel & Expenses': 'Déplacements et dépenses',
     'Billing & Finance': 'Facturation et finances',
-    'Consultant Analytics': 'Analyses des consultants',
+    'User Analytics': 'Analyses des utilisateurs',
     'AI Insights Center': 'Centre de perspectives IA',
     'Admin Panel': 'Panneau d\'administration',
     'Gantt / Timeline': 'Gantt / Calendrier',
@@ -737,7 +741,7 @@ export const translations = {
     'Leave Management': 'Urlaubsverwaltung',
     'Travel & Expenses': 'Reisen & Spesen',
     'Billing & Finance': 'Abrechnung und Finanzen',
-    'Consultant Analytics': 'Berateranalysen',
+    'User Analytics': 'Benutzeranalysen',
     'AI Insights Center': 'KI-Erkenntniszentrum',
     'Admin Panel': 'Verwaltungskonsole',
     'Gantt / Timeline': 'Gantt / Zeitachse',
@@ -795,7 +799,7 @@ export const translations = {
     'Leave Management': 'Gestión de permisos',
     'Travel & Expenses': 'Viajes y gastos',
     'Billing & Finance': 'Facturación y finanzas',
-    'Consultant Analytics': 'Análisis de consultores',
+    'User Analytics': 'Análisis de usuarios',
     'AI Insights Center': 'Centro de información de IA',
     'Admin Panel': 'Panel de administración',
     'Gantt / Timeline': 'Gantt / Línea de tiempo',
@@ -855,7 +859,7 @@ export const translations = {
     'Timesheets': 'Folhas de Horas',
     'Leave Management': 'Gestão de Ausências',
     'Travel & Expenses': 'Viagens e Despesas',
-    'Consultant Analytics': 'Análise de Consultores',
+    'User Analytics': 'Análise de Usuários',
     'Gantt / Timeline': 'Gantt / Cronograma',
     // Common / Admin
     'Search': 'Pesquisar',
@@ -913,7 +917,7 @@ export const translations = {
     'Timesheets': 'タイムシート',
     'Leave Management': '休暇管理',
     'Travel & Expenses': '出張と経費',
-    'Consultant Analytics': 'コンサルタント分析',
+    'User Analytics': 'ユーザー分析',
     'Gantt / Timeline': 'ガント / タイムライン',
     // Common / Admin
     'Search': '検索',
@@ -971,7 +975,7 @@ export const translations = {
     'Timesheets': '工时表',
     'Leave Management': '假期管理',
     'Travel & Expenses': '差旅与费用',
-    'Consultant Analytics': '顾问分析',
+    'User Analytics': '用户分析',
     'Gantt / Timeline': '甘特图 / 时间线',
     // Common / Admin
     'Search': '搜索',
@@ -2760,6 +2764,16 @@ const mapUserToConsultant = (user: any, timesheets?: any[]): Consultant => {
     color = "#ec4899";
     billRate = 240;
     skills = ["Data", "BI", "Python"];
+  } else if (roleName === "client_manager" || roleName === "Client Manager") {
+    dept = "Client Relations";
+    color = "#f59e0b";
+    billRate = 320;
+    skills = ["CRM", "Client Mgmt", "Sales"];
+  } else if (roleName === "client_contact" || roleName === "Client Contact") {
+    dept = "External Client";
+    color = "#8b5cf6";
+    billRate = 0;
+    skills = ["Stakeholder", "Review"];
   }
 
   const avatar = user.name.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
@@ -2779,12 +2793,6 @@ const mapUserToConsultant = (user: any, timesheets?: any[]): Consultant => {
       });
       utilization = Math.min(100, Math.round((totalHours / (userTimesheets.length * 40)) * 100));
     }
-  }
-
-  // Fallback to a realistic, deterministic mock utilization if no timesheets/hours logged
-  if (utilization === 0) {
-    const codeSum = (user.id.charCodeAt(0) || 0) + (user.id.charCodeAt(1) || 0) * 5;
-    utilization = 60 + (codeSum % 31); // 60% to 90%
   }
 
   const availability = 100 - utilization;
@@ -2934,12 +2942,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       const users = (usersList || []).map(mapUserToUser);
-      const consultants = (usersList || [])
-        .filter((u: any) => {
-          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-          return r === "consultant" || r === "senior consultant";
-        })
-        .map((u: any) => mapUserToConsultant(u, timesheets));
+      const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, timesheets));
 
       // Fetch CRM data from the API (best-effort — gracefully ignore failures for non-CM roles)
       const [clientsRes, contactsRes, callsRes, meetingsRes, opportunitiesRes, requirementsRes, followUpsRes] = await Promise.all([
@@ -2990,20 +2993,20 @@ export const useAppStore = create<AppStore>((set, get) => ({
         data: {
           kpis: dashboard.kpis,
           projects,
-          consultants: consultants.length > 0 ? consultants : INITIAL_VSQC_DATA.consultants,
+          consultants: consultants || [],
           tasks,
           milestones: billing.milestones,
           revenueData: dashboard.revenueData,
           utilizationData: dashboard.utilizationData,
           timesheets,
           leaveRequests,
-          expenses: expenses.length > 0 ? expenses : INITIAL_VSQC_DATA.expenses,
+          expenses: expenses || [],
           invoices: billing.invoices,
           aiInsights: dashboard.aiInsights,
           activities: dashboard.activities,
           notifications: [],
           auditLogs: [],
-          users: users.length > 0 ? users : INITIAL_VSQC_DATA.users,
+          users: users || [],
           offices: officesList || [],
           clients: mappedClients,
           clientContacts: crmContacts || [],
@@ -3239,22 +3242,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...newTask, status: targetCol }),
     })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to create task");
+      .then(async (res) => {
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.message || "Failed to create task");
+        }
         return res.json();
       })
       .then((task) => {
         useAppStore.getState().showToast(`Task "${task.title}" created successfully.`, "success");
-        fetch("/api/tasks")
-          .then((r) => r.json())
-          .then((tasks) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                tasks,
-              },
-            }));
-          });
+        Promise.all([
+          fetch("/api/tasks").then((r) => r.json()),
+          fetch("/api/billing").then((r) => r.json()).catch(() => null),
+        ]).then(([tasks, billing]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              tasks,
+              ...(billing && billing.milestones ? { milestones: billing.milestones } : {}),
+            },
+          }));
+        });
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error creating task: " + err.message, "danger");
@@ -3364,16 +3372,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .then((task) => {
         useAppStore.getState().showToast(`Task updated successfully.`, "success");
-        return fetch("/api/tasks")
-          .then((r) => r.json())
-          .then((tasks) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                tasks,
-              },
-            }));
-          });
+        return Promise.all([
+          fetch("/api/tasks").then((r) => r.json()),
+          fetch("/api/billing").then((r) => r.json()).catch(() => null),
+        ]).then(([tasks, billing]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              tasks,
+              ...(billing && billing.milestones ? { milestones: billing.milestones } : {}),
+            },
+          }));
+        });
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error updating task: " + err.message, "danger");
@@ -3489,11 +3499,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     fetch(`/api/tasks/${taskId}/subtasks`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "include",
       body: JSON.stringify(subtask),
     })
       .then(() => {
         // Refresh tasks from server
-        fetch("/api/tasks")
+        fetch("/api/tasks", { credentials: "include" })
           .then((r) => r.json())
           .then((tasks) => {
             set((s) => ({ data: { ...s.data, tasks } }));
@@ -3517,6 +3528,36 @@ export const useAppStore = create<AppStore>((set, get) => ({
           };
         });
       });
+  },
+
+  updateSubtask: async (taskId, subtaskId, updates) => {
+    try {
+      const res = await fetch(`/api/tasks/${taskId}/subtasks/${subtaskId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        let errDesc = text;
+        try {
+          const json = JSON.parse(text);
+          if (json.message) errDesc = json.message;
+        } catch (_) {}
+        throw new Error(`(${res.status}) ${errDesc || "Failed to update subtask"}`);
+      }
+      const updated = await res.json();
+      const resTasks = await fetch("/api/tasks", { credentials: "include" });
+      if (resTasks.ok) {
+        const tasks = await resTasks.json();
+        set((s) => ({ data: { ...s.data, tasks } }));
+      }
+      return updated;
+    } catch (e) {
+      console.error("Error updating subtask:", e);
+      throw e;
+    }
   },
 
   approveLeaveRequest: (id) => {
@@ -3746,12 +3787,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList
-              .filter((u: any) => {
-                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-                return r === "consultant" || r === "senior consultant";
-              })
-              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3782,12 +3818,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList
-              .filter((u: any) => {
-                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-                return r === "consultant" || r === "senior consultant";
-              })
-              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3884,21 +3915,92 @@ export const useAppStore = create<AppStore>((set, get) => ({
       })
       .then(() => {
         useAppStore.getState().showToast("Milestone updated successfully", "success");
-        fetch("/api/billing")
-          .then((r) => r.json())
-          .then((billing) => {
-            set((state) => ({
-              data: {
-                ...state.data,
-                invoices: billing.invoices,
-                milestones: billing.milestones,
-              },
-            }));
-          });
+        Promise.all([
+          fetch("/api/billing").then((r) => r.json()),
+          fetch("/api/dashboard").then((r) => r.json()),
+        ]).then(([billing, dashboard]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              invoices: billing.invoices,
+              milestones: billing.milestones,
+              kpis: dashboard.kpis || state.data.kpis,
+              revenueData: dashboard.revenueData || state.data.revenueData,
+            },
+          }));
+        });
       })
       .catch((err) => {
         useAppStore.getState().showToast("Error updating milestone: " + err.message, "danger");
       });
+  },
+
+  addMilestone: (newMilestone: any) => {
+    return fetch("/api/billing/milestones", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(newMilestone),
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || "Failed to create milestone");
+        }
+        return res.json();
+      })
+      .then((resData) => {
+        useAppStore.getState().showToast("Milestone added successfully", "success");
+        return Promise.all([
+          fetch("/api/billing").then((r) => r.json()),
+          fetch("/api/dashboard").then((r) => r.json()),
+        ]).then(([billing, dashboard]) => {
+          set((state) => ({
+            data: {
+              ...state.data,
+              invoices: billing.invoices,
+              milestones: billing.milestones,
+              kpis: dashboard.kpis || state.data.kpis,
+              revenueData: dashboard.revenueData || state.data.revenueData,
+            },
+          }));
+          return resData;
+        });
+      })
+      .catch((err) => {
+        useAppStore.getState().showToast("Error creating milestone: " + err.message, "danger");
+        throw err;
+      });
+  },
+
+  markMilestoneAchieved: async (id: string) => {
+    try {
+      const res = await fetch(`/api/billing/milestones/${id}/achieved`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || "Failed to mark milestone as achieved");
+      }
+      useAppStore.getState().showToast("Milestone marked as Achieved", "success");
+      const [billing, dashboard] = await Promise.all([
+        fetch("/api/billing").then((r) => r.json()),
+        fetch("/api/dashboard").then((r) => r.json()),
+      ]);
+      set((state) => ({
+        data: {
+          ...state.data,
+          invoices: billing.invoices,
+          milestones: billing.milestones,
+          kpis: dashboard.kpis || state.data.kpis,
+          revenueData: dashboard.revenueData || state.data.revenueData,
+        },
+      }));
+      return true;
+    } catch (err: any) {
+      useAppStore.getState().showToast("Error updating milestone: " + (err.message || "Unknown error"), "danger");
+      return false;
+    }
   },
 
   inviteUser: (newUser) => {
@@ -3921,12 +4023,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           .then((r) => r.json())
           .then((usersList) => {
             const users = usersList.map(mapUserToUser);
-            const consultants = usersList
-              .filter((u: any) => {
-                const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-                return r === "consultant" || r === "senior consultant";
-              })
-              .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+            const consultants = usersList.map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
             set((state) => ({
               data: {
                 ...state.data,
@@ -3995,18 +4092,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
       ]);
       
       const users = (usersList || []).map(mapUserToUser);
-      const consultants = (usersList || [])
-        .filter((u: any) => {
-          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-          return r === "consultant" || r === "senior consultant";
-        })
-        .map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
+      const consultants = (usersList || []).map((u: any) => mapUserToConsultant(u, useAppStore.getState().data.timesheets));
       
       set((state) => ({
         data: {
           ...state.data,
-          users: users.length > 0 ? users : INITIAL_VSQC_DATA.users,
-          consultants: consultants.length > 0 ? consultants : INITIAL_VSQC_DATA.consultants,
+          users: users || [],
+          consultants: consultants || [],
           kpis: dashboard.kpis,
           activities: dashboard.activities,
           projects,
@@ -4028,11 +4120,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: clientData.companyName,
+          company: clientData.company || clientData.companyName,
+          contactPerson: clientData.contactPerson,
+          email: clientData.email,
+          phone: clientData.phone,
+          address: clientData.address,
+          gst: clientData.gstNumber || clientData.gst,
           industry: clientData.industry,
           website: clientData.website,
-          address: clientData.address,
           status: clientData.status || "Active",
           tier: clientData.clientCategory || "A",
+          assignedManagerIds: Array.isArray(clientData.assignedManagerIds) ? clientData.assignedManagerIds.join(",") : (clientData.assignedManagerIds || clientData.accountOwner),
         }),
       });
       if (res.ok) {
@@ -4040,6 +4138,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
         const mappedClient = {
           id: saved.id,
           companyName: saved.name || saved.companyName || clientData.companyName,
+          company: saved.company || clientData.company || clientData.companyName,
+          contactPerson: saved.contactPerson || clientData.contactPerson || "",
           clientType: clientData.clientType || "Direct",
           industry: saved.industry || clientData.industry || "",
           website: saved.website || clientData.website || "",
@@ -4057,6 +4157,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
           priority: clientData.priority || "Medium",
           notes: clientData.notes || "",
           accountOwner: clientData.accountOwner || "",
+          assignedManagerIds: clientData.assignedManagerIds || saved.assignedManagerIds || clientData.accountOwner,
           createdAt: saved.createdAt || new Date().toISOString(),
         };
         set((state) => ({
@@ -4093,14 +4194,90 @@ export const useAppStore = create<AppStore>((set, get) => ({
     }
   },
 
-  updateClient: (id, updates) => set((state) => ({
-    data: {
-      ...state.data,
-      clients: state.data.clients.map(c => 
-        c.id === id ? { ...c, ...updates } : c
-      )
+  updateClient: async (id, updates) => {
+    const formattedAssigned = updates.assignedManagerIds !== undefined
+      ? (Array.isArray(updates.assignedManagerIds) ? updates.assignedManagerIds.join(",") : updates.assignedManagerIds)
+      : undefined;
+
+    try {
+      const res = await fetch(`/api/client-manager/clients/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: updates.companyName || updates.company,
+          company: updates.company || updates.companyName,
+          contactPerson: updates.contactPerson,
+          email: updates.email,
+          phone: updates.phone,
+          gst: updates.gst || updates.gstNumber,
+          notes: updates.notes,
+          industry: updates.industry,
+          website: updates.website,
+          address: updates.address,
+          status: updates.status,
+          tier: updates.clientCategory,
+          assignedManagerIds: formattedAssigned !== undefined ? formattedAssigned : updates.accountOwner,
+        }),
+      });
+      if (res.ok) {
+        const saved = await res.json();
+        set((state) => ({
+          data: {
+            ...state.data,
+            clients: state.data.clients.map((c) =>
+              c.id === id
+                ? {
+                    ...c,
+                    ...updates,
+                    companyName: saved.name || saved.company || updates.companyName || c.companyName,
+                    status: saved.status || updates.status || c.status,
+                    industry: saved.industry || updates.industry || c.industry,
+                  }
+                : c
+            ),
+          },
+        }));
+        useAppStore.getState().showToast("Client updated successfully", "success");
+        return;
+      }
+    } catch (e) {
+      console.error("Update client API error:", e);
     }
-  })),
+    set((state) => ({
+      data: {
+        ...state.data,
+        clients: state.data.clients.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      },
+    }));
+  },
+
+  deleteClient: async (id) => {
+    try {
+      const res = await fetch(`/api/client-manager/clients/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        set((state) => ({
+          data: {
+            ...state.data,
+            clients: state.data.clients.filter((c) => c.id !== id),
+          },
+        }));
+        useAppStore.getState().showToast("Client deleted successfully", "success");
+        return true;
+      }
+    } catch (err: any) {
+      console.error("Delete client API error:", err);
+    }
+    // Fallback local update
+    set((state) => ({
+      data: {
+        ...state.data,
+        clients: state.data.clients.filter((c) => c.id !== id),
+      },
+    }));
+    return true;
+  },
 
   deactivateClient: async (id) => {
     try {
@@ -4487,12 +4664,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       }
 
       // Re-map consultants with updated timesheets to update utilization in UI
-      const updatedConsultants = state.data.users
-        .filter((u: any) => {
-          const r = (u.role || "").toLowerCase().replace(/_/g, " ");
-          return r === "consultant" || r === "senior consultant";
-        })
-        .map((u: any) => mapUserToConsultant(u, updatedTimesheets));
+      const updatedConsultants = state.data.users.map((u: any) => mapUserToConsultant(u, updatedTimesheets));
 
       return {
         data: {

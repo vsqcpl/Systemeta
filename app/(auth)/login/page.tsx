@@ -111,8 +111,8 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form className="login-form" onSubmit={handleSubmit}>
-          <div className="login-field">
+        <form className="login-form" onSubmit={handleSubmit} suppressHydrationWarning>
+          <div className="login-field" suppressHydrationWarning>
             <label className="login-label" htmlFor="login-email">
               Email address
             </label>
@@ -125,9 +125,10 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
+              suppressHydrationWarning
             />
           </div>
-          <div className="login-field">
+          <div className="login-field" suppressHydrationWarning>
             <label className="login-label" htmlFor="login-password">
               Password
               <a
@@ -138,7 +139,7 @@ export default function LoginPage() {
                 Forgot password?
               </a>
             </label>
-            <div className="login-pass-wrap">
+            <div className="login-pass-wrap" suppressHydrationWarning>
               <input
                 className="login-input"
                 id="login-password"
@@ -148,6 +149,7 @@ export default function LoginPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 autoComplete="current-password"
+                suppressHydrationWarning
               />
               <button
                 type="button"

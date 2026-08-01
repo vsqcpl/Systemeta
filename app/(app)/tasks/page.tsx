@@ -108,7 +108,7 @@ function TaskCard({
   const data = useAppStore((state) => state.data);
   const project = data.projects.find((p) => p.id === task.project);
   
-  const isAssignee = task.assignee === user?.id;
+  const isAssignee = task.assignee === user?.id || task.assignee === user?.name || (Array.isArray(task.assignees) && (task.assignees.includes(user?.id || "") || task.assignees.includes(user?.name || "")));
   const isManager = user?.role === "super_admin" || user?.role === "Super Admin" || user?.role === "project_manager" || user?.role === "Project Manager";
   const isSeniorConsultant = user?.role === "senior_consultant" || user?.role === "Senior Consultant";
   const canMove = (isAssignee || isManager || isSeniorConsultant) && !(!isManager && col === "done");
@@ -283,7 +283,8 @@ function TaskDrawer({
   const data = useAppStore((state) => state.data);
   const { user } = useAuth();
   const projects = useAppStore((state) => state.data.projects);
-  const projectName = projects.find((p) => p.id === task.project)?.name || task.project;
+  const projectObj = projects.find((p) => p.id === task.project || p.name === task.project || (p.client ? `${p.name} (${p.client})` === task.project : false) || (p.name.trim().toLowerCase() === (task.project || "").trim().toLowerCase()));
+  const projectName = projectObj?.name || task.project;
 
   const isManager = user?.role?.toLowerCase() === "super_admin" || user?.role?.toLowerCase() === "project_manager";
   const [showReviewModal, setShowReviewModal] = React.useState(col === "review" && isManager);
@@ -295,6 +296,15 @@ function TaskDrawer({
   const [showAddSubtask, setShowAddSubtask] = React.useState(false);
   const [newSubtaskTitle, setNewSubtaskTitle] = React.useState("");
   const [newSubtaskDue, setNewSubtaskDue] = React.useState("");
+  const [newSubtaskDesc, setNewSubtaskDesc] = React.useState("");
+  const [newSubtaskAssignees, setNewSubtaskAssignees] = React.useState<string[]>([]);
+  const [expandedSubtasks, setExpandedSubtasks] = React.useState<Record<number, boolean>>({});
+  
+  const eligibleSubtaskAssignees = React.useMemo(() => {
+    const projTeam = projectObj?.team || [];
+    const filtered = consultants.filter((cons: any) => projTeam.includes(cons.id) || projTeam.includes(cons.name) || task.assignee === cons.id || (task.assignees || []).includes(cons.id));
+    return filtered.length > 0 ? filtered : consultants;
+  }, [projectObj, consultants, task]);
 
   // Rejection Form State
   const [showRejectForm, setShowRejectForm] = React.useState(false);
@@ -402,10 +412,14 @@ function TaskDrawer({
     addSubtaskToTask(task.id, {
       title: newSubtaskTitle,
       dueDate: newSubtaskDue,
-      status: "Not Started",
+      description: newSubtaskDesc || undefined,
+      status: "To Do",
+      assignees: newSubtaskAssignees,
     });
     setNewSubtaskTitle("");
     setNewSubtaskDue("");
+    setNewSubtaskDesc("");
+    setNewSubtaskAssignees([]);
     setShowAddSubtask(false);
   };
 
@@ -418,7 +432,7 @@ function TaskDrawer({
       <div
         className="task-drawer open"
         style={{
-          position: "fixed", top: 0, right: 0, width: "420px", height: "100vh",
+          position: "fixed", top: 0, right: 0, width: "min(420px, 100vw)", maxWidth: "100%", height: "100vh",
           background: "var(--bg-surface)", borderLeft: "1px solid var(--border-subtle)",
           boxShadow: "var(--shadow-xl)", zIndex: 499, overflowY: "auto", padding: "24px",
         }}
@@ -483,7 +497,7 @@ function TaskDrawer({
                       value={rejectAssignee}
                       onChange={(val) => setRejectAssignee(val)}
                       placeholder="Select Assignee"
-                      options={consultants.map(cons => ({ label: cons.name, value: cons.id }))}
+                      options={consultants.filter((cons) => (projectObj?.team || []).some((t: string) => t === cons.id || t === cons.name)).map(cons => ({ label: cons.name, value: cons.id }))}
                     />
                   </div>
 
@@ -553,9 +567,9 @@ function TaskDrawer({
 
         {/* Multiple Assignees section */}
         {(() => {
-          const project = data.projects.find((p) => p.id === task.project);
+          const project = data.projects.find((p) => p.id === task.project || p.name === task.project || (p.client ? `${p.name} (${p.client})` === task.project : false) || (p.name.trim().toLowerCase() === (task.project || "").trim().toLowerCase()));
           const projectTeamIds = project?.team || [];
-          const eligibleUsers = (data.users || []).filter((u: any) => projectTeamIds.includes(u.id));
+          const eligibleUsers = consultants.filter((u: any) => projectTeamIds.includes(u.id) || projectTeamIds.includes(u.name));
           const currentAssignees = task.assignees && task.assignees.length > 0 ? task.assignees : [task.assignee];
           const unassignedProjectUsers = eligibleUsers.filter((u: any) => !currentAssignees.includes(u.id));
 
@@ -654,6 +668,22 @@ function TaskDrawer({
           </div>
         )}
 
+        {/* Inline Mark as Milestone toggle */}
+        <div style={{ marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px", background: "var(--bg-surface-2)", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-subtle)" }}>
+          <input
+            type="checkbox"
+            id={`edit-milestone-toggle-${task.id}`}
+            checked={Boolean(task.isMilestone)}
+            onChange={(e) => {
+              useAppStore.getState().updateTask(task.id, { isMilestone: e.target.checked });
+            }}
+            style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "var(--brand-500)" }}
+          />
+          <label htmlFor={`edit-milestone-toggle-${task.id}`} style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", cursor: "pointer" }}>
+            {t("Mark as Milestone")}
+          </label>
+        </div>
+
         {/* Subtasks section with add button */}
         <div style={{ marginBottom: "20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
@@ -674,7 +704,7 @@ function TaskDrawer({
               <input
                 className="login-input"
                 type="text"
-                placeholder={t("Subtask title")}
+                placeholder={t("Subtask title *")}
                 value={newSubtaskTitle}
                 onChange={(e) => setNewSubtaskTitle(e.target.value)}
                 style={{ fontSize: "12px", height: "34px" }}
@@ -686,7 +716,42 @@ function TaskDrawer({
                 onChange={(e) => setNewSubtaskDue(e.target.value)}
                 style={{ fontSize: "12px", height: "34px" }}
               />
-              <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end" }}>
+              <input
+                className="login-input"
+                type="text"
+                placeholder={t("Description (optional)")}
+                value={newSubtaskDesc}
+                onChange={(e) => setNewSubtaskDesc(e.target.value)}
+                style={{ fontSize: "12px", height: "34px" }}
+              />
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-secondary)" }}>{t("Subtask Assignees (From Parent Project)")}</label>
+                <SearchableSelect
+                  className="login-input"
+                  value=""
+                  onChange={(val) => {
+                    if (val && !newSubtaskAssignees.includes(val)) {
+                      setNewSubtaskAssignees([...newSubtaskAssignees, val]);
+                    }
+                  }}
+                  placeholder={t("Select assignees...")}
+                  options={eligibleSubtaskAssignees.filter((c: any) => !newSubtaskAssignees.includes(c.id)).map((c: any) => ({ label: c.name, value: c.id }))}
+                />
+                {newSubtaskAssignees.length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+                    {newSubtaskAssignees.map((aId) => {
+                      const cons = consultants.find((c: any) => c.id === aId || c.name === aId);
+                      return (
+                        <span key={aId} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--bg-surface-3)", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", border: "1px solid var(--border-subtle)" }}>
+                          {cons ? cons.name : aId}
+                          <button type="button" onClick={() => setNewSubtaskAssignees(newSubtaskAssignees.filter((id) => id !== aId))} style={{ background: "none", border: "none", color: "var(--danger-500)", cursor: "pointer", fontWeight: "bold" }}>×</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: "6px", justifyContent: "flex-end", marginTop: "4px" }}>
                 <button className="btn btn-sm" style={{ fontSize: "12px", padding: "4px 10px", background: "var(--bg-surface-3)" }} onClick={() => setShowAddSubtask(false)}>{t("Cancel")}</button>
                 <button className="btn btn-primary btn-sm" style={{ fontSize: "12px", padding: "4px 10px" }} onClick={handleAddSubtask}>{t("Add Subtask")}</button>
               </div>
@@ -695,34 +760,105 @@ function TaskDrawer({
 
           {task.subtasks && task.subtasks.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              {task.subtasks.map((sub, sIdx) => (
-                <div key={sIdx} style={{ padding: "10px 12px", border: "1px solid var(--border-subtle)", borderRadius: "6px", background: "var(--bg-surface-2)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      {sub.isMilestone && (
-                        <span
-                          style={{
-                            width: "8px",
-                            height: "8px",
-                            background: sub.status === "Completed" ? "#10b981" : sub.status === "In Progress" ? "#f59e0b" : "#94a3b8",
-                            transform: "rotate(45deg)",
-                            borderRadius: "1px",
-                            display: "inline-block",
+              {task.subtasks.map((sub, sIdx) => {
+                const canEditStatus = isManager;
+                const isExpanded = !!expandedSubtasks[sIdx];
+                return (
+                  <div key={sIdx} style={{ padding: "10px 12px", border: "1px solid var(--border-subtle)", borderRadius: "6px", background: "var(--bg-surface-2)" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "13px", fontWeight: 600, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "6px", flex: 1 }}>
+                        {sub.isMilestone && (
+                          <span
+                            style={{
+                              width: "8px",
+                              height: "8px",
+                              background: sub.status === "Done" || sub.status === "Completed" ? "#10b981" : sub.status === "In Progress" ? "#f59e0b" : "#94a3b8",
+                              transform: "rotate(45deg)",
+                              borderRadius: "1px",
+                              display: "inline-block",
+                            }}
+                            title={`Milestone: ${sub.status}`}
+                          />
+                        )}
+                        {sub.title}
+                      </span>
+                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                        <select
+                          value={sub.status || "To Do"}
+                          disabled={!canEditStatus}
+                          title={!canEditStatus ? "Only Project Managers and Super Admins can change subtask status." : "Change subtask status"}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            useAppStore.getState().updateSubtask(task.id, sub.id || sIdx.toString(), { status: val }).then(() => {
+                              showToast("Subtask status updated", "success");
+                            }).catch((err) => {
+                              const msg = err instanceof Error && err.message ? err.message : "Failed to update subtask status";
+                              showToast(`Failed: ${msg}`, "danger");
+                            });
                           }}
-                          title={`Milestone: ${sub.status}`}
-                        />
+                          style={{
+                            fontSize: "11px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            border: "1px solid var(--border-subtle)",
+                            background: !canEditStatus ? "var(--bg-surface-1)" : "var(--bg-surface-3)",
+                            color: !canEditStatus ? "var(--text-tertiary)" : "var(--text-primary)",
+                            cursor: !canEditStatus ? "not-allowed" : "pointer",
+                            fontWeight: 600
+                          }}
+                        >
+                          <option value="To Do">{t("To Do")}</option>
+                          <option value="In Progress">{t("In Progress")}</option>
+                          <option value="In Review">{t("In Review")}</option>
+                          <option value="Done">{t("Done")}</option>
+                          {sub.status === "Not Started" && <option value="Not Started">{t("Not Started")}</option>}
+                          {sub.status === "Completed" && <option value="Completed">{t("Completed")}</option>}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedSubtasks((prev) => ({ ...prev, [sIdx]: !prev[sIdx] }))}
+                          className="btn btn-ghost btn-sm"
+                          style={{ fontSize: "11px", padding: "2px 6px", textDecoration: "underline", color: "var(--primary-500)" }}
+                        >
+                          {isExpanded ? t("Hide Details") : t("Details")}
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "11px", color: "var(--text-secondary)", marginTop: "4px", display: "flex", gap: "12px", alignItems: "center" }}>
+                      <span>🗓 {t("Due")}: {sub.dueDate}</span>
+                      {Array.isArray(sub.assignees) && sub.assignees.length > 0 && (
+                        <span>👥 {sub.assignees.length} {sub.assignees.length === 1 ? t("Assignee") : t("Assignees")}</span>
                       )}
-                      {sub.title}
-                    </span>
-                    <span style={{ fontSize: "11px", color: "var(--text-secondary)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
-                      {sub.dueDate}
-                    </span>
+                    </div>
+                    {isExpanded && (
+                      <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px dashed var(--border-subtle)", display: "flex", flexDirection: "column", gap: "6px" }}>
+                        <div>
+                          <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-secondary)" }}>{t("Description")}: </span>
+                          <span style={{ fontSize: "12px", color: "var(--text-primary)" }}>{sub.description || t("No description provided.")}</span>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-secondary)", marginBottom: "4px" }}>{t("Assigned Members")}:</div>
+                          {Array.isArray(sub.assignees) && sub.assignees.length > 0 ? (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                              {sub.assignees.map((aId: string) => {
+                                const cons = consultants.find((c: any) => c.id === aId || c.name === aId);
+                                return (
+                                  <span key={aId} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--bg-surface-3)", padding: "2px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: 600 }}>
+                                    {cons?.avatar && <span style={{ width: "16px", height: "16px", borderRadius: "50%", background: cons.color || "#3b82f6", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "9px" }}>{cons.avatar}</span>}
+                                    <span>{cons ? cons.name : aId}</span>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: "11px", color: "var(--text-tertiary)", fontStyle: "italic" }}>{t("No assignees added to this subtask.")}</span>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  {sub.description && (
-                    <div style={{ fontSize: "12px", color: "var(--text-secondary)", marginTop: "2px" }}>{sub.description}</div>
-                  )}
-                </div>
-              ))}
+                );
+              })}
             </div>
           ) : !showAddSubtask ? (
             <div style={{ fontSize: "12px", color: "var(--text-tertiary)", fontStyle: "italic" }}>{t("No subtasks yet. Click + Add to create one.")}</div>
@@ -1041,16 +1177,12 @@ export default function TasksPage() {
   const [ntProject, setNtProject] = useState("");
   const [ntAssignees, setNtAssignees] = useState<{ id: string; hours: string }[]>([]);
 
-  const createModalProject = data.projects.find((p) => p.id === ntProject);
+  const createModalProject = data.projects.find((p) => p.id === ntProject || p.name === ntProject || (p.client ? `${p.name} (${p.client})` === ntProject : false));
   const createModalTeamIds = createModalProject?.team || [];
   const createModalEligibleAssignees = React.useMemo(() => {
-    if (user?.role === "super_admin" || user?.role === "project_manager") {
-      return allEligibleAssignees;
-    }
-    return createModalTeamIds.length > 0 
-      ? allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id))
-      : allEligibleAssignees;
-  }, [createModalTeamIds, allEligibleAssignees, user?.role]);
+    if (!ntProject || !createModalProject) return [];
+    return allEligibleAssignees.filter((c) => createModalTeamIds.includes(c.id) || createModalTeamIds.includes(c.name));
+  }, [createModalTeamIds, allEligibleAssignees, ntProject, createModalProject]);
   const totalAllocatedHours = ntAssignees.reduce((acc, curr) => acc + (parseFloat(curr.hours) || 0), 0);
   const [ntPriority, setNtPriority] = useState<any>("");
   const [ntDue, setNtDue] = useState("");
@@ -1153,15 +1285,14 @@ export default function TasksPage() {
   };
 
   // Subtasks State
-  const [subtasks, setSubtasks] = useState<{ title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: 'Not Started' | 'In Progress' | 'Completed' }[]>([]);
+  const [subtasks, setSubtasks] = useState<{ title: string; dueDate: string; description?: string; isMilestone?: boolean; status?: string; assignees?: string[] }[]>([]);
   const [subtaskErrors, setSubtaskErrors] = useState<string[]>([]);
 
   React.useEffect(() => {
-    if (visibleProjects.length > 0) {
+    if (showTaskModal && !ntProject && visibleProjects.length > 0) {
       setNtProject(visibleProjects[0].id);
     }
-    // Fixed Issue 1: Do not force an initial assignee. Let it remain empty.
-  }, [data, visibleProjects, showTaskModal]);
+  }, [showTaskModal]);
 
   // Real-time validation for subtasks deadlines against main task deadline
   React.useEffect(() => {
@@ -1175,7 +1306,7 @@ export default function TasksPage() {
   }, [subtasks, ntDue]);
 
   const handleAddSubtaskField = () => {
-    setSubtasks([...subtasks, { title: "", dueDate: "", description: "", isMilestone: false, status: "Not Started" }]);
+    setSubtasks([...subtasks, { title: "", dueDate: "", description: "", isMilestone: false, status: "To Do", assignees: [] }]);
     setSubtaskErrors([...subtaskErrors, ""]);
   };
 
@@ -1217,7 +1348,8 @@ export default function TasksPage() {
       title: ntTitle,
       project: ntProject,
       assignee: ntAssignees.length > 0 ? ntAssignees[0].id : "",
-      priority: (ntPriority || "") as any,
+      assignees: ntAssignees.map(a => a.id),
+      priority: (ntPriority || "None") as any,
       dueDate: ntDue || "",
       estimate: ntEstimate !== "" ? parseFloat(ntEstimate) : 0,
       tags: ntTags ? ntTags.split(",").map(t => t.trim()).filter(Boolean) : [],
@@ -1547,7 +1679,7 @@ export default function TasksPage() {
                               <span className={`priority-dot priority-${task.priority}`} />
                               <div>
                                 <div style={{ fontSize: "13px", fontWeight: 500 }}>{task.title}</div>
-                                <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{task.id}</div>
+                                {task.id.length <= 10 && <div style={{ fontSize: "11px", color: "var(--text-tertiary)" }}>{task.id}</div>}
                               </div>
                             </div>
                           </td>
@@ -1832,10 +1964,10 @@ export default function TasksPage() {
                     <SearchableSelect
                       className="login-input"
                       value={ntProject}
-                      onChange={(val) => setNtProject(val)}
+                      onChange={(val) => { setNtProject(val); setNtAssignees([]); }}
                       required
                       placeholder={t("Select Project")}
-                      options={visibleProjects.map((p) => ({ label: `${p.name} (${p.id})`, value: p.id }))}
+                      options={visibleProjects.map((p) => ({ label: p.client ? `${p.name} (${p.client})` : p.name, value: p.id }))}
                     />
                   </div>
                   <div className="login-field">
@@ -2059,12 +2191,17 @@ export default function TasksPage() {
                             <label className="login-label" style={{ fontSize: "12px", fontWeight: 600 }}>{t("Subtask Status")}</label>
                             <select
                               className="login-input"
-                              value={sub.status || "Not Started"}
+                              value={sub.status || "To Do"}
                               onChange={e => handleUpdateSubtaskField(idx, 'status', e.target.value)}
                               style={{ height: "36px", padding: "6px 12px" }}
                             >
-                              <option value="Not Started">{t("Not Started")}</option>
+                              <option value="To Do">{t("To Do")}</option>
                               <option value="In Progress">{t("In Progress")}</option>
+                              <option value="In Review">{t("In Review")}</option>
+                              {(user?.role?.toLowerCase() === "super_admin" || user?.role === "Super Admin" || sub.status === "Done") && (
+                                <option value="Done">{t("Done")}</option>
+                              )}
+                              <option value="Not Started">{t("Not Started")}</option>
                               <option value="Completed">{t("Completed")}</option>
                             </select>
                           </div>
@@ -2080,6 +2217,42 @@ export default function TasksPage() {
                               {t("Mark as Milestone")}
                             </label>
                           </div>
+                        </div>
+                        <div className="login-field" style={{ marginTop: "12px" }}>
+                          <label className="login-label" style={{ fontSize: "12px", fontWeight: 600 }}>{t("Subtask Assignees (From Parent Project)")}</label>
+                          <SearchableSelect
+                            className="login-input"
+                            value=""
+                            onChange={(val) => {
+                              if (val) {
+                                const curr = sub.assignees || [];
+                                if (!curr.includes(val)) {
+                                  handleUpdateSubtaskField(idx, 'assignees', [...curr, val]);
+                                }
+                              }
+                            }}
+                            placeholder={t("Add subtask assignees...")}
+                            options={createModalEligibleAssignees.filter(c => !(sub.assignees || []).includes(c.id)).map(c => ({ label: c.name, value: c.id }))}
+                          />
+                          {sub.assignees && sub.assignees.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "8px" }}>
+                              {sub.assignees.map((aId: string) => {
+                                const c = allEligibleAssignees.find(x => x.id === aId || x.name === aId);
+                                return (
+                                  <span key={aId} style={{ display: "inline-flex", alignItems: "center", gap: "6px", background: "var(--bg-surface-3)", padding: "4px 8px", borderRadius: "16px", fontSize: "12px", border: "1px solid var(--border-subtle)" }}>
+                                    <span style={{ fontWeight: 500 }}>{c ? c.name : aId}</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleUpdateSubtaskField(idx, 'assignees', (sub.assignees || []).filter(i => i !== aId))}
+                                      style={{ background: "transparent", border: "none", color: "var(--danger-500)", cursor: "pointer", fontWeight: "bold", padding: 0, fontSize: "14px" }}
+                                    >
+                                      ×
+                                    </button>
+                                  </span>
+                                );
+                              })}
+                            </div>
+                          )}
                         </div>
                         {subtaskErrors[idx] && (
                           <div style={{ fontSize: "11px", color: "var(--danger-500)", marginTop: "6px", fontWeight: 500 }}>
@@ -2104,7 +2277,12 @@ export default function TasksPage() {
                   >
                     {t("Cancel")}
                   </button>
-                  <button type="submit" className="btn btn-primary btn-sm" style={{ padding: "8px 20px" }}>
+                  <button 
+                    type="submit" 
+                    className="btn btn-primary btn-sm" 
+                    style={{ padding: "8px 20px" }}
+                    disabled={!ntTitle || !ntProject || ntAssignees.length === 0}
+                  >
                     {t("Create Task")}
                   </button>
                 </div>

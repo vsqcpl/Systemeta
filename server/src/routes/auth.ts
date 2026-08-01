@@ -25,6 +25,60 @@ router.get("/csrf-token", (req, res) => {
   return res.json({ csrfToken: token });
 });
 
+/**
+ * Helper to process and transform Set-Cookie headers from Better Auth based on rememberMe.
+ */
+function processAndSetCookies(res: any, responseHeaders: Headers, rememberMe: boolean) {
+  const isProd = process.env.NODE_ENV === "production";
+  
+  responseHeaders.forEach((value, name) => {
+    if (name.toLowerCase() === "set-cookie") {
+      let cookieStr = value;
+      
+      if (rememberMe) {
+        // Enforce 30-day cookie persistence (30 * 24 * 60 * 60 = 2,592,000 seconds)
+        const maxAgeSeconds = 30 * 24 * 60 * 60;
+        const expiresDate = new Date(Date.now() + maxAgeSeconds * 1000).toUTCString();
+
+        if (/max-age=\d+/i.test(cookieStr)) {
+          cookieStr = cookieStr.replace(/max-age=\d+/i, `Max-Age=${maxAgeSeconds}`);
+        } else {
+          cookieStr += `; Max-Age=${maxAgeSeconds}`;
+        }
+
+        if (/expires=[^;]+/i.test(cookieStr)) {
+          cookieStr = cookieStr.replace(/expires=[^;]+/i, `Expires=${expiresDate}`);
+        } else {
+          cookieStr += `; Expires=${expiresDate}`;
+        }
+      } else {
+        // When Remember Me is unchecked, remove Max-Age and Expires to make it a Session Cookie
+        // A cookie without Max-Age/Expires is deleted when browser session ends (browser close)
+        cookieStr = cookieStr
+          .split(";")
+          .map((part) => part.trim())
+          .filter((part) => !/^max-age=/i.test(part) && !/^expires=/i.test(part))
+          .join("; ");
+      }
+
+      if (!/httponly/i.test(cookieStr)) {
+        cookieStr += "; HttpOnly";
+      }
+      if (!/path=/i.test(cookieStr)) {
+        cookieStr += "; Path=/";
+      }
+      if (!/samesite=/i.test(cookieStr)) {
+        cookieStr += "; SameSite=Lax";
+      }
+      if (isProd && !/secure/i.test(cookieStr)) {
+        cookieStr += "; Secure";
+      }
+
+      res.append("set-cookie", cookieStr);
+    }
+  });
+}
+
 // POST /api/auth/login
 router.post("/login", async (req, res) => {
   try {
@@ -35,36 +89,60 @@ router.post("/login", async (req, res) => {
       return res.status(400).json({ message: "Email and password are required" });
     }
 
-    // Inject a custom header so the databaseHook can read rememberMe
-    // Note: Better Auth's signInEmail Zod schema strictly strips unknown fields from the body.
-    // We cannot simply pass { isExtended: true } in the body, as it will never reach the session.create hook.
-    // Instead, we pass it via a custom header which is perfectly accessible in the hook's context.
+    if (!process.env.DATABASE_URL) {
+      return res.status(500).json({ message: "Server Configuration Error: DATABASE_URL environment variable is missing." });
+    }
+
+    // Clean up any stale expired sessions
+    try {
+      await prisma.session.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+    } catch (_) {}
+
+    // Inject custom header so databaseHook can read rememberMe
     if (rememberMe) {
       req.headers["x-is-extended"] = "true";
     } else {
       req.headers["x-is-extended"] = "false";
     }
 
-    // Call Better Auth to sign in
-    const response = await auth.api.signInEmail({
-      body: { email, password },
-      headers: fromNodeHeaders(req.headers),
-      asResponse: true,
+    // Call Better Auth to sign in via handler to ensure context.request exists for hooks
+    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5005");
+    requestUrl.pathname = "/api/auth/sign-in/email";
+    
+    const headers = fromNodeHeaders(req.headers);
+    headers.delete("content-length");
+
+    const request = new Request(requestUrl.href, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ email, password }),
     });
 
-    // Copy Set-Cookie headers to Express response
-    response.headers.forEach((value, name) => {
-      if (name.toLowerCase() === "set-cookie") {
-        res.append(name, value);
-      } else {
-        res.setHeader(name, value);
-      }
-    });
+    const response = await auth.handler(request);
 
-    const data = await response.json();
+    // Set processAndSetCookies to enforce 30-day persistence or Session Cookie policy
+    processAndSetCookies(res, response.headers, !!rememberMe);
+
+    const text = await response.text();
+    let data;
+    try {
+      data = text ? JSON.parse(text) : { message: `Server authentication error (status ${response.status})` };
+    } catch {
+      data = { message: text || `Server error (status ${response.status})` };
+    }
 
     if (response.status !== 200) {
       return res.status(response.status).json(data);
+    }
+
+    // Sanitize response: do NOT expose raw session token in JSON to client JS
+    if (data && typeof data === "object") {
+      if (data.session && typeof data.session === "object") {
+        delete data.session.token;
+      }
+      delete data.token;
     }
 
     // Load user record from db to log login event
@@ -95,28 +173,43 @@ router.post("/login", async (req, res) => {
     return res.status(response.status).json(data);
   } catch (error) {
     console.error("Login Error:", error);
-    res.status(500).json({ message: "Internal server error during login", error: String(error) });
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    res.status(500).json({ message: `Server error: ${errorMessage}`, error: String(error) });
   }
 });
 
 // POST /api/auth/logout
 router.post("/logout", async (req, res) => {
   try {
-    const response = await auth.api.signOut({
+    const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
-      asResponse: true,
     });
+
+    if (session?.user?.id) {
+      // Invalidate all active sessions & remember tokens for this user in the database immediately
+      await prisma.session.deleteMany({
+        where: { userId: session.user.id },
+      });
+    }
+
+    const requestUrl = new URL(req.originalUrl || req.url, process.env.FRONTEND_URL || "http://localhost:5005");
+    requestUrl.pathname = "/api/auth/sign-out";
+    
+    const request = new Request(requestUrl.href, {
+      method: "POST",
+      headers: fromNodeHeaders(req.headers),
+    });
+
+    const response = await auth.handler(request);
 
     response.headers.forEach((value, name) => {
       if (name.toLowerCase() === "set-cookie") {
-        res.append(name, value);
-      } else {
-        res.setHeader(name, value);
+        res.append("set-cookie", value);
       }
     });
 
-    const data = await response.json();
-    return res.status(response.status).json(data);
+    const data = await response.json().catch(() => ({ success: true }));
+    return res.status(response.status || 200).json(data);
   } catch (error) {
     console.error("Logout route error:", error);
     return res.status(500).json({ message: "Internal server error during logout" });
@@ -126,6 +219,13 @@ router.post("/logout", async (req, res) => {
 // GET /api/auth/me
 router.get("/me", async (req, res) => {
   try {
+    // Purge expired sessions
+    try {
+      await prisma.session.deleteMany({
+        where: { expiresAt: { lt: new Date() } },
+      });
+    } catch (_) {}
+
     const session = await auth.api.getSession({
       headers: fromNodeHeaders(req.headers),
     });

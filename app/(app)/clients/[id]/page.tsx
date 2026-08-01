@@ -3,6 +3,8 @@
 import React, { useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { useAppStore, useTranslation } from "@/lib/store";
+import EditClientModal from "@/components/EditClientModal";
+import DeleteClientModal from "@/components/DeleteClientModal";
 import {
   IconUsers,
   IconBriefcase,
@@ -10,6 +12,8 @@ import {
   IconClock,
   IconFolder,
 } from "@/components/ui/Icons";
+
+import { isManagerAssignedToClient } from "@/lib/permissionHelpers";
 
 export default function ClientProfilePage() {
   const params = useParams();
@@ -21,14 +25,42 @@ export default function ClientProfilePage() {
   const deactivateClient = useAppStore((state) => state.deactivateClient);
   const activateClient = useAppStore((state) => state.activateClient);
 
+  const currentUser = useAppStore((state) => state.user);
+  const updateClient = useAppStore((state) => state.updateClient);
+  const deleteClient = useAppStore((state) => state.deleteClient);
+
   const client = data.clients?.find(c => c.id === clientId);
 
   const [activeTab, setActiveTab] = useState<"contacts" | "opportunities" | "requirements" | "communication" | "projects">("contacts");
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
-  if (!client) {
+  const isAssigned = client ? isManagerAssignedToClient(client, currentUser) : false;
+
+  const canManageClients =
+    isAssigned &&
+    (!currentUser ||
+      currentUser.role === "super_admin" ||
+      currentUser.role === "client_manager" ||
+      currentUser.role === "director" ||
+      (currentUser as any).permissions?.crm);
+
+  if (!client || client.deletedAt) {
     return (
       <div className="page-container" style={{ padding: "48px", textAlign: "center" }}>
         <h2>{t("Client not found")}</h2>
+        <button className="btn btn-primary" onClick={() => router.push("/clients")}>{t("Back to Clients")}</button>
+      </div>
+    );
+  }
+
+  if (!isAssigned) {
+    return (
+      <div className="page-container" style={{ padding: "48px", textAlign: "center" }}>
+        <h2>{t("Access Denied")}</h2>
+        <p style={{ color: "var(--text-tertiary)", marginBottom: "20px" }}>
+          {t("You do not have permission to access or manage this client record.")}
+        </p>
         <button className="btn btn-primary" onClick={() => router.push("/clients")}>{t("Back to Clients")}</button>
       </div>
     );
@@ -44,6 +76,22 @@ export default function ClientProfilePage() {
     p => p.client === clientId || p.client === client.companyName
   ) || [];
 
+  const assignedManagers = Array.isArray(client.assignedManagerIds)
+    ? client.assignedManagerIds.filter(Boolean)
+    : typeof client.assignedManagerIds === "string" && client.assignedManagerIds
+    ? client.assignedManagerIds.split(",").map((s) => s.trim()).filter(Boolean)
+    : client.accountOwner
+    ? [client.accountOwner]
+    : [];
+
+  const handleDeleteConfirm = async (id: string) => {
+    const success = await deleteClient(id);
+    if (success) {
+      router.push("/clients");
+    }
+    return success;
+  };
+
   return (
     <div className="page-container" style={{ animation: "fadeIn 0.5s ease-out", padding: "24px" }}>
       {/* Header */}
@@ -58,28 +106,50 @@ export default function ClientProfilePage() {
             </div>
             <div>
               <h1 className="page-title" style={{ margin: 0 }}>{client.companyName}</h1>
-              <p className="page-subtitle" style={{ margin: 0 }}>
-                {client.industry || t("No Industry")} · {t("Manager")}: {client.accountOwner || t("Unassigned")}
-              </p>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginTop: "4px" }}>
+                <span className="page-subtitle" style={{ margin: 0 }}>
+                  {client.industry || t("No Industry")}
+                  {client.email ? ` · ${client.email}` : ""}
+                  {client.phone ? ` · ${client.phone}` : ""}
+                </span>
+                <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>· {t("Managers")}:</span>
+                {assignedManagers.length > 0 ? (
+                  assignedManagers.map((m, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        padding: "2px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: 500,
+                        background: "rgba(99, 102, 241, 0.12)",
+                        color: "var(--primary-color, #4f46e5)",
+                        border: "1px solid rgba(99, 102, 241, 0.2)",
+                      }}
+                    >
+                      {m}
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ fontSize: "12px", color: "var(--text-tertiary)" }}>{t("Unassigned")}</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", gap: "8px" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
           <span className={`badge ${client.status === 'Active' ? 'badge-success' : client.status === 'Inactive' ? 'badge-danger' : 'badge-neutral'}`} style={{ height: "fit-content", padding: "6px 12px" }}>
             {client.status}
           </span>
-          {client.status === 'Active' ? (
-            <button className="btn btn-outline" onClick={() => {
-              if (confirm("Deactivate this client?")) deactivateClient(client.id);
-            }}>
-              {t("Deactivate")}
-            </button>
-          ) : (
-            <button className="btn btn-primary" onClick={() => {
-              if (confirm("Activate this client?")) activateClient(client.id);
-            }}>
-              {t("Activate")}
-            </button>
+          {canManageClients && (
+            <>
+              <button className="btn btn-secondary" onClick={() => setShowEditModal(true)}>
+                {t("Edit Details")}
+              </button>
+              <button className="btn btn-danger" onClick={() => setShowDeleteModal(true)}>
+                {t("Delete")}
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -247,7 +317,7 @@ export default function ClientProfilePage() {
               <table className="table">
                 <thead>
                   <tr>
-                    <th>{t("ID")}</th>
+                    <th>{t("Type")}</th>
                     <th>{t("Name")}</th>
                     <th>{t("Status")}</th>
                     <th>{t("Health")}</th>
@@ -258,7 +328,7 @@ export default function ClientProfilePage() {
                 <tbody>
                   {clientProjects.length > 0 ? clientProjects.map(pr => (
                     <tr key={pr.id} style={{ cursor: "pointer" }} onClick={() => router.push(`/projects/${pr.id}`)}>
-                      <td><span className="badge badge-brand">{pr.id}</span></td>
+                      <td><span className="badge badge-brand">{pr.type || "Project"}</span></td>
                       <td style={{ fontWeight: 500 }}>{pr.name}</td>
                       <td><span className="badge badge-neutral">{pr.status}</span></td>
                       <td>
@@ -287,6 +357,24 @@ export default function ClientProfilePage() {
 
         </div>
       </div>
+
+      {showEditModal && (
+        <EditClientModal
+          isOpen={showEditModal}
+          onClose={() => setShowEditModal(false)}
+          client={client}
+          onSave={updateClient}
+        />
+      )}
+
+      {showDeleteModal && (
+        <DeleteClientModal
+          isOpen={showDeleteModal}
+          onClose={() => setShowDeleteModal(false)}
+          client={client}
+          onConfirm={handleDeleteConfirm}
+        />
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import prisma from "./prisma.js";
 import bcrypt from "bcrypt";
 
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL || (process.env.NODE_ENV === "production" ? "https://vsqc-platform-backend.vercel.app" : "http://localhost:5000"),
+  baseURL: process.env.BETTER_AUTH_URL || (process.env.NODE_ENV === "production" ? "https://vsqc-platform-backend.vercel.app" : "http://localhost:5005"),
   trustedOrigins: [
     process.env.FRONTEND_URL || "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -14,6 +14,9 @@ export const auth = betterAuth({
     "http://127.0.0.1:3002",
     "http://localhost:*",
     "http://127.0.0.1:*",
+    "http://192.168.*:*",
+    "http://10.*:*",
+    "http://172.*:*",
     "https://*.vercel.app",
     ...(process.env.TRUSTED_ORIGINS ? process.env.TRUSTED_ORIGINS.split(",").map(url => url.trim()) : []),
   ],
@@ -34,8 +37,8 @@ export const auth = betterAuth({
   },
   // Ensure sessions last long enough and cookies are secure
   session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // 1 day
+    expiresIn: 60 * 60 * 24 * 30, // 30 days maximum duration
+    updateAge: 60 * 60 * 24, // 1 day sliding window update
     additionalFields: {
       isExtended: {
         type: "boolean",
@@ -49,22 +52,24 @@ export const auth = betterAuth({
       create: {
         before: async (session, context) => {
           const isExtendedHeader = context?.request?.headers?.get("x-is-extended");
-          console.log("BETTER AUTH HOOK: context.request exists?", !!context?.request);
-          console.log("BETTER AUTH HOOK: session.isExtended =", session.isExtended, "isExtendedHeader =", isExtendedHeader);
-          // If we passed the header (from auth.ts fallback injection) or if it's already on the payload
           const isExtended = session.isExtended === true || isExtendedHeader === "true";
           
           if (isExtended) {
-            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000);
+            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000); // 30 days
             return { data: { ...session, isExtended: true, expiresAt } };
+          } else {
+            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 1000); // 24 hours
+            return { data: { ...session, isExtended: false, expiresAt } };
           }
-          return { data: { ...session, isExtended: false } };
         },
       },
       update: {
         before: async (session, context) => {
           if (session.isExtended === true) {
             const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 30 * 1000);
+            return { data: { ...session, expiresAt } };
+          } else {
+            const expiresAt = new Date(Date.now() + 60 * 60 * 24 * 1000);
             return { data: { ...session, expiresAt } };
           }
         },

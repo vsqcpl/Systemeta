@@ -43,11 +43,13 @@ export interface Consultant {
 }
 
 export interface Subtask {
+  id?: string;
   title: string;
   dueDate: string;
   description?: string;
   isMilestone?: boolean;
-  status?: 'Not Started' | 'In Progress' | 'Completed';
+  status?: string;
+  assignees?: string[];
 }
 
 export interface Task {
@@ -60,6 +62,7 @@ export interface Task {
   dueDate: string;
   estimate: number;
   progress?: number;
+  status?: string; // Optional task status representation
   tags: string[];
   comments?: TaskComment[];
   subtasks?: Subtask[];
@@ -77,16 +80,29 @@ export interface TaskComment {
   time: string;
 }
 
-export type MilestoneStatus = 'upcoming' | 'at-risk' | 'delayed' | 'completed';
+export type MilestoneStatus =
+  | 'Invoice Generated'
+  | 'Pending'
+  | 'Paid'
+  | 'Overdue'
+  | 'Cancelled'
+  | 'upcoming'
+  | 'at-risk'
+  | 'delayed'
+  | 'completed';
 
 export interface Milestone {
   id: string;
   project: string; // Project ID (frontend/store field)
   projectId?: string; // Project ID (API/backend field — alias of project)
+  taskId?: string; // Linked Task ID if converted from task
   title: string;
+  description?: string; // Optional description for standalone milestones
   date: string;
-  status: MilestoneStatus;
+  status: MilestoneStatus | string;
   amount: number;
+  invoiceId?: string;
+  invoiceNo?: string;
 }
 
 export interface RevenueData {
@@ -136,12 +152,14 @@ export interface LeaveRequest {
 }
 
 export type ExpenseCategory = 'Travel' | 'Accommodation' | 'Meals' | 'Transport' | 'Other';
-export type ExpenseStatus = 'pending' | 'approved' | 'rejected';
+export type ExpenseStatus = 'pending' | 'approved' | 'rejected' | 'Pending' | 'Approved' | 'Rejected' | string;
 
 export interface Expense {
   id: string;
   consultant: string; // Consultant ID
   project: string; // Project ID
+  projectId?: string; // Optional API/backend alias for project ID
+  invoiceId?: string; // Linked Invoice ID when billed
   category: ExpenseCategory;
   description: string;
   amount: number;
@@ -158,7 +176,15 @@ export interface Expense {
   onHoldReason?: string | null;
 }
 
-export type InvoiceStatus = 'draft' | 'issued' | 'partially_paid' | 'paid' | 'overdue' | 'cancelled';
+export type InvoiceStatus =
+  | 'pending'
+  | 'draft'
+  | 'issued'
+  | 'partially_paid'
+  | 'paid'
+  | 'overdue'
+  | 'cancelled'
+  | 'refunded';
 
 export interface Payment {
   id: string;
@@ -176,10 +202,15 @@ export interface Payment {
 
 export interface Invoice {
   id: string;
+  invoiceNo?: string;
   project: string; // Project ID
   client: string;
   amount: number;
-  status: InvoiceStatus;
+  gst?: number;
+  taxAmount?: number;
+  milestoneId?: string;
+  milestone?: string;
+  status: InvoiceStatus | string;
   issued: string;
   due?: string;
   paid?: string;
@@ -248,10 +279,13 @@ export type ClientPriority = 'Low' | 'Medium' | 'High' | 'Critical';
 export interface Client {
   id: string;
   companyName: string;
+  company?: string;
+  contactPerson?: string;
   clientType: string;
   industry: string;
   website: string;
   gstNumber: string;
+  gst?: string;
   panNumber: string;
   address: string;
   country: string;
@@ -264,8 +298,10 @@ export interface Client {
   clientCategory: string;
   priority: ClientPriority;
   notes: string;
-  accountOwner: string; // User ID
+  accountOwner: string; // User ID or Manager Name
+  assignedManagerIds?: string[] | string;
   createdAt: string;
+  deletedAt?: string | null;
 }
 
 export interface ClientContact {
