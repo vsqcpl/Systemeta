@@ -605,8 +605,15 @@ router.patch("/:taskId/subtasks/:subtaskId", async (req: AuthenticatedRequest, r
     if (status && status !== existing.status) {
       const userRole = (req.user?.role || "").toLowerCase();
       const isManager = userRole === "super_admin" || userRole === "project_manager";
+      const isAssignee = Array.isArray(existing.assignees) && (existing.assignees.includes(req.user.id) || (req.user.name && existing.assignees.includes(req.user.name)));
+      
       if (!isManager) {
-        return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can update subtask status." });
+        if (!isAssignee) {
+          return res.status(403).json({ message: "Forbidden: You do not have permission to update this subtask." });
+        }
+        if (status.toLowerCase() === "done" || status.toLowerCase() === "completed") {
+          return res.status(403).json({ message: "Forbidden: Only Project Managers and Super Admins can set subtasks to Done." });
+        }
       }
     }
 

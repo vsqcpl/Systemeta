@@ -116,12 +116,12 @@ export default function QuickAddModal({ open, onClose, defaultTab, defaultProjec
       setNtProject(defaultProjectId);
       setTsProject(defaultProjectId);
       setExpProject(defaultProjectId);
-    } else if (data.projects.length > 0) {
+    } else if (data?.projects?.length > 0) {
       setNtProject(data.projects[0].id);
       setTsProject(data.projects[0].id);
       setExpProject(data.projects[0].id);
     }
-    if (data.consultants.length > 0) {
+    if (data?.consultants?.length > 0) {
       setNpManager(data.consultants[0].name);
       setExpConsultant(data.consultants[0].id);
     }
@@ -141,7 +141,7 @@ export default function QuickAddModal({ open, onClose, defaultTab, defaultProjec
   }, [ntAssignees]);
 
   useEffect(() => {
-    if (projectTypes.length > 0 && !projectTypes.includes(npType)) {
+    if (projectTypes?.length > 0 && !projectTypes.includes(npType)) {
       setNpType(projectTypes[0]);
     }
   }, [projectTypes, npType]);

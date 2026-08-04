@@ -761,7 +761,8 @@ function TaskDrawer({
           {task.subtasks && task.subtasks.length > 0 ? (
             <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
               {task.subtasks.map((sub, sIdx) => {
-                const canEditStatus = isManager;
+                const isSubtaskAssignee = Array.isArray(sub.assignees) && (sub.assignees.includes(user?.id || "") || sub.assignees.includes(user?.name || ""));
+                const canEditStatus = isManager || isSubtaskAssignee;
                 const isExpanded = !!expandedSubtasks[sIdx];
                 return (
                   <div key={sIdx} style={{ padding: "10px 12px", border: "1px solid var(--border-subtle)", borderRadius: "6px", background: "var(--bg-surface-2)" }}>
@@ -786,7 +787,7 @@ function TaskDrawer({
                         <select
                           value={sub.status || "To Do"}
                           disabled={!canEditStatus}
-                          title={!canEditStatus ? "Only Project Managers and Super Admins can change subtask status." : "Change subtask status"}
+                          title={!canEditStatus ? "Only Project Managers, Super Admins, and Assignees can change subtask status." : "Change subtask status"}
                           onChange={(e) => {
                             const val = e.target.value;
                             useAppStore.getState().updateSubtask(task.id, sub.id || sIdx.toString(), { status: val }).then(() => {
@@ -810,9 +811,9 @@ function TaskDrawer({
                           <option value="To Do">{t("To Do")}</option>
                           <option value="In Progress">{t("In Progress")}</option>
                           <option value="In Review">{t("In Review")}</option>
-                          <option value="Done">{t("Done")}</option>
+                          <option value="Done" disabled={!isManager}>{t("Done")}</option>
                           {sub.status === "Not Started" && <option value="Not Started">{t("Not Started")}</option>}
-                          {sub.status === "Completed" && <option value="Completed">{t("Completed")}</option>}
+                          {sub.status === "Completed" && <option value="Completed" disabled={!isManager}>{t("Completed")}</option>}
                         </select>
                         <button
                           type="button"
