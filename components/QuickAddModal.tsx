@@ -105,7 +105,7 @@ export default function QuickAddModal({ open, onClose, defaultTab, defaultProjec
   const [expCurrency, setExpCurrency] = useState("AED");
   const [expDate, setExpDate] = useState("");
 
-  const projectTypes = useAppStore((state) => state.projectTypes);
+  const projectTypes = Array.from(new Set(data.projects.map((p) => p.type)));
 
   // Auto-select defaults when data is loaded
   useEffect(() => {
