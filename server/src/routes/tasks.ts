@@ -13,10 +13,10 @@ router.use(authMiddleware);
 router.get("/", async (req: AuthenticatedRequest, res) => {
   try {
     let projectsFilter: string[] = [];
-    const isSpecialRole = req.user.role === "super_admin" || req.user.role === "accounts";
+    const isSpecialRole = req.user.role === "super_admin" || req.user.role === "accounts" || req.user.role === "client_manager";
 
     if (!isSpecialRole) {
-      if (req.user.role === "client_manager") {
+      if (false) { // client_manager handled above
         const clients = await prisma.client.findMany({
           where: { createdBy: req.user.id },
           select: { name: true },

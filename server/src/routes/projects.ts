@@ -17,8 +17,8 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 
     const hasCrossProject = await checkPermission(req.user.id, req.user.role, "Cross-Project Visibility");
 
-    if (req.user.role === "super_admin" || req.user.role === "accounts" || hasCrossProject) {
-      // Super Admin, Accounts, or Cross-Project Visibility see all projects
+    if (req.user.role === "super_admin" || req.user.role === "accounts" || req.user.role === "client_manager" || hasCrossProject) {
+      // Super Admin, Accounts, Client Manager or Cross-Project Visibility see all projects
       projects = await prisma.project.findMany({
         include: {
           users: {
@@ -26,23 +26,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
           },
         },
       });
-    } else if (req.user.role === "client_manager") {
-      // Client Managers see projects belonging to clients they created
-      const clients = await prisma.client.findMany({
-        where: { createdBy: req.user.id },
-        select: { name: true },
-      });
-      const clientNames = clients.map((c) => c.name);
-      projects = await prisma.project.findMany({
-        where: {
-          client: { in: clientNames },
-        },
-        include: {
-          users: {
-            select: { userId: true },
-          },
-        },
-      });
+    } else if (false) { // Condition effectively disabled, merged above
     } else if (req.user.role === "client_contact" && req.user.clientId) {
       // Client Contacts see projects matching their clientId
       projects = await prisma.project.findMany({

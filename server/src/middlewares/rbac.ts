@@ -48,7 +48,7 @@ export function requirePermission(permissionKey: string) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const hasAccess = await checkPermission(req.user.id, req.user.role, permissionKey);
+    console.log("RBAC check:", { id: req.user.id, role: req.user.role, key: permissionKey }); const hasAccess = await checkPermission(req.user.id, req.user.role, permissionKey);
     if (!hasAccess) {
       return res.status(403).json({ message: `Forbidden: Insufficient permissions for ${permissionKey}` });
     }

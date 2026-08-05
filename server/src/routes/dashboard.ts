@@ -41,9 +41,9 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 
     const hasCrossProject = await checkPermission(req.user.id, req.user.role, "Cross-Project Visibility");
 
-    if (req.user.role === "super_admin" || req.user.role === "accounts" || hasCrossProject) {
+    if (req.user.role === "super_admin" || req.user.role === "accounts" || req.user.role === "client_manager" || hasCrossProject) {
       // No extra filtering needed; keep defaults to see all projects/tasks
-    } else if (req.user.role === "client_manager") {
+    } else if (false) { // client_manager handled above
       const clients = await prisma.client.findMany({
         where: { createdBy: req.user.id },
         select: { name: true },
@@ -129,7 +129,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     ]);
 
     // Fetch all invoices to compute monthly revenue performance
-    const invoices = req.user.role === "client_manager"
+    const invoices = false // client_manager sees all now
       ? await prisma.invoice.findMany({ where: { client: { in: clientNames } } })
       : await prisma.invoice.findMany();
     const actual = Array(12).fill(0);
@@ -150,7 +150,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
     });
 
     // Populate target from projects due dates
-    const allProjects = req.user.role === "client_manager"
+    const allProjects = false // client_manager sees all now
       ? await prisma.project.findMany({ where: { client: { in: clientNames } } })
       : await prisma.project.findMany();
     allProjects.forEach((proj) => {

@@ -140,7 +140,7 @@ async function checkRecordAccess(
 router.get("/clients", async (req: Request, res: Response) => {
   try {
     const user = (req as any).user;
-    const isSuperAdmin = user?.role === "super_admin" || user?.role === "admin" || user?.role === "Super Admin";
+    const isSuperAdmin = user?.role === "super_admin" || user?.role === "admin" || user?.role === "Super Admin" || user?.role === "client_manager" || user?.role === "Client Manager";
     const isClientContact = user?.role === "client_contact" || user?.role === "Client Contact";
     const userId = user?.id || "";
     const userName = user?.name || "";
@@ -346,7 +346,7 @@ router.delete("/clients/:id", async (req: Request, res: Response) => {
 router.get("/contacts", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.query;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -371,7 +371,7 @@ router.get("/contacts", async (req: Request, res: Response) => {
 router.post("/contacts", async (req: Request, res: Response) => {
   try {
     const { clientId, name, email, phone, role, isPrimary } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -386,7 +386,7 @@ router.post("/contacts", async (req: Request, res: Response) => {
 
 router.put("/contacts/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("contact", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this contact." });
@@ -402,7 +402,7 @@ router.put("/contacts/:id", async (req: Request, res: Response) => {
 
 router.delete("/contacts/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("contact", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this contact." });
@@ -423,7 +423,7 @@ router.delete("/contacts/:id", async (req: Request, res: Response) => {
 router.get("/calls", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.query;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -448,7 +448,7 @@ router.get("/calls", async (req: Request, res: Response) => {
 router.post("/calls", async (req: Request, res: Response) => {
   try {
     const { clientId, subject, notes, outcome, duration, scheduledAt } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -466,7 +466,7 @@ router.post("/calls", async (req: Request, res: Response) => {
 
 router.put("/calls/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("call", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this call." });
@@ -485,7 +485,7 @@ router.put("/calls/:id", async (req: Request, res: Response) => {
 
 router.delete("/calls/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("call", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this call." });
@@ -506,7 +506,7 @@ router.delete("/calls/:id", async (req: Request, res: Response) => {
 router.get("/meetings", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.query;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -531,7 +531,7 @@ router.get("/meetings", async (req: Request, res: Response) => {
 router.post("/meetings", async (req: Request, res: Response) => {
   try {
     const { clientId, title, agenda, notes, platform, meetLink, status, scheduledAt } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -549,7 +549,7 @@ router.post("/meetings", async (req: Request, res: Response) => {
 
 router.put("/meetings/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("meeting", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this meeting." });
@@ -568,7 +568,7 @@ router.put("/meetings/:id", async (req: Request, res: Response) => {
 
 router.delete("/meetings/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("meeting", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this meeting." });
@@ -589,7 +589,7 @@ router.delete("/meetings/:id", async (req: Request, res: Response) => {
 router.get("/follow-ups", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.query;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -614,7 +614,7 @@ router.get("/follow-ups", async (req: Request, res: Response) => {
 router.post("/follow-ups", async (req: Request, res: Response) => {
   try {
     const { clientId, description, dueDate, priority, status } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -632,7 +632,7 @@ router.post("/follow-ups", async (req: Request, res: Response) => {
 
 router.put("/follow-ups/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("followUp", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this follow-up." });
@@ -651,7 +651,7 @@ router.put("/follow-ups/:id", async (req: Request, res: Response) => {
 
 router.delete("/follow-ups/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("followUp", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this follow-up." });
@@ -672,7 +672,7 @@ router.delete("/follow-ups/:id", async (req: Request, res: Response) => {
 router.get("/requirements", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.query;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -697,7 +697,7 @@ router.get("/requirements", async (req: Request, res: Response) => {
 router.post("/requirements", async (req: Request, res: Response) => {
   try {
     const { clientId, title, description, category, priority, status, budget } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -715,7 +715,7 @@ router.post("/requirements", async (req: Request, res: Response) => {
 
 router.put("/requirements/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("requirement", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this requirement." });
@@ -731,7 +731,7 @@ router.put("/requirements/:id", async (req: Request, res: Response) => {
 
 router.delete("/requirements/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("requirement", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this requirement." });
@@ -752,7 +752,7 @@ router.delete("/requirements/:id", async (req: Request, res: Response) => {
 router.get("/opportunities", async (req: Request, res: Response) => {
   try {
     const { clientId } = req.query;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -777,7 +777,7 @@ router.get("/opportunities", async (req: Request, res: Response) => {
 router.post("/opportunities", async (req: Request, res: Response) => {
   try {
     const { clientId, title, value, stage, probability, expectedClose, notes } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -799,7 +799,7 @@ router.post("/opportunities", async (req: Request, res: Response) => {
 
 router.put("/opportunities/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("opportunity", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this opportunity." });
@@ -818,7 +818,7 @@ router.put("/opportunities/:id", async (req: Request, res: Response) => {
 
 router.delete("/opportunities/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("opportunity", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this opportunity." });
@@ -838,7 +838,7 @@ router.delete("/opportunities/:id", async (req: Request, res: Response) => {
 
 router.get("/escalations", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
@@ -869,7 +869,7 @@ router.get("/escalations", async (req: Request, res: Response) => {
 router.post("/escalations", async (req: Request, res: Response) => {
   try {
     const { clientId, title, description, severity, assignedTo } = req.body;
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkClientAccess(clientId, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own this client." });
@@ -885,7 +885,7 @@ router.post("/escalations", async (req: Request, res: Response) => {
 
 router.put("/escalations/:id", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const userId = (req as any).user?.id;
     if (!(await checkRecordAccess("escalation", req.params.id, userId, isSuperAdmin))) {
       return res.status(403).json({ error: "Access denied. You do not own the client for this escalation." });
@@ -906,7 +906,7 @@ router.put("/escalations/:id", async (req: Request, res: Response) => {
 
 router.get("/dashboard-summary", async (req: Request, res: Response) => {
   try {
-    const isSuperAdmin = (req as any).user?.role === "super_admin";
+    const isSuperAdmin = (req as any).user?.role === "super_admin" || (req as any).user?.role === "client_manager";
     const isClientContact = (req as any).user?.role === "client_contact" || (req as any).user?.role === "Client Contact";
     const userId = (req as any).user?.id;
     const userClientId = (req as any).user?.clientId;
