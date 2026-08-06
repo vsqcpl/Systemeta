@@ -43,6 +43,10 @@ export async function authMiddleware(
     }
 
     req.user = dbUser;
+    // Normalize role to lowercase with underscores for backend compatibility (e.g., "Client Manager" -> "client_manager")
+    if (req.user.role) {
+      req.user.role = req.user.role.toLowerCase().replace(/[\s_]+/g, "_");
+    }
     req.session = session.session;
 
     // Enforce first-login password reset on all protected routes

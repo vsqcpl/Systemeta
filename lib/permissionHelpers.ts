@@ -386,7 +386,7 @@ export function getScreenKey(path: string): string {
 export function isManagerAssignedToClient(client: any, user: any): boolean {
   if (!user) return false;
   const role = normalizeRole(user.role);
-  if (role === "super_admin") return true;
+  if (role === "super_admin" || role === "client_manager") return true;
   if (!client) return false;
 
   const userId = user.id || "";

@@ -39,7 +39,9 @@ export async function checkPermission(
 
   // 2. Check default User Role Permissions (primary)
   const allowedRoles = DEFAULT_ROLE_PERMISSIONS[permissionKey] || [];
-  return allowedRoles.includes(role);
+  const normalizedRole = role.toLowerCase().replace(/[\s_]+/g, "");
+  const normalizedAllowed = allowedRoles.map(r => r.toLowerCase().replace(/[\s_]+/g, ""));
+  return normalizedAllowed.includes(normalizedRole);
 }
 
 export function requirePermission(permissionKey: string) {
