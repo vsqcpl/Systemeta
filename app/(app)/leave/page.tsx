@@ -66,6 +66,7 @@ export default function LeavePage() {
 
   const [viewMode, setViewMode] = useState<"calendar" | "team">("calendar");
   const [isRequestModalOpen, setIsRequestModalOpen] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [expandedReasons, setExpandedReasons] = useState<Record<string, boolean>>({});
   const [customLeaveType, setCustomLeaveType] = useState("");
   const [detailsModalLeave, setDetailsModalLeave] = useState<any | null>(null);
@@ -141,6 +142,36 @@ export default function LeavePage() {
       attachment: "",
     });
     setCustomLeaveType("");
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) {
+      setNewRequest({ ...newRequest, attachment: "" });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("folder", "leave_attachments");
+
+      const res = await fetch("/api/upload", { method: "POST", body: formData });
+      const result = await res.json();
+
+      if (!res.ok || !result.url) {
+        throw new Error(result.error || "Upload failed");
+      }
+
+      setNewRequest({ ...newRequest, attachment: result.url });
+      showToast("Attachment uploaded successfully.", "success");
+    } catch (err: any) {
+      showToast("Attachment upload failed: " + err.message, "danger");
+      e.target.value = "";
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   // Default to June 2026 to align with mock data range
@@ -880,14 +911,8 @@ export default function LeavePage() {
                 </label>
                 <input
                   type="file"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setNewRequest({ ...newRequest, attachment: file.name });
-                    } else {
-                      setNewRequest({ ...newRequest, attachment: "" });
-                    }
-                  }}
+                  onChange={handleFileChange}
+                  disabled={isUploading}
                   style={{
                     padding: "8px 12px",
                     borderRadius: "6px",
@@ -907,8 +932,8 @@ export default function LeavePage() {
                 >
                   {t("Cancel")}
                 </button>
-                <button type="submit" className="btn btn-primary btn-sm">
-                  {t("Submit Request")}
+                <button type="submit" className="btn btn-primary btn-sm" disabled={isUploading}>
+                  {isUploading ? t("Uploading...") : t("Submit Request")}
                 </button>
               </div>
             </form>
@@ -960,7 +985,39 @@ export default function LeavePage() {
                 <div>
                   <span style={{ fontWeight: 600, color: "var(--text-secondary)" }}>{t("Attachment")}:</span>
                   <div style={{ marginTop: "4px", padding: "8px", background: "var(--bg-surface-2)", borderRadius: "6px" }}>
-                    📄 {detailsModalLeave.attachment}
+                    {detailsModalLeave.attachment.startsWith("data:image/") ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                        <img 
+                          src={detailsModalLeave.attachment} 
+                          alt="Attachment preview" 
+                          style={{ maxWidth: "100%", maxHeight: "300px", borderRadius: "4px", objectFit: "contain", border: "1px solid var(--border-subtle)" }} 
+                        />
+                        <a 
+                          href={detailsModalLeave.attachment} 
+                          download="leave_attachment"
+                          style={{ color: "var(--brand-600)", textDecoration: "underline", display: "inline-block", fontSize: "12px" }}
+                        >
+                          Download Image
+                        </a>
+                      </div>
+                    ) : detailsModalLeave.attachment.startsWith("data:application/pdf") || detailsModalLeave.attachment.startsWith("data:") ? (
+                      <a 
+                        href={detailsModalLeave.attachment} 
+                        download="leave_attachment"
+                        style={{ color: "var(--brand-600)", textDecoration: "underline", display: "flex", alignItems: "center", gap: "6px" }}
+                      >
+                        📄 Download Attachment
+                      </a>
+                    ) : (
+                      <a 
+                        href={detailsModalLeave.attachment} 
+                        target="_blank" 
+                        rel="noreferrer" 
+                        style={{ color: "var(--brand-600)", textDecoration: "underline", display: "flex", alignItems: "center", gap: "6px" }}
+                      >
+                        📄 View Attachment
+                      </a>
+                    )}
                   </div>
                 </div>
               )}

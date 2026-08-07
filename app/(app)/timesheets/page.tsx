@@ -837,14 +837,6 @@ export default function TimesheetsPage() {
           >
             {t("Export")}
           </button>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={handleSubmit}
-            disabled={isSubmitted}
-            style={isSubmitted ? { opacity: 0.7, cursor: "not-allowed" } : {}}
-          >
-            {isSubmitted ? t("Submitted") : t("Submit for Approval")}
-          </button>
         </div>
       </div>
 

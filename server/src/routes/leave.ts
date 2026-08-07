@@ -42,6 +42,7 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
       days: r.days,
       status: r.status,
       reason: r.reason,
+      attachment: r.attachment,
     }));
 
     return res.json(formatted);
@@ -54,10 +55,10 @@ router.get("/", async (req: AuthenticatedRequest, res) => {
 // POST /api/leave - Submit leave request
 router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
   try {
-    const { type, start, end, days, reason } = req.body;
+    const { type, start, end, days, reason, attachment } = req.body;
 
     if (!type || !start || !end || !days || !reason) {
-      return res.status(400).json({ message: "All fields are required" });
+      return res.status(400).json({ message: "All fields except attachment are required" });
     }
 
     const overlap = await prisma.leaveRequest.findFirst({
@@ -84,6 +85,7 @@ router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
         days: parseInt(days),
         status: "pending",
         reason,
+        attachment: attachment || null,
       },
     });
 
@@ -109,6 +111,7 @@ router.post("/", validateCsrf, async (req: AuthenticatedRequest, res) => {
       days: leave.days,
       status: leave.status,
       reason: leave.reason,
+      attachment: leave.attachment,
     });
   } catch (error) {
     console.error("POST /leave error:", error);
@@ -162,6 +165,7 @@ router.patch("/:id", requirePermission("Approve Leave"), validateCsrf, async (re
       days: updated.days,
       status: updated.status,
       reason: updated.reason,
+      attachment: updated.attachment,
     });
   } catch (error) {
     console.error("PATCH /leave/:id error:", error);

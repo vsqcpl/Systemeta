@@ -246,6 +246,7 @@ model LeaveRequest {
   days         Int
   status       String   @default("pending") // e.g. pending, approved, rejected
   reason       String
+  attachment   String?
 }
 
 model Expense {
